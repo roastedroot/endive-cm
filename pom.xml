@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>run.endive.cm</groupId>
+  <artifactId>endive-cm</artifactId>
+  <version>999-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>Endive Component Model</name>
+  <description>WebAssembly Component Model support for Endive</description>
+
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <modules>
+    <module>wit-parser</module>
+  </modules>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <maven.compiler.release>11</maven.compiler.release>
+    <maven.compiler.failOnWarning>true</maven.compiler.failOnWarning>
+    <maven.dependency.failOnWarning>true</maven.dependency.failOnWarning>
+
+    <checkstyle.version>13.4.1</checkstyle.version>
+    <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+    <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+    <spotless-maven-plugin.version>3.4.0</spotless-maven-plugin.version>
+    <surefire-plugin.version>3.5.2</surefire-plugin.version>
+
+    <endive.version>999-SNAPSHOT</endive.version>
+    <zerofs.version>0.1.0</zerofs.version>
+    <junit.version>5.14.4</junit.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>zerofs</artifactId>
+        <version>${zerofs.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive</groupId>
+        <artifactId>log</artifactId>
+        <version>${endive.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive</groupId>
+        <artifactId>runtime</artifactId>
+        <version>${endive.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive</groupId>
+        <artifactId>wasi</artifactId>
+        <version>${endive.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive</groupId>
+        <artifactId>wasm</artifactId>
+        <version>${endive.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive</groupId>
+        <artifactId>wasm-tools</artifactId>
+        <version>${endive.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter-api</artifactId>
+        <version>${junit.version}</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>com.diffplug.spotless</groupId>
+          <artifactId>spotless-maven-plugin</artifactId>
+          <version>${spotless-maven-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven-compiler-plugin.version}</version>
+          <configuration>
+            <parameters>true</parameters>
+            <release>11</release>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>java11</id>
+      <activation>
+        <jdk>11</jdk>
+      </activation>
+      <properties>
+        <checkstyle.skip>true</checkstyle.skip>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <compilerArgs combine.self="override"/>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>java17</id>
+      <activation>
+        <jdk>[17,)</jdk>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.diffplug.spotless</groupId>
+            <artifactId>spotless-maven-plugin</artifactId>
+            <configuration>
+              <formats>
+                <format>
+                  <includes>
+                    <include>*.md</include>
+                    <include>.gitignore</include>
+                  </includes>
+                  <trimTrailingWhitespace/>
+                  <endWithNewline/>
+                  <indent>
+                    <spaces>true</spaces>
+                    <spacesPerTab>2</spacesPerTab>
+                  </indent>
+                </format>
+              </formats>
+              <java>
+                <includes>
+                  <include>**/src/main/java/**/*.java</include>
+                  <include>**/src/test/java/**/*.java</include>
+                </includes>
+                <googleJavaFormat>
+                  <version>1.28.0</version>
+                  <style>AOSP</style>
+                  <reflowLongStrings>true</reflowLongStrings>
+                  <formatJavadoc>false</formatJavadoc>
+                </googleJavaFormat>
+                <importOrder/>
+                <jsr223>
+                  <name>Wildcard Imports Not Allowed</name>
+                  <dependency>org.apache.groovy:groovy-jsr223:4.0.27</dependency>
+                  <engine>groovy</engine>
+                  <script>def pattern = ~/import\s+(?:static\s+)?[^\*\s]+\*;(\r\n|\r|\n)/
+                def matcher = pattern.matcher(source)
+                if (matcher.find()) {
+                   def importText = matcher.group().trim()
+                   throw new Exception("Wildcard imports not allowed:\n\n    " + importText + "\n\nPlease fully expand the imports.\n")
+                }
+                source</script>
+                </jsr223>
+                <removeUnusedImports/>
+              </java>
+              <pom>
+                <includes>
+                  <include>**/pom.xml</include>
+                </includes>
+                <excludes>
+                  <exclude>**/target/**/*.xml</exclude>
+                </excludes>
+                <sortPom>
+                  <expandEmptyElements>false</expandEmptyElements>
+                  <sortModules>true</sortModules>
+                  <sortDependencies>scope,groupId,artifactId</sortDependencies>
+                  <sortDependencyExclusions>groupId,artifactId</sortDependencyExclusions>
+                  <sortPlugins>groupId,artifactId</sortPlugins>
+                </sortPom>
+              </pom>
+            </configuration>
+            <executions>
+              <execution>
+                <id>format</id>
+                <goals>
+                  <goal>apply</goal>
+                </goals>
+                <phase>process-sources</phase>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-checkstyle-plugin</artifactId>
+            <version>${maven-checkstyle-plugin.version}</version>
+            <configuration>
+              <failOnViolation>true</failOnViolation>
+              <includeTestSourceDirectory>true</includeTestSourceDirectory>
+              <excludeGeneratedSources>true</excludeGeneratedSources>
+              <checkstyleRules>
+                <module name="Checker">
+                  <module name="FileTabCharacter">
+                    <property name="fileExtensions" value="java,xml"/>
+                  </module>
+                  <module name="SuppressWarningsFilter"/>
+                  <module name="TreeWalker">
+                    <module name="AnnotationUseStyle"/>
+                    <module name="ArrayTypeStyle"/>
+                    <module name="AtclauseOrder"/>
+                    <module name="AvoidDoubleBraceInitialization"/>
+                    <module name="AvoidNoArgumentSuperConstructorCall"/>
+                    <module name="ConstructorsDeclarationGrouping"/>
+                    <module name="DefaultComesLast"/>
+                    <module name="EmptyBlock">
+                      <property name="option" value="text"/>
+                    </module>
+                    <module name="EmptyCatchBlock"/>
+                    <module name="ExplicitInitialization"/>
+                    <module name="FallThrough"/>
+                    <module name="FinalClass"/>
+                    <module name="HideUtilityClassConstructor"/>
+                    <module name="IllegalCatch">
+                      <property name="illegalClassNames" value="Exception"/>
+                    </module>
+                    <module name="InnerAssignment"/>
+                    <module name="InvalidJavadocPosition"/>
+                    <module name="JavadocBlockTagLocation"/>
+                    <module name="JavadocContentLocation"/>
+                    <module name="JavadocMissingLeadingAsterisk"/>
+                    <module name="JavadocMissingWhitespaceAfterAsterisk"/>
+                    <module name="JavadocTagContinuationIndentation"/>
+                    <module name="ModifiedControlVariable"/>
+                    <module name="ModifierOrder"/>
+                    <module name="MultipleVariableDeclarations"/>
+                    <module name="MutableException"/>
+                    <module name="NeedBraces"/>
+                    <module name="NoClone"/>
+                    <module name="NoFinalizer"/>
+                    <module name="NonEmptyAtclauseDescription"/>
+                    <module name="OneStatementPerLine"/>
+                    <module name="OneTopLevelClass"/>
+                    <module name="OverloadMethodsDeclarationOrder"/>
+                    <module name="PackageDeclaration"/>
+                    <module name="RequireEmptyLineBeforeBlockTagGroup"/>
+                    <module name="SimplifyBooleanExpression"/>
+                    <module name="SimplifyBooleanReturn"/>
+                    <module name="SingleLineJavadoc"/>
+                    <module name="StringLiteralEquality"/>
+                    <module name="SuppressWarningsHolder"/>
+                    <module name="TypeName"/>
+                    <module name="UnnecessarySemicolonAfterOuterTypeDeclaration"/>
+                    <module name="UnnecessarySemicolonAfterTypeMemberDeclaration"/>
+                    <module name="UnnecessarySemicolonInEnumeration"/>
+                    <module name="UnnecessarySemicolonInTryWithResources"/>
+                    <module name="UnusedLocalVariable"/>
+                    <module name="UpperEll"/>
+                  </module>
+                </module>
+              </checkstyleRules>
+            </configuration>
+            <dependencies>
+              <dependency>
+                <groupId>com.puppycrawl.tools</groupId>
+                <artifactId>checkstyle</artifactId>
+                <version>${checkstyle.version}</version>
+              </dependency>
+            </dependencies>
+            <executions>
+              <execution>
+                <id>checkstyle</id>
+                <goals>
+                  <goal>check</goal>
+                </goals>
+                <phase>validate</phase>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

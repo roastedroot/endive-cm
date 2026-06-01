@@ -1,0 +1,14 @@
+# IDE files
+.idea
+*.iml
+.classpath
+.project
+.settings
+.vscode
+
+target/
+
+# mac-os files
+.DS_Store
+
+.claude
