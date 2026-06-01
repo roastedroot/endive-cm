@@ -36,7 +36,7 @@
 
     <endive.version>999-SNAPSHOT</endive.version>
     <zerofs.version>0.1.0</zerofs.version>
-    <junit.version>5.14.4</junit.version>
+    <junit.version>6.1.0</junit.version>
   </properties>
 
   <dependencyManagement>
