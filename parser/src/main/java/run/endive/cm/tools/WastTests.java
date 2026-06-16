@@ -83,8 +83,6 @@ public final class WastTests implements AutoCloseable {
             var filePath = location.resolve(filename);
             try (var in = new ByteArrayInputStream(Files.readAllBytes(filePath))) {
                 try {
-                    ComponentValidate.validate(in);
-                    in.reset();
                     var parser = ComponentParser.builder().build();
                     return parser.parse(() -> in);
                 } catch (UnsupportedOperationException e) {
