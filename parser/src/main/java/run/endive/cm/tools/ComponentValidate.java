@@ -58,11 +58,7 @@ public final class ComponentValidate {
                             .withStdout(stdoutStream, false)
                             .withStderr(stderrStream, false)
                             .withDirectory(inputDir.toString(), inputDir)
-                            .withArguments(
-                                    List.of(
-                                            "wasm-tools",
-                                            "validate",
-                                            inputFile.toString()))
+                            .withArguments(List.of("wasm-tools", "validate", inputFile.toString()))
                             .build();
 
             try (var wasi =

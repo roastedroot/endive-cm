@@ -1,7 +1,15 @@
-package run.endive.cm.tools;
+package run.endive.cm.parser;
 
 import io.roastedroot.zerofs.Configuration;
 import io.roastedroot.zerofs.ZeroFs;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystem;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import run.endive.cm.tools.ComponentValidateException;
 import run.endive.log.Logger;
 import run.endive.log.SystemLogger;
 import run.endive.runtime.ByteArrayMemory;
@@ -12,13 +20,6 @@ import run.endive.wasi.WasiExitException;
 import run.endive.wasi.WasiOptions;
 import run.endive.wasi.WasiPreview1;
 import run.endive.wasm.WasmModule;
-
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystem;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
 
 public final class JsonFromWast {
 
@@ -36,14 +37,12 @@ public final class JsonFromWast {
 
     public static WastTests exec(InputStream is) {
         try (var stdinStream = new ByteArrayInputStream(new byte[0]);
-             var stdoutStream = new ByteArrayOutputStream();
-             var stderrStream = new ByteArrayOutputStream()) {
+                var stdoutStream = new ByteArrayOutputStream();
+                var stderrStream = new ByteArrayOutputStream()) {
 
             FileSystem fs =
                     ZeroFs.newFileSystem(
-                            Configuration.unix().toBuilder()
-                                    .setAttributeViews("unix")
-                                    .build());
+                            Configuration.unix().toBuilder().setAttributeViews("unix").build());
 
             Path wastDir = fs.getPath("wast");
             Files.createDirectory(wastDir);
@@ -67,7 +66,7 @@ public final class JsonFromWast {
                             .build();
 
             try (var wasi =
-                         WasiPreview1.builder().withLogger(logger).withOptions(options).build()) {
+                    WasiPreview1.builder().withLogger(logger).withOptions(options).build()) {
                 var imports = ImportValues.builder().addFunction(wasi.toHostFunctions()).build();
                 try {
                     Instance.builder(MODULE)

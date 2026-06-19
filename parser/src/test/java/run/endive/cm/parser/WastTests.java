@@ -1,13 +1,10 @@
-package run.endive.cm.tools;
+package run.endive.cm.parser;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import run.endive.cm.parser.ComponentParser;
-import run.endive.cm.types.WasmComponent;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigInteger;
@@ -15,7 +12,13 @@ import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
+
+import run.endive.cm.tools.ComponentValidateException;
+import run.endive.cm.types.WasmComponent;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public final class WastTests implements AutoCloseable {
 
@@ -26,18 +29,17 @@ public final class WastTests implements AutoCloseable {
     public WastTests(String wastJson, FileSystem wastFS) {
         var objectMapper = new ObjectMapper();
         try {
-            this.wastTestFile =
-                     objectMapper.readValue(wastJson, WastTestFile.class);
+            this.wastTestFile = objectMapper.readValue(wastJson, WastTestFile.class);
             this.wastFS = wastFS;
         } catch (JsonProcessingException e) {
             throw new JsonFromWastException("failed to deserialize wast json", e);
         }
     }
 
-    public void runTests(int[] skipLines) {
+    public void runTests(Map<Integer, WasmComponent> expectedComponents, int[] skipLines) {
         var workingDir = wastFS.getPath("/work");
         for (var command : wastTestFile.commands()) {
-            command.execute(workingDir, skipLines);
+            command.execute(workingDir, expectedComponents, skipLines);
         }
     }
 
@@ -66,17 +68,15 @@ public final class WastTests implements AutoCloseable {
         }
     }
 
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property =
-            "type")
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
     @JsonSubTypes({
-            @JsonSubTypes.Type(value = Module.class, name = "module"),
-            @JsonSubTypes.Type(value = AssertMalformed.class, name = "assert_malformed"),
-            @JsonSubTypes.Type(value = AssertInvalid.class, name = "assert_invalid"),
+        @JsonSubTypes.Type(value = Module.class, name = "module"),
+        @JsonSubTypes.Type(value = AssertMalformed.class, name = "assert_malformed"),
+        @JsonSubTypes.Type(value = AssertInvalid.class, name = "assert_invalid"),
     })
     interface Command {
 
-        void execute(Path location, int... skipLines)
-                throws CommandException;
+        void execute(Path location, Map<Integer, WasmComponent> expectedComponents, int... skipLines) throws CommandException;
 
         default WasmComponent parseComponent(Path location, String filename)
                 throws CommandException {
@@ -86,25 +86,43 @@ public final class WastTests implements AutoCloseable {
                     var parser = ComponentParser.builder().build();
                     return parser.parse(() -> in);
                 } catch (UnsupportedOperationException e) {
-                    throw new CommandException(e);
+                    throw new CommandException(filePath, e);
                 }
             } catch (IOException e) {
-                throw new CommandException(e);
+                throw new CommandException(filePath, e);
             }
         }
     }
 
     public static class CommandException extends RuntimeException {
-        public CommandException(Throwable cause) {
+
+        private final byte[] testContents;
+
+        public CommandException(Path filePath, Throwable cause) {
             super(cause);
+            this.testContents = readFileContents(filePath);
         }
 
-        public CommandException(String message) {
+        public CommandException(Path filePath, String message) {
             super(message);
+            this.testContents = readFileContents(filePath);
         }
 
-        public CommandException(String message, Throwable cause) {
+        public CommandException(Path filePath, String message, Throwable cause) {
             super(message, cause);
+            this.testContents = readFileContents(filePath);
+        }
+
+        private byte[] readFileContents(Path location) {
+            try {
+                return Files.readAllBytes(location);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to read test contents from " + location, e);
+            }
+        }
+
+        public byte[] testContents() {
+            return testContents;
         }
     }
 
@@ -142,8 +160,7 @@ public final class WastTests implements AutoCloseable {
         }
 
         @Override
-        public void execute(Path location, int... skipLines)
-                throws CommandException {
+        public void execute(Path location, Map<Integer, WasmComponent> expectedComponents, int... skipLines) throws CommandException {
             if (skipLines.length > 0) {
                 if (IntStream.of(skipLines).anyMatch(i -> i == line)) {
                     return;
@@ -153,15 +170,16 @@ public final class WastTests implements AutoCloseable {
                 parseComponent(location, filename);
             } catch (Exception e) {
                 if (!(e instanceof ComponentValidateException)) {
-                    throw new CommandException(
+                    throw new CommandException(location.resolve(filename),
                             String.format(
-                                    "Expected validation of %s to fail at line %d due to '%s' but got unexpected exception of type %s",
+                                    "Expected validation of %s to fail at line %d due to '%s' but"
+                                            + " got unexpected exception of type %s",
                                     filename, line, text, e.getClass().getSimpleName()),
                             e);
                 }
                 return;
             }
-            throw new CommandException(
+            throw new CommandException(location.resolve(filename),
                     String.format(
                             "\"Expected validation of %s to fail at line %d due to '%s' ",
                             filename, line, text));
@@ -202,8 +220,7 @@ public final class WastTests implements AutoCloseable {
         }
 
         @Override
-        public void execute(Path location, int... skipLines)
-                throws CommandException {
+        public void execute(Path location, Map<Integer, WasmComponent> expectedComponents, int... skipLines) throws CommandException {
             if (skipLines.length > 0) {
                 if (IntStream.of(skipLines).anyMatch(i -> i == line)) {
                     return;
@@ -213,15 +230,16 @@ public final class WastTests implements AutoCloseable {
                 parseComponent(location, filename);
             } catch (Exception e) {
                 if (!(e instanceof ComponentValidateException)) {
-                    throw new CommandException(
+                    throw new CommandException(location.resolve(filename),
                             String.format(
-                                    "Expected validation of %s to fail at line %d due to '%s' but got unexpected exception of type %s",
+                                    "Expected validation of %s to fail at line %d due to '%s' but"
+                                            + " got unexpected exception of type %s",
                                     filename, line, text, e.getClass().getSimpleName()),
                             e);
                 }
                 return;
             }
-            throw new CommandException(
+            throw new CommandException(location.resolve(filename),
                     String.format(
                             "\"Expected validation of %s to fail at line %d due to '%s' ",
                             filename, line, text));
@@ -335,18 +353,25 @@ public final class WastTests implements AutoCloseable {
         }
 
         @Override
-        public void execute(Path location, int... skipLines)
-                throws CommandException {
+        public void execute(Path location, Map<Integer, WasmComponent> expectedComponents, int... skipLines) throws CommandException {
             if (skipLines.length > 0) {
                 if (IntStream.of(skipLines).anyMatch(i -> i == line)) {
                     return;
                 }
             }
             try {
-                parseComponent(location, filename);
+                WasmComponent actualComponent = parseComponent(location, filename);
+                var testId = Integer.parseInt(filename.split("\\.")[1]);
+                if (expectedComponents.containsKey(testId)) {
+                    WasmComponent expectedComponent = expectedComponents.get(testId);
+                    assertThat(actualComponent).usingRecursiveComparison()
+                            .ignoringFields("customSections")
+                            .isEqualTo(expectedComponent);
+                }
             } catch (Exception e) {
-                throw new CommandException(
-                        String.format("Failed to load module %s due to error at line %d", filename, line),
+                throw new CommandException(location.resolve(filename),
+                        String.format(
+                                "Failed to load module %s due to error at line %d", filename, line),
                         e);
             }
         }

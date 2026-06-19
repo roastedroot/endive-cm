@@ -1,4 +1,4 @@
-package run.endive.cm.tools;
+package run.endive.cm.parser;
 
 public class JsonFromWastException extends RuntimeException {
 
