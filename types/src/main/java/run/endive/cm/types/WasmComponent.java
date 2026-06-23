@@ -53,7 +53,9 @@ public final class WasmComponent {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof WasmComponent)) return false;
+        if (!(o instanceof WasmComponent)) {
+            return false;
+        }
         WasmComponent that = (WasmComponent) o;
         return Objects.equals(coreTypeSections, that.coreTypeSections);
     }
@@ -65,8 +67,6 @@ public final class WasmComponent {
 
     @Override
     public String toString() {
-        return "WasmComponent{" +
-                "coreTypeSections=" + coreTypeSections +
-                '}';
+        return "WasmComponent{" + "coreTypeSections=" + coreTypeSections + '}';
     }
 }

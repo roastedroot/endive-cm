@@ -1,6 +1,6 @@
 # Phase 1: Binary Parser
 
-**Status**: Not started
+**Status**: In progress
 **Depends on**: Phase 0 (Type Model)
 
 ## Goal
@@ -81,6 +81,9 @@ and immutable fields for all sections.
 
 ## Testing
 
+- **Component Model spec tests**: sync .wast tests from the [Component Model spec tests](https://github.com/WebAssembly/component-model/tree/main/test)
+  and use `wasm-tools json-from-wast` to extract and execute tests, parse with `ComponentParser`, and verify the .wast 
+  assertions 
 - **Round-trip with wasm-tools**: produce component binaries via
   `wasm-tools component new`, parse with `ComponentParser`, verify structure
 - **Error paths**: truncated input, wrong magic, wrong layer, malformed

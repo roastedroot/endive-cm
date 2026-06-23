@@ -35,7 +35,9 @@ public final class ModuleType {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ModuleType)) return false;
+        if (!(o instanceof ModuleType)) {
+            return false;
+        }
         ModuleType that = (ModuleType) o;
         return Objects.equals(moduleDecls, that.moduleDecls);
     }
@@ -47,8 +49,6 @@ public final class ModuleType {
 
     @Override
     public String toString() {
-        return "ModuleType{" +
-                "moduleDecls=" + moduleDecls +
-                '}';
+        return "ModuleType{" + "moduleDecls=" + moduleDecls + '}';
     }
 }

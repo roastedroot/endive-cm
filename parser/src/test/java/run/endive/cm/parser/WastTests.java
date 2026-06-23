@@ -1,5 +1,7 @@
 package run.endive.cm.parser;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -14,11 +16,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
-
 import run.endive.cm.tools.ComponentValidateException;
 import run.endive.cm.types.WasmComponent;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 public final class WastTests implements AutoCloseable {
 
@@ -36,10 +35,11 @@ public final class WastTests implements AutoCloseable {
         }
     }
 
-    public void runTests(Map<Integer, WasmComponent> expectedComponents, int[] skipLines) {
+    public void runTests(
+            Map<Integer, WasmComponent> expectedComponents, boolean parseOnly, int[] skipCases) {
         var workingDir = wastFS.getPath("/work");
         for (var command : wastTestFile.commands()) {
-            command.execute(workingDir, expectedComponents, skipLines);
+            command.execute(workingDir, expectedComponents, parseOnly, skipCases);
         }
     }
 
@@ -72,11 +72,16 @@ public final class WastTests implements AutoCloseable {
     @JsonSubTypes({
         @JsonSubTypes.Type(value = Module.class, name = "module"),
         @JsonSubTypes.Type(value = AssertMalformed.class, name = "assert_malformed"),
-        @JsonSubTypes.Type(value = AssertInvalid.class, name = "assert_invalid"),
+        @JsonSubTypes.Type(value = AssertInvalid.class, name = "assert_invalid")
     })
     interface Command {
 
-        void execute(Path location, Map<Integer, WasmComponent> expectedComponents, int... skipLines) throws CommandException;
+        void execute(
+                Path location,
+                Map<Integer, WasmComponent> expectedComponents,
+                boolean parseOnly,
+                int... skipCases)
+                throws CommandException;
 
         default WasmComponent parseComponent(Path location, String filename)
                 throws CommandException {
@@ -160,17 +165,24 @@ public final class WastTests implements AutoCloseable {
         }
 
         @Override
-        public void execute(Path location, Map<Integer, WasmComponent> expectedComponents, int... skipLines) throws CommandException {
-            if (skipLines.length > 0) {
-                if (IntStream.of(skipLines).anyMatch(i -> i == line)) {
+        public void execute(
+                Path location,
+                Map<Integer, WasmComponent> expectedComponents,
+                boolean parseOnly,
+                int... skipCases)
+                throws CommandException {
+            var testId = Integer.parseInt(filename.split("\\.")[1]);
+            if (skipCases.length > 0) {
+                if (IntStream.of(skipCases).anyMatch(i -> i == testId)) {
                     return;
                 }
             }
             try {
                 parseComponent(location, filename);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 if (!(e instanceof ComponentValidateException)) {
-                    throw new CommandException(location.resolve(filename),
+                    throw new CommandException(
+                            location.resolve(filename),
                             String.format(
                                     "Expected validation of %s to fail at line %d due to '%s' but"
                                             + " got unexpected exception of type %s",
@@ -179,7 +191,8 @@ public final class WastTests implements AutoCloseable {
                 }
                 return;
             }
-            throw new CommandException(location.resolve(filename),
+            throw new CommandException(
+                    location.resolve(filename),
                     String.format(
                             "\"Expected validation of %s to fail at line %d due to '%s' ",
                             filename, line, text));
@@ -220,17 +233,24 @@ public final class WastTests implements AutoCloseable {
         }
 
         @Override
-        public void execute(Path location, Map<Integer, WasmComponent> expectedComponents, int... skipLines) throws CommandException {
-            if (skipLines.length > 0) {
-                if (IntStream.of(skipLines).anyMatch(i -> i == line)) {
+        public void execute(
+                Path location,
+                Map<Integer, WasmComponent> expectedComponents,
+                boolean parseOnly,
+                int... skipCases)
+                throws CommandException {
+            var testId = Integer.parseInt(filename.split("\\.")[1]);
+            if (skipCases.length > 0) {
+                if (IntStream.of(skipCases).anyMatch(i -> i == testId)) {
                     return;
                 }
             }
             try {
                 parseComponent(location, filename);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 if (!(e instanceof ComponentValidateException)) {
-                    throw new CommandException(location.resolve(filename),
+                    throw new CommandException(
+                            location.resolve(filename),
                             String.format(
                                     "Expected validation of %s to fail at line %d due to '%s' but"
                                             + " got unexpected exception of type %s",
@@ -239,7 +259,8 @@ public final class WastTests implements AutoCloseable {
                 }
                 return;
             }
-            throw new CommandException(location.resolve(filename),
+            throw new CommandException(
+                    location.resolve(filename),
                     String.format(
                             "\"Expected validation of %s to fail at line %d due to '%s' ",
                             filename, line, text));
@@ -353,23 +374,35 @@ public final class WastTests implements AutoCloseable {
         }
 
         @Override
-        public void execute(Path location, Map<Integer, WasmComponent> expectedComponents, int... skipLines) throws CommandException {
-            if (skipLines.length > 0) {
-                if (IntStream.of(skipLines).anyMatch(i -> i == line)) {
+        public void execute(
+                Path location,
+                Map<Integer, WasmComponent> expectedComponents,
+                boolean parseOnly,
+                int... skipCases)
+                throws CommandException {
+            var testId = Integer.parseInt(filename.split("\\.")[1]);
+            if (skipCases.length > 0) {
+                if (IntStream.of(skipCases).anyMatch(i -> i == testId)) {
                     return;
                 }
             }
             try {
                 WasmComponent actualComponent = parseComponent(location, filename);
-                var testId = Integer.parseInt(filename.split("\\.")[1]);
                 if (expectedComponents.containsKey(testId)) {
                     WasmComponent expectedComponent = expectedComponents.get(testId);
-                    assertThat(actualComponent).usingRecursiveComparison()
+                    assertThat(actualComponent)
+                            .usingRecursiveComparison()
                             .ignoringFields("customSections")
                             .isEqualTo(expectedComponent);
                 }
-            } catch (Exception e) {
-                throw new CommandException(location.resolve(filename),
+                if (!parseOnly) {
+                    // TODO Include component instantiation here once implemented
+                    throw new UnsupportedOperationException(
+                            "Component instantiation not yet implemented");
+                }
+            } catch (Throwable e) {
+                throw new CommandException(
+                        location.resolve(filename),
                         String.format(
                                 "Failed to load module %s due to error at line %d", filename, line),
                         e);

@@ -20,6 +20,7 @@
   <modules>
     <module>parser</module>
     <module>types</module>
+    <module>wasm-tools</module>
     <module>wit-parser</module>
   </modules>
 
@@ -39,16 +40,12 @@
     <endive.version>999-SNAPSHOT</endive.version>
     <zerofs.version>0.1.0</zerofs.version>
     <jackson.version>2.18.3</jackson.version>
+    <assertj.version>3.27.7</assertj.version>
     <junit.version>5.14.4</junit.version>
   </properties>
 
   <dependencyManagement>
     <dependencies>
-      <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>${jackson.version}</version>
-      </dependency>
       <dependency>
         <groupId>io.roastedroot</groupId>
         <artifactId>zerofs</artifactId>
@@ -88,6 +85,23 @@
         <groupId>run.endive.cm</groupId>
         <artifactId>types</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive.cm</groupId>
+        <artifactId>wasm-tools</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>${jackson.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>${assertj.version}</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.junit.jupiter</groupId>

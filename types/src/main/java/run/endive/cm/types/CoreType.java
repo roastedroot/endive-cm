@@ -1,10 +1,9 @@
 package run.endive.cm.types;
 
+import java.util.Objects;
 import run.endive.wasm.types.CompType;
 import run.endive.wasm.types.RecType;
 import run.endive.wasm.types.SubType;
-
-import java.util.Objects;
 
 public final class CoreType {
     private final RecType recType;
@@ -83,9 +82,14 @@ public final class CoreType {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof CoreType)) return false;
+        if (!(o instanceof CoreType)) {
+            return false;
+        }
         CoreType coreType = (CoreType) o;
-        return Objects.equals(recType, coreType.recType) && Objects.equals(subType, coreType.subType) && Objects.equals(compType, coreType.compType) && Objects.equals(moduleType, coreType.moduleType);
+        return Objects.equals(recType, coreType.recType)
+                && Objects.equals(subType, coreType.subType)
+                && Objects.equals(compType, coreType.compType)
+                && Objects.equals(moduleType, coreType.moduleType);
     }
 
     @Override
@@ -95,11 +99,15 @@ public final class CoreType {
 
     @Override
     public String toString() {
-        return "CoreType{" +
-                "recType=" + recType +
-                ", subType=" + subType +
-                ", compType=" + compType +
-                ", moduleType=" + moduleType +
-                '}';
+        return "CoreType{"
+                + "recType="
+                + recType
+                + ", subType="
+                + subType
+                + ", compType="
+                + compType
+                + ", moduleType="
+                + moduleType
+                + '}';
     }
 }

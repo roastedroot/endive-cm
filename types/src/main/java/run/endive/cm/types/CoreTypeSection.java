@@ -43,7 +43,9 @@ public final class CoreTypeSection extends Section {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof CoreTypeSection)) return false;
+        if (!(o instanceof CoreTypeSection)) {
+            return false;
+        }
         CoreTypeSection that = (CoreTypeSection) o;
         return Objects.equals(coreTypes, that.coreTypes);
     }
@@ -55,8 +57,6 @@ public final class CoreTypeSection extends Section {
 
     @Override
     public String toString() {
-        return "CoreTypeSection{" +
-                "coreTypes=" + coreTypes +
-                '}';
+        return "CoreTypeSection{" + "coreTypes=" + coreTypes + '}';
     }
 }

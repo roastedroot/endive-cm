@@ -1,22 +1,32 @@
 package run.endive.cm.parser;
 
-import run.endive.wasm.MalformedException;
-import run.endive.wasm.types.*;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-
 import static run.endive.cm.parser.ComponentParser.readByte;
 import static run.endive.cm.parser.ComponentParser.readBytes;
 import static run.endive.wasm.Encoding.readName;
 import static run.endive.wasm.Encoding.readVarSInt32;
 import static run.endive.wasm.Encoding.readVarUInt32;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import run.endive.wasm.MalformedException;
+import run.endive.wasm.types.ArrayType;
+import run.endive.wasm.types.CompType;
+import run.endive.wasm.types.CustomSection;
+import run.endive.wasm.types.FieldType;
+import run.endive.wasm.types.FunctionType;
+import run.endive.wasm.types.MutabilityType;
+import run.endive.wasm.types.PackedType;
+import run.endive.wasm.types.RecType;
+import run.endive.wasm.types.StorageType;
+import run.endive.wasm.types.StructType;
+import run.endive.wasm.types.SubType;
+import run.endive.wasm.types.UnknownCustomSection;
+import run.endive.wasm.types.ValType;
+
 public final class CoreParser {
 
     private CoreParser() {}
-
 
     static CustomSection parseCustomSection(
             ByteBuffer buffer, long sectionSize, boolean checkMalformed) {
@@ -148,8 +158,7 @@ public final class CoreParser {
         }
     }
 
-    static ValType.Builder readValueTypeBuilderFromOpCode(
-            ByteBuffer buffer, int valueTypeOpCode) {
+    static ValType.Builder readValueTypeBuilderFromOpCode(ByteBuffer buffer, int valueTypeOpCode) {
         var builder = ValType.builder().withOpcode(valueTypeOpCode);
         if (valueTypeOpCode == ValType.ID.Ref || valueTypeOpCode == ValType.ID.RefNull) {
             return builder.withTypeIdx((int) readVarSInt32(buffer));

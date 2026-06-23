@@ -2,13 +2,6 @@ package run.endive.cm.parser;
 
 import io.roastedroot.zerofs.Configuration;
 import io.roastedroot.zerofs.ZeroFs;
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystem;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
 import run.endive.cm.tools.ComponentValidateException;
 import run.endive.log.Logger;
 import run.endive.log.SystemLogger;
@@ -20,6 +13,17 @@ import run.endive.wasi.WasiExitException;
 import run.endive.wasi.WasiOptions;
 import run.endive.wasi.WasiPreview1;
 import run.endive.wasm.WasmModule;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystem;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 
 public final class JsonFromWast {
 

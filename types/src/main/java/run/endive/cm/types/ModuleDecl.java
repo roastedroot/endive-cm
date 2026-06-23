@@ -86,9 +86,14 @@ public final class ModuleDecl {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ModuleDecl)) return false;
+        if (!(o instanceof ModuleDecl)) {
+            return false;
+        }
         ModuleDecl that = (ModuleDecl) o;
-        return Objects.equals(importDecl, that.importDecl) && Objects.equals(alias, that.alias) && Objects.equals(type, that.type) && Objects.equals(exportDecl, that.exportDecl);
+        return Objects.equals(importDecl, that.importDecl)
+                && Objects.equals(alias, that.alias)
+                && Objects.equals(type, that.type)
+                && Objects.equals(exportDecl, that.exportDecl);
     }
 
     @Override
@@ -98,11 +103,15 @@ public final class ModuleDecl {
 
     @Override
     public String toString() {
-        return "ModuleDecl{" +
-                "importDecl=" + importDecl +
-                ", alias=" + alias +
-                ", type=" + type +
-                ", exportDecl=" + exportDecl +
-                '}';
+        return "ModuleDecl{"
+                + "importDecl="
+                + importDecl
+                + ", alias="
+                + alias
+                + ", type="
+                + type
+                + ", exportDecl="
+                + exportDecl
+                + '}';
     }
 }

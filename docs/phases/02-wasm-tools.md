@@ -1,6 +1,6 @@
 # Phase 2: wasm-tools Integration (Component Commands)
 
-**Status**: Not started
+**Status**: In progress
 **Depends on**: None (independent, but Phase 1 testing benefits from it)
 
 ## Goal

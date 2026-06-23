@@ -1,6 +1,6 @@
 # Phase 0: Type Model Foundation
 
-**Status**: Not started
+**Status**: In progress
 
 ## Goal
 

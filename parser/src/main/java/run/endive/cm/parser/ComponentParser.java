@@ -3,18 +3,28 @@ package run.endive.cm.parser;
 import static java.util.Objects.requireNonNull;
 import static run.endive.cm.parser.CoreParser.parseCustomSection;
 import static run.endive.cm.parser.CoreParser.parseRecType;
-import static run.endive.wasm.Encoding.*;
+import static run.endive.wasm.Encoding.readVarUInt32;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
-import java.util.Objects;
 import java.util.function.Supplier;
-
 import run.endive.cm.tools.ComponentValidate;
-import run.endive.cm.types.*;
+import run.endive.cm.types.CoreAlias;
+import run.endive.cm.types.CoreExportDecl;
+import run.endive.cm.types.CoreImportDecl;
+import run.endive.cm.types.CoreOuterAliasTarget;
+import run.endive.cm.types.CoreSort;
+import run.endive.cm.types.CoreType;
+import run.endive.cm.types.CoreTypeSection;
+import run.endive.cm.types.CustomSection;
+import run.endive.cm.types.ModuleDecl;
+import run.endive.cm.types.ModuleType;
+import run.endive.cm.types.Section;
+import run.endive.cm.types.SectionId;
+import run.endive.cm.types.WasmComponent;
 import run.endive.wasm.MalformedException;
 import run.endive.wasm.io.InputStreams;
 
@@ -50,8 +60,7 @@ public final class ComponentParser {
     }
 
     private static void onSection(WasmComponent.Builder module, Section s) {
-        switch(s.sectionId())
-        {
+        switch (s.sectionId()) {
             case SectionId.CUSTOM:
                 var coreCustomSection = (CustomSection) s;
                 module.addCoreCustomSection(coreCustomSection);
@@ -61,8 +70,7 @@ public final class ComponentParser {
                 module.addCoreTypeSection(coreTypeSection);
                 break;
             default:
-                throw new MalformedException(
-                        "unsupported section id " + s.sectionId());
+                throw new MalformedException("unsupported section id " + s.sectionId());
         }
     }
 
@@ -134,8 +142,10 @@ public final class ComponentParser {
             switch (sectionId) {
                 case SectionId.CUSTOM:
                     {
-                        var customSection = parseCustomSection(sectionByteBuffer, sectionSize, true);
-                        var coreCustomSection = CustomSection.builder().withCustomSection(customSection).build();
+                        var customSection =
+                                parseCustomSection(sectionByteBuffer, sectionSize, true);
+                        var coreCustomSection =
+                                CustomSection.builder().withCustomSection(customSection).build();
                         listener.onSection(coreCustomSection);
                         break;
                     }
@@ -225,13 +235,15 @@ public final class ComponentParser {
     private static CoreType parseCoreType(ByteBuffer buffer) {
         var typeBuilder = CoreType.builder();
         var opcode = peekByte(buffer);
-        switch(opcode) {
+        switch (opcode) {
             case 0x50:
                 buffer.position(buffer.position() + 1);
                 typeBuilder.withModuleType(parseModuleType(buffer));
                 break;
             case 0x00:
                 buffer.position(buffer.position() + 1);
+                typeBuilder.withRecType(parseRecType(buffer));
+                break;
             default:
                 typeBuilder.withRecType(parseRecType(buffer));
         }
@@ -284,10 +296,11 @@ public final class ComponentParser {
         var typeIndex = readVarUInt32(buffer);
         var sortIndex = readVarUInt32(buffer);
         builder.withSort(sort);
-        builder.withOuterTarget(CoreOuterAliasTarget.builder()
-                .withTypeIndex(typeIndex)
-                .withSortIndex(sortIndex)
-                .build());
+        builder.withOuterTarget(
+                CoreOuterAliasTarget.builder()
+                        .withTypeIndex(typeIndex)
+                        .withSortIndex(sortIndex)
+                        .build());
         return builder.build();
     }
 
