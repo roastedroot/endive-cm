@@ -69,16 +69,12 @@ mvn -Dquickly
 Then build endive-cm:
 
 The tests of the `parser` module rely upon downloading a local copy of the .wast tests from the Component Model spec
-repository. A shell script is provided that fetches the most recent copy of the .wast tests. To download (and update)
-the .wast tests:
-```shell
-cd endive-cm
-./parser/update-spec-tests.sh
-```
+repository. A shell script is provided that fetches the most recent copy of the .wast tests.
 
-Once the .wast tests have been downloaded, build endive-cm:
+To build endive-cm:
 ```sh
 cd endive-cm
+./update-spec-tests.sh
 mvn clean install
 ```
 

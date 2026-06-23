@@ -4,7 +4,7 @@ set -euo pipefail
 REPO="WebAssembly/component-model"
 BRANCH="main"
 REMOTE_TEST_DIR="test"
-LOCAL_TEST_DIR="src/test/resources/spec-tests"
+LOCAL_TEST_DIR="parser/src/test/resources/spec-tests"
 
 API_BASE="https://api.github.com/repos/${REPO}/contents"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
