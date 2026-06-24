@@ -11,7 +11,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.function.Supplier;
-import run.endive.cm.tools.ComponentValidate;
 import run.endive.cm.types.CoreAlias;
 import run.endive.cm.types.CoreExportDecl;
 import run.endive.cm.types.CoreImportDecl;
@@ -82,13 +81,6 @@ public final class ComponentParser {
 
     private void parse(InputStream in, ComponentParserListener listener) {
         requireNonNull(listener, "listener");
-
-        ComponentValidate.validate(in);
-        try {
-            in.reset();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
 
         var buffer = readByteBuffer(in);
 

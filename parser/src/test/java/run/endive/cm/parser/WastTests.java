@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
+import run.endive.cm.tools.ComponentValidate;
 import run.endive.cm.tools.ComponentValidateException;
 import run.endive.cm.types.WasmComponent;
 
@@ -86,13 +87,13 @@ public final class WastTests implements AutoCloseable {
         default WasmComponent parseComponent(Path location, String filename)
                 throws CommandException {
             var filePath = location.resolve(filename);
-            try (var in = new ByteArrayInputStream(Files.readAllBytes(filePath))) {
-                try {
-                    var parser = ComponentParser.builder().build();
-                    return parser.parse(() -> in);
-                } catch (UnsupportedOperationException e) {
-                    throw new CommandException(filePath, e);
-                }
+            try {
+                byte[] bytes = Files.readAllBytes(filePath);
+                ComponentValidate.validate(new ByteArrayInputStream(bytes));
+                var parser = ComponentParser.builder().build();
+                return parser.parse(() -> new ByteArrayInputStream(bytes));
+            } catch (UnsupportedOperationException e) {
+                throw new CommandException(filePath, e);
             } catch (IOException e) {
                 throw new CommandException(filePath, e);
             }
