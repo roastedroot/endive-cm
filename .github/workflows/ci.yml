@@ -33,6 +33,8 @@ jobs:
         git clone --depth 1 https://github.com/bytecodealliance/endive.git /tmp/endive
         cd /tmp/endive
         mvn -B -Dquickly install
+    - name: Prepare wast files
+      run: ./update-spec-tests.sh
     - name: Build and test
       run: mvn -B install
     - name: Publish Test Report
