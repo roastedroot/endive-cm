@@ -2,21 +2,15 @@ package run.endive.cm.types;
 
 import java.util.Objects;
 
-public final class CoreAlias {
+public final class OuterAlias extends Alias {
 
-    private final CoreSort sort;
     private final long count;
     private final long index;
 
-    private CoreAlias(CoreSort sort, long count, long index) {
-        Objects.requireNonNull(sort, "sort");
-        this.sort = sort;
+    private OuterAlias(Sort sort, long count, long index) {
+        super(ID.OUTER, sort);
         this.count = count;
         this.index = index;
-    }
-
-    public CoreSort sort() {
-        return sort;
     }
 
     public long count() {
@@ -33,13 +27,13 @@ public final class CoreAlias {
 
     public static final class Builder {
 
-        private CoreSort sort;
+        private Sort sort;
         private long count;
         private long index;
 
         private Builder() {}
 
-        public Builder withSort(CoreSort sort) {
+        public Builder withSort(Sort sort) {
             this.sort = sort;
             return this;
         }
@@ -54,27 +48,27 @@ public final class CoreAlias {
             return this;
         }
 
-        public CoreAlias build() {
-            return new CoreAlias(sort, count, index);
+        public OuterAlias build() {
+            return new OuterAlias(sort, count, index);
         }
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof CoreAlias)) {
+        if (!(o instanceof OuterAlias)) {
             return false;
         }
-        CoreAlias that = (CoreAlias) o;
-        return count == that.count && index == that.index && Objects.equals(sort, that.sort);
+        OuterAlias that = (OuterAlias) o;
+        return count == that.count && index == that.index && Objects.equals(sort(), that.sort());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(sort, count, index);
+        return Objects.hash(sort(), count, index);
     }
 
     @Override
     public String toString() {
-        return "CoreAlias{" + "sort=" + sort + ", count=" + count + ", index=" + index + '}';
+        return "OuterAlias{" + "sort=" + sort() + ", count=" + count + ", index=" + index + '}';
     }
 }

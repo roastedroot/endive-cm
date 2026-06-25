@@ -5,6 +5,10 @@ import static java.util.Objects.requireNonNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import run.endive.wasm.types.CompType;
+import run.endive.wasm.types.FunctionType;
+import run.endive.wasm.types.RecType;
+import run.endive.wasm.types.SubType;
 
 public final class CoreTypeSection extends Section {
     private final List<CoreType> coreTypes;
@@ -33,6 +37,26 @@ public final class CoreTypeSection extends Section {
 
         public Builder addCoreType(CoreType coreType) {
             coreTypes.add(requireNonNull(coreType, "coreType"));
+            return this;
+        }
+
+        public Builder addFunctionType(FunctionType functionType) {
+            Objects.requireNonNull(functionType, "functionType");
+            var type =
+                    RecType.builder()
+                            .withSubTypes(
+                                    new SubType[] {
+                                        SubType.builder()
+                                                .withTypeIdx(new int[] {})
+                                                .withFinal(true)
+                                                .withCompType(
+                                                        CompType.builder()
+                                                                .withFuncType(functionType)
+                                                                .build())
+                                                .build()
+                                    })
+                            .build();
+            coreTypes.add(CoreType.of(type));
             return this;
         }
 

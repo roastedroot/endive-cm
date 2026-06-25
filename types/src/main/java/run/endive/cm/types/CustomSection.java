@@ -2,6 +2,8 @@ package run.endive.cm.types;
 
 import static java.util.Objects.requireNonNull;
 
+import java.util.Objects;
+
 public final class CustomSection extends Section {
 
     private final run.endive.wasm.types.CustomSection customSection;
@@ -32,5 +34,24 @@ public final class CustomSection extends Section {
             this.customSection = requireNonNull(customSection, "customSection");
             return this;
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof CustomSection)) {
+            return false;
+        }
+        CustomSection that = (CustomSection) o;
+        return Objects.equals(customSection, that.customSection);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(customSection);
+    }
+
+    @Override
+    public String toString() {
+        return "CustomSection{" + "customSection=" + customSection + '}';
     }
 }

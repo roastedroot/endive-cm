@@ -12,18 +12,26 @@ public final class CoreType {
     private final ModuleType moduleType;
 
     private CoreType(RecType recType, SubType subType, CompType compType, ModuleType moduleType) {
-        requireExactlyOneNonNull(recType, subType, compType, moduleType);
         this.recType = recType;
         this.subType = subType;
         this.compType = compType;
         this.moduleType = moduleType;
     }
 
-    private static void requireExactlyOneNonNull(Object a, Object b, Object c, Object d) {
-        if ((a == null ? 0 : 1) + (b == null ? 0 : 1) + (c == null ? 0 : 1) + (d == null ? 0 : 1)
-                != 1) {
-            throw new IllegalArgumentException("Exactly one field must be filled");
-        }
+    public static CoreType of(RecType recType) {
+        return new CoreType(recType, null, null, null);
+    }
+
+    public static CoreType of(SubType subType) {
+        return new CoreType(null, subType, null, null);
+    }
+
+    public static CoreType of(CompType compType) {
+        return new CoreType(null, null, compType, null);
+    }
+
+    public static CoreType of(ModuleType moduleType) {
+        return new CoreType(null, null, null, moduleType);
     }
 
     public RecType recType() {
@@ -40,44 +48,6 @@ public final class CoreType {
 
     public ModuleType moduleType() {
         return moduleType;
-    }
-
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    public static final class Builder {
-
-        private RecType recType;
-        private SubType subType;
-        private CompType compType;
-        private ModuleType moduleType;
-
-        private Builder() {}
-
-        public Builder withRecType(RecType recType) {
-            this.recType = recType;
-            return this;
-        }
-
-        public Builder withSubType(SubType subType) {
-            this.subType = subType;
-            return this;
-        }
-
-        public Builder withCompType(CompType compType) {
-            this.compType = compType;
-            return this;
-        }
-
-        public Builder withModuleType(ModuleType moduleType) {
-            this.moduleType = moduleType;
-            return this;
-        }
-
-        public CoreType build() {
-            return new CoreType(recType, subType, compType, moduleType);
-        }
     }
 
     @Override
