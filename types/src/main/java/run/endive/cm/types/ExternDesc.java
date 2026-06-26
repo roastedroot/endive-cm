@@ -25,7 +25,7 @@ public final class ExternDesc {
             Objects.requireNonNull(typeBound, "typeBound");
         } else if (kind == Kind.VALUE) {
             Objects.requireNonNull(valueBound, "valueBound");
-        } else {
+        } else if (typeIdx == UNDEFINED_IDX) {
             throw new IllegalArgumentException(
                     "extern desc type index must be defined for all kinds other than typebound and"
                             + " valuebound");
