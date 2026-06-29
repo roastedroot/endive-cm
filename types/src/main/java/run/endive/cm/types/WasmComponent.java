@@ -10,11 +10,18 @@ public final class WasmComponent {
 
     private final List<CustomSection> customSections;
     private final List<CoreTypeSection> coreTypeSections;
+    private final List<ComponentSection> componentSections;
+    private final List<TypeSection> typeSections;
 
     private WasmComponent(
-            List<CustomSection> customSections, List<CoreTypeSection> coreTypeSections) {
+            List<CustomSection> customSections,
+            List<CoreTypeSection> coreTypeSections,
+            List<ComponentSection> componentSections,
+            List<TypeSection> typeSections) {
         this.customSections = List.copyOf(customSections);
         this.coreTypeSections = List.copyOf(coreTypeSections);
+        this.componentSections = componentSections;
+        this.typeSections = List.copyOf(typeSections);
     }
 
     public static WasmComponent.Builder builder() {
@@ -29,10 +36,20 @@ public final class WasmComponent {
         return coreTypeSections;
     }
 
+    public List<ComponentSection> componentSections() {
+        return componentSections;
+    }
+
+    public List<TypeSection> typeSections() {
+        return typeSections;
+    }
+
     public static final class Builder {
 
         private final List<CustomSection> customSections = new ArrayList<>();
         private final List<CoreTypeSection> coreTypeSections = new ArrayList<>();
+        private final List<ComponentSection> componentSections = new ArrayList<>();
+        private final List<TypeSection> typeSections = new ArrayList<>();
 
         private Builder() {}
 
@@ -46,8 +63,19 @@ public final class WasmComponent {
             return this;
         }
 
+        public Builder addComponentSection(ComponentSection componentSection) {
+            componentSections.add(requireNonNull(componentSection, "componentSection"));
+            return this;
+        }
+
+        public Builder addTypeSection(TypeSection typeSection) {
+            typeSections.add(requireNonNull(typeSection, "typeSection"));
+            return this;
+        }
+
         public WasmComponent build() {
-            return new WasmComponent(customSections, coreTypeSections);
+            return new WasmComponent(
+                    customSections, coreTypeSections, componentSections, typeSections);
         }
     }
 
@@ -57,16 +85,26 @@ public final class WasmComponent {
             return false;
         }
         WasmComponent that = (WasmComponent) o;
-        return Objects.equals(coreTypeSections, that.coreTypeSections);
+        return Objects.equals(customSections, that.customSections)
+                && Objects.equals(coreTypeSections, that.coreTypeSections)
+                && Objects.equals(componentSections, that.componentSections)
+                && Objects.equals(typeSections, that.typeSections);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(coreTypeSections);
+        return Objects.hash(customSections, coreTypeSections, componentSections, typeSections);
     }
 
     @Override
     public String toString() {
-        return "WasmComponent{" + "coreTypeSections=" + coreTypeSections + '}';
+        return "WasmComponent{"
+                + "coreTypeSections="
+                + coreTypeSections
+                + ", componentSections="
+                + componentSections
+                + ", typeSections="
+                + typeSections
+                + '}';
     }
 }

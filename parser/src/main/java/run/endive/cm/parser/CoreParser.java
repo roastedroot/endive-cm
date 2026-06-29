@@ -9,18 +9,28 @@ import static run.endive.wasm.Encoding.readVarUInt32;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import run.endive.wasm.InvalidException;
 import run.endive.wasm.MalformedException;
 import run.endive.wasm.types.ArrayType;
 import run.endive.wasm.types.CompType;
 import run.endive.wasm.types.CustomSection;
+import run.endive.wasm.types.ExternalType;
 import run.endive.wasm.types.FieldType;
+import run.endive.wasm.types.FunctionImport;
 import run.endive.wasm.types.FunctionType;
+import run.endive.wasm.types.GlobalImport;
+import run.endive.wasm.types.Import;
+import run.endive.wasm.types.MemoryImport;
+import run.endive.wasm.types.MemoryLimits;
 import run.endive.wasm.types.MutabilityType;
 import run.endive.wasm.types.PackedType;
 import run.endive.wasm.types.RecType;
 import run.endive.wasm.types.StorageType;
 import run.endive.wasm.types.StructType;
 import run.endive.wasm.types.SubType;
+import run.endive.wasm.types.TableImport;
+import run.endive.wasm.types.TableLimits;
+import run.endive.wasm.types.TagImport;
 import run.endive.wasm.types.UnknownCustomSection;
 import run.endive.wasm.types.ValType;
 
@@ -155,6 +165,86 @@ public final class CoreParser {
             return RecType.builder()
                     .withSubTypes(new SubType[] {parseSubType(discriminator, buffer)})
                     .build();
+        }
+    }
+
+    static Import parseImport(ByteBuffer buffer) {
+        String moduleName = readName(buffer);
+        String importName = readName(buffer);
+        ExternalType descType;
+        try {
+            descType = ExternalType.byId((int) readVarUInt32(buffer));
+        } catch (RuntimeException e) {
+            throw new MalformedException("malformed import kind", e);
+        }
+        switch (descType) {
+            case FUNCTION:
+                {
+                    return new FunctionImport(moduleName, importName, (int) readVarUInt32(buffer));
+                }
+            case TABLE:
+                {
+                    var rawTableType = readValueTypeBuilder(buffer).build();
+
+                    var limitType = readByte(buffer);
+                    var min = (int) readVarUInt32(buffer);
+                    TableLimits limits = null;
+                    switch (limitType) {
+                        case 0x00:
+                            limits = new TableLimits(min);
+                            break;
+                        case 0x01:
+                        case 0x03:
+                            limits = new TableLimits(min, readVarUInt32(buffer), limitType == 0x03);
+                            break;
+                        default:
+                            throw new MalformedException(
+                                    "integer too large, invalid table limit: " + limitType);
+                    }
+
+                    return new TableImport(moduleName, importName, rawTableType, limits);
+                }
+            case MEMORY:
+                {
+                    var limits = parseMemoryLimits(buffer);
+                    return new MemoryImport(moduleName, importName, limits);
+                }
+            case GLOBAL:
+                var globalValType = readValueTypeBuilder(buffer).build();
+                var globalMut = MutabilityType.forId(readByte(buffer));
+                return new GlobalImport(moduleName, importName, globalMut, globalValType);
+            case TAG:
+                try {
+                    var attribute = readByte(buffer);
+                    var tagTypeIdx = (int) readVarUInt32(buffer);
+                    return new TagImport(moduleName, importName, attribute, tagTypeIdx);
+                } catch (MalformedException e) {
+                    throw new MalformedException("malformed import kind", e);
+                }
+            default:
+                throw new MalformedException("malformed import kind");
+        }
+    }
+
+    private static MemoryLimits parseMemoryLimits(ByteBuffer buffer) {
+        var limitType = readByte(buffer);
+        var initial = (int) readVarUInt32(buffer);
+        switch (limitType) {
+            case 0x00:
+                return new MemoryLimits(initial);
+            case 0x01:
+            case 0x03:
+                int maximum = (int) readVarUInt32(buffer);
+                return new MemoryLimits(initial, maximum, limitType == 0x03);
+            case 0x02:
+                throw new InvalidException("shared memory must have maximum");
+            default:
+                if (limitType > 0) {
+                    throw new MalformedException(
+                            "integer too large, invalid memory limit: " + limitType);
+                } else {
+                    throw new MalformedException("integer representation too long: " + limitType);
+                }
         }
     }
 

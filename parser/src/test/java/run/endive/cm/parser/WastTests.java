@@ -393,7 +393,7 @@ public final class WastTests implements AutoCloseable {
                     WasmComponent expectedComponent = expectedComponents.get(testId);
                     assertThat(actualComponent)
                             .usingRecursiveComparison()
-                            .ignoringFields("customSections")
+                            .ignoringFieldsMatchingRegexes(".*customSection\\.bytes.*")
                             .isEqualTo(expectedComponent);
                 }
                 if (!parseOnly) {
