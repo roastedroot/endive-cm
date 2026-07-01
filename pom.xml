@@ -47,6 +47,7 @@
     <endive.version>1.0.0</endive.version>
     <zerofs.version>0.1.0</zerofs.version>
     <jackson.version>2.22.0</jackson.version>
+    <assertj.version>3.27.7</assertj.version>
     <junit.version>5.14.4</junit.version>
   </properties>
 
@@ -142,8 +143,20 @@
         <scope>provided</scope>
       </dependency>
       <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>${assertj.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter-api</artifactId>
+        <version>${junit.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter-params</artifactId>
         <version>${junit.version}</version>
         <scope>test</scope>
       </dependency>
