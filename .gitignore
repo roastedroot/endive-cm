@@ -12,4 +12,4 @@ target/
 .DS_Store
 
 .claude
-/parser/src/test/resources/spec-tests/
+/component-model-testsuite/

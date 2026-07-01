@@ -18,6 +18,8 @@
   </licenses>
 
   <modules>
+    <module>cm-test-gen-lib</module>
+    <module>cm-test-gen-plugin</module>
     <module>parser</module>
     <module>types</module>
     <module>wasm-tools</module>
@@ -32,12 +34,17 @@
     <maven.dependency.failOnWarning>true</maven.dependency.failOnWarning>
 
     <checkstyle.version>13.7.0</checkstyle.version>
+    <javaparser.version>3.28.2</javaparser.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+    <maven-plugin-annotations.version>3.15.2</maven-plugin-annotations.version>
+    <maven-plugin-api.version>3.9.16</maven-plugin-api.version>
+    <maven-plugin-plugin.version>3.15.2</maven-plugin-plugin.version>
     <spotless-maven-plugin.version>3.8.0</spotless-maven-plugin.version>
     <surefire-plugin.version>3.5.2</surefire-plugin.version>
+    <zip4j.version>2.11.6</zip4j.version>
 
-    <endive.version>999-SNAPSHOT</endive.version>
+    <endive.version>1.0.0</endive.version>
     <zerofs.version>0.1.0</zerofs.version>
     <jackson.version>2.22.0</jackson.version>
     <assertj.version>3.27.7</assertj.version>
@@ -47,9 +54,24 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.github.javaparser</groupId>
+        <artifactId>javaparser-core</artifactId>
+        <version>${javaparser.version}</version>
+      </dependency>
+      <dependency>
         <groupId>io.roastedroot</groupId>
         <artifactId>zerofs</artifactId>
         <version>${zerofs.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>net.lingala.zip4j</groupId>
+        <artifactId>zip4j</artifactId>
+        <version>${zip4j.version}</version>
       </dependency>
       <dependency>
         <groupId>run.endive</groupId>
@@ -78,6 +100,11 @@
       </dependency>
       <dependency>
         <groupId>run.endive.cm</groupId>
+        <artifactId>cm-test-gen-lib</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive.cm</groupId>
         <artifactId>parser</artifactId>
         <version>${project.version}</version>
       </dependency>
@@ -92,10 +119,28 @@
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>${jackson.version}</version>
-        <scope>test</scope>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-core</artifactId>
+        <version>${maven-plugin-api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-model</artifactId>
+        <version>${maven-plugin-api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-plugin-api</artifactId>
+        <version>${maven-plugin-api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven.plugin-tools</groupId>
+        <artifactId>maven-plugin-annotations</artifactId>
+        <version>${maven-plugin-annotations.version}</version>
+        <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.assertj</groupId>
@@ -134,6 +179,11 @@
             <parameters>true</parameters>
             <release>11</release>
           </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-plugin-plugin</artifactId>
+          <version>${maven-plugin-plugin.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>

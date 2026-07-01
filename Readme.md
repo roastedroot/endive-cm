@@ -68,15 +68,15 @@ mvn -Dquickly
 
 Then build endive-cm:
 
-The tests of the `parser` module rely upon downloading a local copy of the .wast tests from the Component Model spec
-repository. A shell script is provided that fetches the most recent copy of the .wast tests.
-
-To build endive-cm:
 ```sh
 cd endive-cm
-./update-spec-tests.sh
 mvn clean install
 ```
+
+The build is fully self-contained: the `cm-test-gen-plugin` automatically downloads the
+[Component Model spec tests](https://github.com/WebAssembly/component-model/tree/main/test)
+and generates JUnit 5 test classes during the `generate-test-sources` phase.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details on adding new test coverage.
 
 ### Usage
 
