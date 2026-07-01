@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>run.endive.cm</groupId>
+    <artifactId>endive-cm</artifactId>
+    <version>999-SNAPSHOT</version>
+  </parent>
+  <artifactId>cm-test-gen-lib</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Endive CM - Test Gen Lib</name>
+  <description>A library to generate tests from the WebAssembly component model testsuite</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.github.javaparser</groupId>
+      <artifactId>javaparser-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>net.lingala.zip4j</groupId>
+      <artifactId>zip4j</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>run.endive.cm</groupId>
+      <artifactId>wasm-tools</artifactId>
+    </dependency>
+  </dependencies>
+</project>

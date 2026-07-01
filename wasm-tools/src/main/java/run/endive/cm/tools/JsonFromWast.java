@@ -1,18 +1,21 @@
-package run.endive.cm.parser;
+package run.endive.cm.tools;
+
+import static java.util.Objects.requireNonNull;
 
 import io.roastedroot.zerofs.Configuration;
 import io.roastedroot.zerofs.ZeroFs;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
-import run.endive.cm.tools.ComponentValidateException;
+import java.util.stream.Stream;
 import run.endive.log.Logger;
 import run.endive.log.SystemLogger;
 import run.endive.runtime.ByteArrayMemory;
@@ -26,8 +29,6 @@ import run.endive.wasm.WasmModule;
 
 public final class JsonFromWast {
 
-    private JsonFromWast() {}
-
     private static final Logger logger =
             new SystemLogger() {
                 @Override
@@ -38,27 +39,49 @@ public final class JsonFromWast {
 
     private static final WasmModule MODULE = WasmToolsModule.load();
 
-    public static WastTests exec(InputStream is) {
+    private final File file;
+    private final File output;
+
+    private JsonFromWast(File file, File output) {
+        this.file = file;
+        this.output = output;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public void process() {
+        if (!file.exists()) {
+            throw new JsonFromWastException("Input file does not exist: " + file);
+        }
+        if (!output.isDirectory() && !output.mkdirs()) {
+            throw new JsonFromWastException("Failed to create output directory: " + output);
+        }
+
         try (var stdinStream = new ByteArrayInputStream(new byte[0]);
                 var stdoutStream = new ByteArrayOutputStream();
-                var stderrStream = new ByteArrayOutputStream()) {
-
-            FileSystem fs =
-                    ZeroFs.newFileSystem(
-                            Configuration.unix().toBuilder().setAttributeViews("unix").build());
+                var stderrStream = new ByteArrayOutputStream();
+                FileSystem fs =
+                        ZeroFs.newFileSystem(
+                                Configuration.unix().toBuilder()
+                                        .setAttributeViews("unix")
+                                        .build())) {
 
             Path wastDir = fs.getPath("wast");
             Files.createDirectory(wastDir);
             Path inputFile = wastDir.resolve("input.wast");
-            byte[] source = is.readAllBytes();
-            Files.write(inputFile, source);
+            Files.write(inputFile, Files.readAllBytes(file.toPath()));
+
+            Path workDir = fs.getPath("/work");
+            Files.createDirectories(workDir);
 
             var options =
                     WasiOptions.builder()
                             .withStdin(stdinStream, false)
                             .withStdout(stdoutStream, false)
                             .withStderr(stderrStream, false)
-                            .withDirectory("/", fs.getPath("/work"))
+                            .withDirectory("/", workDir)
                             .withArguments(
                                     List.of(
                                             "wasm-tools",
@@ -85,11 +108,52 @@ public final class JsonFromWast {
                                 e);
                     }
                 }
-                var wastJson = stdoutStream.toString(StandardCharsets.UTF_8);
-                return new WastTests(wastJson, fs);
             }
+
+            var specJson = stdoutStream.toString(StandardCharsets.UTF_8);
+            Files.writeString(output.toPath().resolve("spec.json"), specJson);
+
+            try (Stream<Path> wasmFiles = Files.list(workDir)) {
+                wasmFiles
+                        .filter(p -> p.toString().endsWith(".wasm"))
+                        .forEach(
+                                p -> {
+                                    try {
+                                        Files.copy(
+                                                p,
+                                                output.toPath().resolve(p.getFileName().toString()),
+                                                StandardCopyOption.REPLACE_EXISTING);
+                                    } catch (IOException e) {
+                                        throw new UncheckedIOException(e);
+                                    }
+                                });
+            }
+
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    public static final class Builder {
+        private File file;
+        private File output;
+
+        private Builder() {}
+
+        public Builder withFile(File file) {
+            this.file = file;
+            return this;
+        }
+
+        public Builder withOutput(File output) {
+            this.output = output;
+            return this;
+        }
+
+        public JsonFromWast build() {
+            requireNonNull(file, "file");
+            requireNonNull(output, "output");
+            return new JsonFromWast(file, output);
         }
     }
 }
