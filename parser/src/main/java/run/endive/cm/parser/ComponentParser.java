@@ -2,19 +2,31 @@ package run.endive.cm.parser;
 
 import static java.util.Objects.requireNonNull;
 import static run.endive.cm.parser.CoreParser.parseCustomSection;
-import static run.endive.cm.parser.CoreParser.parseImport;
 import static run.endive.cm.parser.CoreParser.parseRecType;
+import static run.endive.cm.parser.CoreParser.readValueTypeBuilder;
+import static run.endive.wasm.Encoding.readName;
 import static run.endive.wasm.Encoding.readVarUInt32;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 import java.util.function.Supplier;
 import run.endive.cm.types.Alias;
+import run.endive.cm.types.AliasSection;
 import run.endive.cm.types.BorrowType;
+import run.endive.cm.types.Canon;
+import run.endive.cm.types.CanonLift;
+import run.endive.cm.types.CanonLower;
+import run.endive.cm.types.CanonOpt;
+import run.endive.cm.types.CanonResource;
+import run.endive.cm.types.CanonSection;
 import run.endive.cm.types.Case;
 import run.endive.cm.types.ComponentDecl;
 import run.endive.cm.types.ComponentSection;
@@ -22,22 +34,48 @@ import run.endive.cm.types.ComponentType;
 import run.endive.cm.types.CoreAlias;
 import run.endive.cm.types.CoreExportAlias;
 import run.endive.cm.types.CoreExportDecl;
+import run.endive.cm.types.CoreFunctionImportDesc;
+import run.endive.cm.types.CoreGlobalImportDesc;
 import run.endive.cm.types.CoreImportDecl;
+import run.endive.cm.types.CoreImportDesc;
+import run.endive.cm.types.CoreInlineExport;
+import run.endive.cm.types.CoreInlineExportInstanceExpr;
+import run.endive.cm.types.CoreInstance;
+import run.endive.cm.types.CoreInstanceExpr;
+import run.endive.cm.types.CoreInstanceSection;
+import run.endive.cm.types.CoreInstantiateArg;
+import run.endive.cm.types.CoreInstantiateInstanceExpr;
+import run.endive.cm.types.CoreMemoryImportDesc;
+import run.endive.cm.types.CoreModuleSection;
 import run.endive.cm.types.CoreSort;
+import run.endive.cm.types.CoreSortIdx;
+import run.endive.cm.types.CoreTableImportDesc;
+import run.endive.cm.types.CoreTagImportDesc;
 import run.endive.cm.types.CoreType;
 import run.endive.cm.types.CoreTypeSection;
 import run.endive.cm.types.CustomSection;
 import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
+import run.endive.cm.types.Export;
 import run.endive.cm.types.ExportAlias;
 import run.endive.cm.types.ExportDecl;
+import run.endive.cm.types.ExportSection;
 import run.endive.cm.types.ExternDesc;
 import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.FuncType;
 import run.endive.cm.types.FutureType;
+import run.endive.cm.types.Import;
 import run.endive.cm.types.ImportDecl;
+import run.endive.cm.types.ImportSection;
+import run.endive.cm.types.InlineExport;
+import run.endive.cm.types.InlineExportInstanceExpr;
+import run.endive.cm.types.Instance;
 import run.endive.cm.types.InstanceDecl;
+import run.endive.cm.types.InstanceExpr;
+import run.endive.cm.types.InstanceSection;
 import run.endive.cm.types.InstanceType;
+import run.endive.cm.types.InstantiateArg;
+import run.endive.cm.types.InstantiateInstanceExpr;
 import run.endive.cm.types.LabelValType;
 import run.endive.cm.types.ListType;
 import run.endive.cm.types.MapType;
@@ -48,10 +86,12 @@ import run.endive.cm.types.OuterAlias;
 import run.endive.cm.types.OwnType;
 import run.endive.cm.types.PrimValType;
 import run.endive.cm.types.RecordType;
+import run.endive.cm.types.ResourceType;
 import run.endive.cm.types.ResultType;
 import run.endive.cm.types.Section;
 import run.endive.cm.types.SectionId;
 import run.endive.cm.types.Sort;
+import run.endive.cm.types.SortIdx;
 import run.endive.cm.types.StreamType;
 import run.endive.cm.types.TupleType;
 import run.endive.cm.types.Type;
@@ -62,7 +102,11 @@ import run.endive.cm.types.ValueBound;
 import run.endive.cm.types.VariantType;
 import run.endive.cm.types.WasmComponent;
 import run.endive.wasm.MalformedException;
+import run.endive.wasm.Parser;
 import run.endive.wasm.io.InputStreams;
+import run.endive.wasm.types.ExternalType;
+import run.endive.wasm.types.MutabilityType;
+import run.endive.wasm.types.TableLimits;
 
 public final class ComponentParser {
 
@@ -70,7 +114,12 @@ public final class ComponentParser {
     static final byte[] VERSION_BYTES = {0x0d, 0x00};
     static final byte[] LAYER_BYTES = {0x01, 0x00};
 
-    private ComponentParser() {}
+    private final Parser coreModuleParser;
+
+    private ComponentParser(Parser coreModuleParser) {
+        Objects.requireNonNull(coreModuleParser, "coreModuleParser");
+        this.coreModuleParser = coreModuleParser;
+    }
 
     private static ByteBuffer readByteBuffer(InputStream is) {
         try {
@@ -82,16 +131,30 @@ public final class ComponentParser {
         }
     }
 
-    public static ComponentParser.Builder builder() {
-        return new ComponentParser.Builder();
+    public Parser coreModuleParser() {
+        return coreModuleParser;
+    }
+
+    public static Builder builder() {
+        return new Builder();
     }
 
     public static final class Builder {
 
+        private Parser coreModuleParser;
+
+        public Builder withCoreModuleParser(Parser coreModuleParser) {
+            this.coreModuleParser = coreModuleParser;
+            return this;
+        }
+
         private Builder() {}
 
         public ComponentParser build() {
-            return new ComponentParser();
+            if (coreModuleParser == null) {
+                coreModuleParser = Parser.builder().build();
+            }
+            return new ComponentParser(coreModuleParser);
         }
     }
 
@@ -101,6 +164,14 @@ public final class ComponentParser {
                 var coreCustomSection = (CustomSection) s;
                 module.addCoreCustomSection(coreCustomSection);
                 break;
+            case SectionId.CORE_MODULE:
+                var coreModuleSection = (CoreModuleSection) s;
+                module.addCoreModuleSection(coreModuleSection);
+                break;
+            case SectionId.CORE_INSTANCE:
+                var coreInstanceSection = (CoreInstanceSection) s;
+                module.addCoreInstanceSection(coreInstanceSection);
+                break;
             case SectionId.CORE_TYPE:
                 var coreTypeSection = (CoreTypeSection) s;
                 module.addCoreTypeSection(coreTypeSection);
@@ -109,9 +180,29 @@ public final class ComponentParser {
                 var componentSection = (ComponentSection) s;
                 module.addComponentSection(componentSection);
                 break;
+            case SectionId.INSTANCE:
+                var instanceSection = (InstanceSection) s;
+                module.addInstanceSection(instanceSection);
+                break;
+            case SectionId.ALIAS:
+                var aliasSection = (AliasSection) s;
+                module.addAliasSection(aliasSection);
+                break;
+            case SectionId.CANON:
+                var canonSection = (CanonSection) s;
+                module.addCanonSection(canonSection);
+                break;
             case SectionId.TYPE:
                 var typeSection = (TypeSection) s;
                 module.addTypeSection(typeSection);
+                break;
+            case SectionId.IMPORT:
+                var importSection = (ImportSection) s;
+                module.addImportSection(importSection);
+                break;
+            case SectionId.EXPORT:
+                var exportSection = (ExportSection) s;
+                module.addExportSection(exportSection);
                 break;
             default:
                 throw new MalformedException("unsupported section id " + s.sectionId());
@@ -129,10 +220,11 @@ public final class ComponentParser {
 
         var buffer = readByteBuffer(in);
 
-        parseComponent(listener, buffer);
+        parseComponent(listener, buffer, coreModuleParser);
     }
 
-    private static void parseComponent(ComponentParserListener listener, ByteBuffer buffer) {
+    private static void parseComponent(
+            ComponentParserListener listener, ByteBuffer buffer, Parser coreModuleParser) {
         byte[] magic = new byte[4];
         readBytes(buffer, magic);
         if (!Arrays.equals(magic, MAGIC_BYTES)) {
@@ -192,13 +284,16 @@ public final class ComponentParser {
                     }
                 case SectionId.CORE_MODULE:
                     {
-                        throw new UnsupportedOperationException(
-                                "Core module section is not supported yet");
+                        var coreModuleSection =
+                                parseCoreModuleSection(sectionByteBuffer, coreModuleParser);
+                        listener.onSection(coreModuleSection);
+                        break;
                     }
                 case SectionId.CORE_INSTANCE:
                     {
-                        throw new UnsupportedOperationException(
-                                "Core instance section is not supported yet");
+                        var coreInstanceSection = parseCoreInstanceSection(sectionByteBuffer);
+                        listener.onSection(coreInstanceSection);
+                        break;
                     }
                 case SectionId.CORE_TYPE:
                     {
@@ -208,19 +303,22 @@ public final class ComponentParser {
                     }
                 case SectionId.COMPONENT:
                     {
-                        var componentSection = parseComponentSection(sectionByteBuffer);
+                        var componentSection =
+                                parseComponentSection(sectionByteBuffer, coreModuleParser);
                         listener.onSection(componentSection);
                         break;
                     }
                 case SectionId.INSTANCE:
                     {
-                        throw new UnsupportedOperationException(
-                                "Instance section is not supported yet");
+                        var instanceSection = parseInstanceSection(sectionByteBuffer);
+                        listener.onSection(instanceSection);
+                        break;
                     }
                 case SectionId.ALIAS:
                     {
-                        throw new UnsupportedOperationException(
-                                "Alias section is not supported yet");
+                        var aliasSection = parseAliasSection(sectionByteBuffer);
+                        listener.onSection(aliasSection);
+                        break;
                     }
                 case SectionId.TYPE:
                     {
@@ -230,8 +328,9 @@ public final class ComponentParser {
                     }
                 case SectionId.CANON:
                     {
-                        throw new UnsupportedOperationException(
-                                "Canon section is not supported yet");
+                        var canonSection = parseCanonSection(sectionByteBuffer);
+                        listener.onSection(canonSection);
+                        break;
                     }
                 case SectionId.START:
                     {
@@ -240,13 +339,15 @@ public final class ComponentParser {
                     }
                 case SectionId.IMPORT:
                     {
-                        throw new UnsupportedOperationException(
-                                "Import section is not supported yet");
+                        var importSection = parseImportSection(sectionByteBuffer);
+                        listener.onSection(importSection);
+                        break;
                     }
                 case SectionId.EXPORT:
                     {
-                        throw new UnsupportedOperationException(
-                                "Export section is not supported yet");
+                        var exportSection = parseExportSection(sectionByteBuffer);
+                        listener.onSection(exportSection);
+                        break;
                     }
                 case SectionId.VALUE:
                     {
@@ -266,6 +367,24 @@ public final class ComponentParser {
         }
     }
 
+    private static CoreModuleSection parseCoreModuleSection(
+            ByteBuffer buffer, Parser coreModuleParser) {
+        var builder = CoreModuleSection.builder();
+        ByteArrayInputStream in;
+        if (buffer.hasArray()) {
+            in =
+                    new ByteArrayInputStream(
+                            buffer.array(),
+                            buffer.arrayOffset() + buffer.position(),
+                            buffer.remaining());
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            in = new ByteArrayInputStream(bytes);
+        }
+        return builder.withModule(coreModuleParser.parse(() -> in)).build();
+    }
+
     private static CoreTypeSection parseCoreTypeSection(ByteBuffer buffer) {
         var builder = CoreTypeSection.builder();
         var numCoreTypes = readVarUInt32(buffer);
@@ -275,10 +394,287 @@ public final class ComponentParser {
         return builder.build();
     }
 
-    private static ComponentSection parseComponentSection(ByteBuffer buffer) {
+    private static ComponentSection parseComponentSection(
+            ByteBuffer buffer, Parser coreModuleParser) {
         var componentBuilder = WasmComponent.builder();
-        parseComponent(s -> onSection(componentBuilder, s), buffer);
+        parseComponent(s -> onSection(componentBuilder, s), buffer, coreModuleParser);
         return ComponentSection.builder().withComponent(componentBuilder.build()).build();
+    }
+
+    private static CoreInstanceSection parseCoreInstanceSection(ByteBuffer buffer) {
+        var builder = CoreInstanceSection.builder();
+        var numInstances = readVarUInt32(buffer);
+        for (int i = 0; i < numInstances && buffer.hasRemaining(); i++) {
+            builder.addInstance(parseCoreInstance(buffer));
+        }
+        return builder.build();
+    }
+
+    private static CoreInstance parseCoreInstance(ByteBuffer buffer) {
+        return CoreInstance.of(parseCoreInstanceExpr(buffer));
+    }
+
+    private static CoreInstanceExpr parseCoreInstanceExpr(ByteBuffer buffer) {
+        var opcode = readByte(buffer);
+        var kind = CoreInstanceExpr.Kind.fromOpcode(opcode);
+        if (kind == null) {
+            throw new MalformedException("unknown core instance expr opcode " + opcode);
+        }
+        switch (kind) {
+            case INSTANTIATE:
+                var instantiateBuilder =
+                        CoreInstantiateInstanceExpr.builder().withModuleIdx(readVarUInt32(buffer));
+                var numArgs = readVarUInt32(buffer);
+                for (int i = 0; i < numArgs && buffer.hasRemaining(); i++) {
+                    instantiateBuilder.addInstantiateArg(parseCoreInstantiateArg(buffer));
+                }
+                return instantiateBuilder.build();
+            case INLINE_EXPORT:
+                var coreInlineExportBuilder = CoreInlineExportInstanceExpr.builder();
+                var numCoreExports = readVarUInt32(buffer);
+                for (int i = 0; i < numCoreExports && buffer.hasRemaining(); i++) {
+                    coreInlineExportBuilder.addInlineExport(parseCoreInlineExport(buffer));
+                }
+                return coreInlineExportBuilder.build();
+            default:
+                throw new MalformedException("unknown core instance expr kind " + kind);
+        }
+    }
+
+    private static CoreInstantiateArg parseCoreInstantiateArg(ByteBuffer buffer) {
+        return CoreInstantiateArg.builder()
+                .withName(readName(buffer))
+                .withSortIdx(parseCoreSortIdx(buffer))
+                .build();
+    }
+
+    private static CoreInlineExport parseCoreInlineExport(ByteBuffer buffer) {
+        return CoreInlineExport.builder()
+                .withName(readName(buffer))
+                .withSortIdx(parseCoreSortIdx(buffer))
+                .build();
+    }
+
+    private static CoreSortIdx parseCoreSortIdx(ByteBuffer buffer) {
+        return CoreSortIdx.builder()
+                .withSort(CoreSort.fromId(readByte(buffer)))
+                .withIdx(readVarUInt32(buffer))
+                .build();
+    }
+
+    private static InstanceSection parseInstanceSection(ByteBuffer buffer) {
+        var builder = InstanceSection.builder();
+        var numInstances = readVarUInt32(buffer);
+        for (int i = 0; i < numInstances && buffer.hasRemaining(); i++) {
+            builder.addInstance(parseInstance(buffer));
+        }
+        return builder.build();
+    }
+
+    private static Instance parseInstance(ByteBuffer buffer) {
+        return Instance.of(parseInstanceExpr(buffer));
+    }
+
+    private static InstanceExpr parseInstanceExpr(ByteBuffer buffer) {
+        var opcode = readByte(buffer);
+        var kind = InstanceExpr.Kind.fromOpcode(opcode);
+        if (kind == null) {
+            throw new MalformedException("unknown instance expr opcode " + opcode);
+        }
+        switch (kind) {
+            case INSTANTIATE:
+                var instantiateBuilder =
+                        InstantiateInstanceExpr.builder().withComponentIdx(readVarUInt32(buffer));
+                var numArgs = readVarUInt32(buffer);
+                for (int i = 0; i < numArgs && buffer.hasRemaining(); i++) {
+                    instantiateBuilder.addInstantiateArg(parseInstantiateArg(buffer));
+                }
+                return instantiateBuilder.build();
+            case INLINE_EXPORT:
+                var inlineExportBuilder = InlineExportInstanceExpr.builder();
+                var numExports = readVarUInt32(buffer);
+                for (int i = 0; i < numExports && buffer.hasRemaining(); i++) {
+                    inlineExportBuilder.addInlineExport(parseInlineExport(buffer));
+                }
+                return inlineExportBuilder.build();
+            default:
+                throw new MalformedException("unknown instance expr kind " + kind);
+        }
+    }
+
+    private static InstantiateArg parseInstantiateArg(ByteBuffer buffer) {
+        return InstantiateArg.builder()
+                .withName(readName(buffer))
+                .withSortIdx(parseSortIdx(buffer))
+                .build();
+    }
+
+    private static InlineExport parseInlineExport(ByteBuffer buffer) {
+        return InlineExport.builder()
+                .withName(parseExternName(buffer))
+                .withSortIdx(parseSortIdx(buffer))
+                .build();
+    }
+
+    private static AliasSection parseAliasSection(ByteBuffer buffer) {
+        var builder = AliasSection.builder();
+        var numAliases = readVarUInt32(buffer);
+        for (int i = 0; i < numAliases && buffer.hasRemaining(); i++) {
+            builder.addAlias(parseAlias(buffer));
+        }
+        return builder.build();
+    }
+
+    private static CanonSection parseCanonSection(ByteBuffer buffer) {
+        var builder = CanonSection.builder();
+        var numCanons = readVarUInt32(buffer);
+        for (int i = 0; i < numCanons && buffer.hasRemaining(); i++) {
+            builder.addCanon(parseCanon(buffer));
+        }
+        return builder.build();
+    }
+
+    private static Canon parseCanon(ByteBuffer buffer) {
+        var opcode = readByte(buffer);
+        var kind = Canon.Kind.fromOpcode(opcode);
+        if (kind == null) {
+            throw new MalformedException("unknown canon opcode " + opcode);
+        }
+        switch (kind) {
+            case LIFT:
+                return parseCanonLift(buffer);
+            case LOWER:
+                return parseCanonLower(buffer);
+            case RESOURCE_NEW:
+            case RESOURCE_DROP:
+            case RESOURCE_REP:
+                return parseCanonResource(buffer, kind);
+            default:
+                throw new UnsupportedOperationException(
+                        "Canon kind " + kind + " is not supported yet");
+        }
+    }
+
+    private static CanonLift parseCanonLift(ByteBuffer buffer) {
+        var reserved = readByte(buffer);
+        if (reserved != 0x00) {
+            throw new MalformedException(
+                    "expected 0x00 after canon lift opcode, found " + reserved);
+        }
+        var funcIdx =
+                CoreSortIdx.builder()
+                        .withSort(CoreSort.FUNC)
+                        .withIdx(readVarUInt32(buffer))
+                        .build();
+        var opts = parseCanonOpts(buffer);
+        var typeIdx = readVarUInt32(buffer);
+        return CanonLift.builder().withFuncIdx(funcIdx).withOpts(opts).withTypeIdx(typeIdx).build();
+    }
+
+    private static CanonLower parseCanonLower(ByteBuffer buffer) {
+        var reserved = readByte(buffer);
+        if (reserved != 0x00) {
+            throw new MalformedException(
+                    "expected 0x00 after canon lower opcode, found " + reserved);
+        }
+        var funcIdx =
+                SortIdx.builder()
+                        .withSort(Sort.builder().withKind(Sort.Kind.FUNC).build())
+                        .withIdx(readVarUInt32(buffer))
+                        .build();
+        var opts = parseCanonOpts(buffer);
+        return CanonLower.builder().withFuncIdx(funcIdx).withOpts(opts).build();
+    }
+
+    private static CanonResource parseCanonResource(ByteBuffer buffer, Canon.Kind kind) {
+        var typeIdx = readVarUInt32(buffer);
+        return CanonResource.builder().withKind(kind).withTypeIdx(typeIdx).build();
+    }
+
+    private static List<CanonOpt> parseCanonOpts(ByteBuffer buffer) {
+        var numOpts = readVarUInt32(buffer);
+        List<CanonOpt> opts = new ArrayList<>();
+        for (int i = 0; i < numOpts && buffer.hasRemaining(); i++) {
+            opts.add(parseCanonOpt(buffer));
+        }
+        return opts;
+    }
+
+    private static CanonOpt parseCanonOpt(ByteBuffer buffer) {
+        var opcode = readByte(buffer);
+        var kind = CanonOpt.Kind.fromOpcode(opcode);
+        if (kind == null) {
+            throw new MalformedException("unknown canonopt opcode " + opcode);
+        }
+        var builder = new CanonOpt.Builder().withKind(kind);
+        switch (kind) {
+            case MEMORY:
+            case REALLOC:
+            case POST_RETURN:
+            case CALLBACK:
+                builder.withIndex(readVarUInt32(buffer));
+                break;
+            default:
+                break;
+        }
+        return builder.build();
+    }
+
+    private static ImportSection parseImportSection(ByteBuffer buffer) {
+        var builder = ImportSection.builder();
+        var numImports = readVarUInt32(buffer);
+        for (int i = 0; i < numImports && buffer.hasRemaining(); i++) {
+            builder.addImport(parseImport(buffer));
+        }
+        return builder.build();
+    }
+
+    private static ExportSection parseExportSection(ByteBuffer buffer) {
+        var builder = ExportSection.builder();
+        var numExports = readVarUInt32(buffer);
+        for (int i = 0; i < numExports && buffer.hasRemaining(); i++) {
+            builder.addExport(parseExport(buffer));
+        }
+        return builder.build();
+    }
+
+    private static Import parseImport(ByteBuffer buffer) {
+        var opcode = readByte(buffer);
+        switch (opcode) {
+            case 0x00:
+            case 0x01:
+                return Import.builder()
+                        .withName(readName(buffer))
+                        .withExternDesc(parseExternDesc(buffer))
+                        .build();
+            case 0x02:
+                throw new UnsupportedOperationException("Import opcode 0x02 is not supported");
+            default:
+                throw new IllegalArgumentException("Invalid import opcode: " + opcode);
+        }
+    }
+
+    private static Export parseExport(ByteBuffer buffer) {
+        var opcode = readByte(buffer);
+        switch (opcode) {
+            case 0x00:
+            case 0x01:
+                var builder = Export.builder();
+                builder.withName(readName(buffer)).withSortIdx(parseSortIdx(buffer));
+                var hasExternDesc = readByte(buffer);
+                if (hasExternDesc != 0x00) {
+                    builder.withExternDesc(parseExternDesc(buffer));
+                }
+                return builder.build();
+            case 0x02:
+                throw new UnsupportedOperationException("Export opcode 0x02 is not supported");
+            default:
+                throw new IllegalArgumentException("Invalid export opcode: " + opcode);
+        }
+    }
+
+    private static SortIdx parseSortIdx(ByteBuffer buffer) {
+        return SortIdx.builder().withSort(parseSort(buffer)).withIdx(readVarUInt32(buffer)).build();
     }
 
     private static CoreType parseCoreType(ByteBuffer buffer) {
@@ -327,7 +723,7 @@ public final class ComponentParser {
     }
 
     private static CoreImportDecl parseCoreImportDecl(ByteBuffer buffer) {
-        return CoreImportDecl.builder().withCoreImport(parseImport(buffer)).build();
+        return CoreImportDecl.builder().withCoreImport(CoreParser.parseImport(buffer)).build();
     }
 
     private static CoreAlias parseCoreAlias(ByteBuffer buffer) {
@@ -343,7 +739,72 @@ public final class ComponentParser {
     }
 
     private static CoreExportDecl parseCoreExportDecl(ByteBuffer buffer) {
-        throw new UnsupportedOperationException("export decl parsing not implemented");
+        return CoreExportDecl.builder()
+                .withName(readName(buffer))
+                .withCoreImportDesc(parseCoreImportDesc(buffer))
+                .build();
+    }
+
+    static CoreImportDesc parseCoreImportDesc(ByteBuffer buffer) {
+        ExternalType descType = CoreParser.parseExternalType(buffer);
+        switch (descType) {
+            case FUNCTION:
+                {
+                    return CoreFunctionImportDesc.builder()
+                            .withTypeIndex(readVarUInt32(buffer))
+                            .build();
+                }
+            case TABLE:
+                {
+                    var rawTableType = readValueTypeBuilder(buffer).build();
+
+                    var limitType = readByte(buffer);
+                    var min = (int) readVarUInt32(buffer);
+                    TableLimits limits = null;
+                    switch (limitType) {
+                        case 0x00:
+                            limits = new TableLimits(min);
+                            break;
+                        case 0x01:
+                        case 0x03:
+                            limits = new TableLimits(min, readVarUInt32(buffer), limitType == 0x03);
+                            break;
+                        default:
+                            throw new MalformedException(
+                                    "integer too large, invalid table limit: " + limitType);
+                    }
+
+                    return CoreTableImportDesc.builder()
+                            .withEntryType(rawTableType)
+                            .withLimits(limits)
+                            .build();
+                }
+            case MEMORY:
+                {
+                    var limits = CoreParser.parseMemoryLimits(buffer);
+                    return CoreMemoryImportDesc.builder().withLimits(limits).build();
+                }
+            case GLOBAL:
+                var globalValType = readValueTypeBuilder(buffer).build();
+                var globalMut = MutabilityType.forId(readByte(buffer));
+                return CoreGlobalImportDesc.builder()
+                        .withMutabilityType(globalMut)
+                        .withValType(globalValType)
+                        .build();
+            case TAG:
+                try {
+                    var attribute = readByte(buffer);
+                    var tagTypeIdx = (int) readVarUInt32(buffer);
+                    return CoreTagImportDesc.builder()
+                            .withAttribute(attribute)
+                            .withTagTypeIdx(tagTypeIdx)
+                            .build();
+                } catch (MalformedException e) {
+                    throw new MalformedException("malformed import kind", e);
+                }
+            default:
+                throw new MalformedException("malformed import kind");
+        }
     }
 
     private static TypeSection parseTypeSection(ByteBuffer buffer) {
@@ -370,9 +831,28 @@ public final class ComponentParser {
                 return Type.of(parseComponentType(buffer));
             case 0x42:
                 return Type.of(parseInstanceType(buffer));
+            case 0x3F:
+                return Type.of(parseResourceType(buffer));
             default:
                 throw new MalformedException("unknown type opcode: " + opcode);
         }
+    }
+
+    private static ResourceType parseResourceType(ByteBuffer buffer) {
+        var rep = readValueTypeBuilder(buffer).build();
+        var builder = ResourceType.builder().withRep(rep);
+        var hasDtor = readByte(buffer);
+        switch (hasDtor) {
+            case 0x00:
+                break;
+            case 0x01:
+                builder.withDtor(readVarUInt32(buffer));
+                break;
+            default:
+                throw new MalformedException(
+                        "expected 0x00 or 0x01 for resource dtor, found " + hasDtor);
+        }
+        return builder.build();
     }
 
     private static Type parseDefValType(DefValType.Kind kind, ByteBuffer buffer) {

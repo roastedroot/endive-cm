@@ -171,12 +171,7 @@ public final class CoreParser {
     static Import parseImport(ByteBuffer buffer) {
         String moduleName = readName(buffer);
         String importName = readName(buffer);
-        ExternalType descType;
-        try {
-            descType = ExternalType.byId((int) readVarUInt32(buffer));
-        } catch (RuntimeException e) {
-            throw new MalformedException("malformed import kind", e);
-        }
+        ExternalType descType = parseExternalType(buffer);
         switch (descType) {
             case FUNCTION:
                 {
@@ -226,7 +221,17 @@ public final class CoreParser {
         }
     }
 
-    private static MemoryLimits parseMemoryLimits(ByteBuffer buffer) {
+    static ExternalType parseExternalType(ByteBuffer buffer) {
+        ExternalType descType;
+        try {
+            descType = ExternalType.byId((int) readVarUInt32(buffer));
+        } catch (RuntimeException e) {
+            throw new MalformedException("malformed import kind", e);
+        }
+        return descType;
+    }
+
+    static MemoryLimits parseMemoryLimits(ByteBuffer buffer) {
         var limitType = readByte(buffer);
         var initial = (int) readVarUInt32(buffer);
         switch (limitType) {
