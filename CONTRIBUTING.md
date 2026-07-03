@@ -33,10 +33,7 @@ The plugin configuration in [`parser/pom.xml`](parser/pom.xml) declares three li
 
 All `.wast` files must be in either `includedWasts` or `excludedWasts` — the plugin will fail if any file is unaccounted for.
 
-Test counts (from `wasm-tools/` directory):
-- **530 total** generated test methods across 31 test classes
-- **389 passing** (validation + parsing assertions)
-- **141 skipped** (`@Disabled` — blocked on unimplemented sections: Core Module, Import, Export, Instance, Alias, Canon)
+Test counts are tracked in CI and displayed automatically in the project's main README.
 
 ### Adding a new `.wast` file
 
