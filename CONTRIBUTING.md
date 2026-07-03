@@ -29,7 +29,7 @@ The plugin configuration in [`parser/pom.xml`](parser/pom.xml) declares three li
 
 - **`includedWasts`** — `.wast` files that are actively tested (currently all 31 `wasm-tools/*.wast` files)
 - **`excludedWasts`** — `.wast` files not yet tested (e.g. `async/`, `wasmtime/`, `values/` — require runtime support)
-- **`excludedTests`** — individual test methods that are `@Disabled` due to unimplemented parser sections (141 tests)
+- **`excludedTests`** — individual test methods that are `@Disabled` due to unimplemented parser sections
 
 All `.wast` files must be in either `includedWasts` or `excludedWasts` — the plugin will fail if any file is unaccounted for.
 
