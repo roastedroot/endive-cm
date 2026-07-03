@@ -1,5 +1,7 @@
 # Endive Component Model
 
+[![Test Results](https://raw.githubusercontent.com/roastedroot/endive-cm/badges/badge-tests.svg)](https://github.com/roastedroot/endive-cm/actions)
+
 This repository is a collaborative space to design and implement
 [WebAssembly Component Model](https://github.com/WebAssembly/component-model) support
 for the [Endive](https://github.com/bytecodealliance/endive) runtime.
