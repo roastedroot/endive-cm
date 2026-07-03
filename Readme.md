@@ -33,7 +33,7 @@ This effort builds on earlier exploration in the ecosystem:
 
 The long-term goal is to bring full Component Model support to Endive:
 
-- **WIT parsing**: spec-compliant parsing of WIT definitions (available now via the `wit-parser` module)
+- **WIT parsing**: spec-compliant parsing of WIT definitions (available now via the `wasm-tools` module)
 - **Canonical ABI**: encoding and decoding of Component Model types for Java
 - **WIT bindgen**: generate type-safe Java bindings from WIT definitions
 - **Component instantiation and linking**: load, instantiate, and compose Wasm components
@@ -43,7 +43,7 @@ The long-term goal is to bring full Component Model support to Endive:
 Initial work is in progress on the component type model (`types` module), binary parser (`parser` module), and
 supporting infrastructure including initial `wasm-tools component` command support (`wasm-tools` module).
 
-The repository includes a `wit-parser` module that wraps the
+The repository includes a `wasm-tools` module that wraps the
 [wasm-tools](https://github.com/bytecodealliance/wasm-tools) `component wit` command,
 using the same pattern as the
 [wasm-tools module](https://github.com/bytecodealliance/endive/tree/main/wasm-tools) in the main Endive repo.
@@ -83,7 +83,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details on adding new test coverage.
 ### Usage
 
 ```java
-import run.endive.cm.wit.WitParser;
+import run.endive.cm.tools.WitParser;
 
 String output = WitParser.parse("package example:hello;\n"
         + "world hello {\n"

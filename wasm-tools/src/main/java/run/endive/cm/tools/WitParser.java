@@ -1,4 +1,4 @@
-package run.endive.cm.wit;
+package run.endive.cm.tools;
 
 import io.roastedroot.zerofs.Configuration;
 import io.roastedroot.zerofs.ZeroFs;

@@ -43,7 +43,7 @@ These apply across all phases and must not be violated:
 ## Module Dependency Graph
 
 ```
-wit-parser (existing)
+wasm-tools (existing)          wraps wasm-tools CLI: validate, json-from-wast, WIT parsing
      |
      v
   types (Phase 0)

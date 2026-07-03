@@ -1,4 +1,4 @@
-package run.endive.cm.wit;
+package run.endive.cm.tools;
 
 public class WitParseException extends RuntimeException {
 

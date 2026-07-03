@@ -23,7 +23,6 @@
     <module>parser</module>
     <module>types</module>
     <module>wasm-tools</module>
-    <module>wit-parser</module>
   </modules>
 
   <properties>
