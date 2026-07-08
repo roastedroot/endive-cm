@@ -43,7 +43,7 @@
     <surefire-plugin.version>3.5.2</surefire-plugin.version>
     <zip4j.version>2.11.6</zip4j.version>
 
-    <endive.version>1.0.0</endive.version>
+    <endive.version>1.0.1</endive.version>
     <zerofs.version>0.1.0</zerofs.version>
     <jackson.version>2.22.0</jackson.version>
     <assertj.version>3.27.7</assertj.version>

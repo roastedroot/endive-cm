@@ -125,7 +125,10 @@
             <wast>names/kebab.wast</wast>
             <wast>resources/multiple-resources.wast</wast>
             <wast>validation/abi.wast</wast>
+            <wast>validation/external-visibility.wast</wast>
             <wast>validation/implements.wast</wast>
+            <wast>validation/outer-alias.wast</wast>
+            <wast>validation/resources.wast</wast>
             <wast>values/concat.wast</wast>
             <wast>values/post-return.wast</wast>
             <wast>values/strings.wast</wast>
@@ -145,8 +148,6 @@
             <wast>wasmtime/types.wast</wast>
           </excludedWasts>
           <excludedTests>
-            <test>CmSpecWasmToolsAliasTest.test2</test>
-            <test>CmSpecWasmToolsInstantiateTest.test35</test>
             <test>CmSpecWasmToolsMemory64Test.test2</test>
             <test>CmSpecWasmToolsMemory64Test.test3</test>
             <test>CmSpecWasmToolsMemory64Test.test4</test>
