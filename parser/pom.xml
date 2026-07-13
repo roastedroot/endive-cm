@@ -122,9 +122,12 @@
             <wast>async/validate-no-stream-char.wast</wast>
             <wast>async/wait-during-callback.wast</wast>
             <wast>async/zero-length.wast</wast>
+            <wast>linking/link-time-virtualization.wast</wast>
+            <wast>linking/shared-everything-dynamic-linking.wast</wast>
             <wast>names/kebab.wast</wast>
             <wast>resources/multiple-resources.wast</wast>
             <wast>validation/abi.wast</wast>
+            <wast>validation/attributes.wast</wast>
             <wast>validation/external-visibility.wast</wast>
             <wast>validation/implements.wast</wast>
             <wast>validation/outer-alias.wast</wast>
