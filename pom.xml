@@ -21,6 +21,7 @@
     <module>cm-test-gen-lib</module>
     <module>cm-test-gen-plugin</module>
     <module>parser</module>
+    <module>runtime</module>
     <module>types</module>
     <module>wasm-tools</module>
   </modules>
@@ -105,6 +106,11 @@
       <dependency>
         <groupId>run.endive.cm</groupId>
         <artifactId>parser</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive.cm</groupId>
+        <artifactId>runtime</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
