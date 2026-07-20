@@ -85,6 +85,14 @@ final class ComponentStore {
         types.add(type);
     }
 
+    Type getType(int index) {
+        if (index < 0 || index >= types.size()) {
+            throw new LinkageException(
+                    "Type index " + index + " out of bounds (size " + types.size() + ")");
+        }
+        return types.get(index);
+    }
+
     void addComponent(WasmComponent component) {
         components.add(component);
     }

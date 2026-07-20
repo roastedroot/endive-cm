@@ -222,7 +222,7 @@ public final class CmJavaTestGen {
         body.addStatement("var linker = ComponentLinker.builder().build();");
         body.addStatement("ComponentInstance instance = linker.instantiate(component);");
         body.addStatement(
-                "long[] result = instance.export(\"" + command.action().field() + "\").apply();");
-        body.addStatement("assertArrayEquals(new long[0], result);");
+                "Object[] result = instance.export(\"" + command.action().field() + "\").apply();");
+        body.addStatement("assertArrayEquals(new Object[0], result);");
     }
 }

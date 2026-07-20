@@ -22,6 +22,7 @@ import run.endive.cm.types.CustomSection;
 import run.endive.cm.types.Export;
 import run.endive.cm.types.ExportAlias;
 import run.endive.cm.types.ExportSection;
+import run.endive.cm.types.FuncType;
 import run.endive.cm.types.ImportSection;
 import run.endive.cm.types.InstanceSection;
 import run.endive.cm.types.Section;
@@ -189,16 +190,31 @@ public final class ComponentLinker {
         }
     }
 
-    private static final long[] EMPTY = new long[0];
+    private static final Object[] EMPTY = new Object[0];
 
     private void processCanonLift(ComponentStore store, CanonLift lift) {
         int coreFuncIdx = (int) lift.funcIdx().idx();
         ExportFunction coreFunc = store.getCoreFunction(coreFuncIdx);
 
+        Type type = store.getType((int) lift.typeIdx());
+        FuncType funcType = type.funcType();
+        if (funcType == null) {
+            throw new LinkageException(
+                    "canon lift type index " + lift.typeIdx() + " is not a FuncType");
+        }
+
+        if (!funcType.params().isEmpty()) {
+            throw new UnsupportedOperationException("canon lift with parameters not yet supported");
+        }
+        if (funcType.hasResult()) {
+            throw new UnsupportedOperationException("canon lift with result not yet supported");
+        }
+
+        // TODO: implement proper lifting/lowering in the canonical ABI module
         ComponentFunction componentFunc =
                 (args) -> {
-                    long[] result = coreFunc.apply(args);
-                    return result != null ? result : EMPTY;
+                    coreFunc.apply();
+                    return EMPTY;
                 };
         store.addFunction(componentFunc);
     }
