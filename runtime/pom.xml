@@ -132,6 +132,7 @@
             <wast>validation/attributes.wast</wast>
             <wast>validation/external-visibility.wast</wast>
             <wast>validation/implements.wast</wast>
+            <wast>validation/kebab.wast</wast>
             <wast>validation/outer-alias.wast</wast>
             <wast>validation/resources.wast</wast>
             <wast>values/concat.wast</wast>
