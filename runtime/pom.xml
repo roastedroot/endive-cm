@@ -126,6 +126,7 @@
             <wast>async/zero-length.wast</wast>
             <wast>linking/link-time-virtualization.wast</wast>
             <wast>linking/shared-everything-dynamic-linking.wast</wast>
+            <wast>linking/unit.wast</wast>
             <wast>names/kebab.wast</wast>
             <wast>resources/multiple-resources.wast</wast>
             <wast>validation/abi.wast</wast>
