@@ -21,11 +21,6 @@ import java.util.function.Supplier;
 import run.endive.cm.types.Alias;
 import run.endive.cm.types.AliasSection;
 import run.endive.cm.types.BorrowType;
-import run.endive.cm.types.Canon;
-import run.endive.cm.types.CanonLift;
-import run.endive.cm.types.CanonLower;
-import run.endive.cm.types.CanonOpt;
-import run.endive.cm.types.CanonResource;
 import run.endive.cm.types.CanonSection;
 import run.endive.cm.types.Case;
 import run.endive.cm.types.ComponentDecl;
@@ -101,6 +96,34 @@ import run.endive.cm.types.ValType;
 import run.endive.cm.types.ValueBound;
 import run.endive.cm.types.VariantType;
 import run.endive.cm.types.WasmComponent;
+import run.endive.cm.types.canon.Canon;
+import run.endive.cm.types.canon.CanonBackpressure;
+import run.endive.cm.types.canon.CanonContext;
+import run.endive.cm.types.canon.CanonErrorContext;
+import run.endive.cm.types.canon.CanonErrorContextDrop;
+import run.endive.cm.types.canon.CanonFuture;
+import run.endive.cm.types.canon.CanonFutureCancel;
+import run.endive.cm.types.canon.CanonFutureIo;
+import run.endive.cm.types.canon.CanonLift;
+import run.endive.cm.types.canon.CanonLower;
+import run.endive.cm.types.canon.CanonOpt;
+import run.endive.cm.types.canon.CanonResource;
+import run.endive.cm.types.canon.CanonStream;
+import run.endive.cm.types.canon.CanonStreamCancel;
+import run.endive.cm.types.canon.CanonStreamIo;
+import run.endive.cm.types.canon.CanonSubtaskCancel;
+import run.endive.cm.types.canon.CanonSubtaskDrop;
+import run.endive.cm.types.canon.CanonTaskCancel;
+import run.endive.cm.types.canon.CanonTaskReturn;
+import run.endive.cm.types.canon.CanonThread;
+import run.endive.cm.types.canon.CanonThreadAvailableParallelism;
+import run.endive.cm.types.canon.CanonThreadCancellable;
+import run.endive.cm.types.canon.CanonThreadNewIndirect;
+import run.endive.cm.types.canon.CanonThreadSpawnIndirect;
+import run.endive.cm.types.canon.CanonThreadSpawnRef;
+import run.endive.cm.types.canon.CanonWaitableJoin;
+import run.endive.cm.types.canon.CanonWaitableSet;
+import run.endive.cm.types.canon.CanonWaitableSetIo;
 import run.endive.wasm.MalformedException;
 import run.endive.wasm.Parser;
 import run.endive.wasm.io.InputStreams;
@@ -540,6 +563,72 @@ public final class ComponentParser {
             case RESOURCE_DROP:
             case RESOURCE_REP:
                 return parseCanonResource(buffer, kind);
+            case BACKPRESSURE_SET:
+            case BACKPRESSURE_INC:
+            case BACKPRESSURE_DEC:
+                return CanonBackpressure.of(kind);
+            case TASK_RETURN:
+                return parseCanonTaskReturn(buffer);
+            case TASK_CANCEL:
+                return new CanonTaskCancel();
+            case CONTEXT_GET:
+            case CONTEXT_SET:
+                return parseCanonContext(buffer, kind);
+            case SUBTASK_CANCEL:
+                return CanonSubtaskCancel.of(parseFlag(buffer, "async"));
+            case SUBTASK_DROP:
+                return new CanonSubtaskDrop();
+            case STREAM_NEW:
+            case STREAM_DROP_READABLE:
+            case STREAM_DROP_WRITABLE:
+                return parseCanonStream(buffer, kind);
+            case STREAM_READ:
+            case STREAM_WRITE:
+                return parseCanonStreamIo(buffer, kind);
+            case STREAM_CANCEL_READ:
+            case STREAM_CANCEL_WRITE:
+                return parseCanonStreamCancel(buffer, kind);
+            case FUTURE_NEW:
+            case FUTURE_DROP_READABLE:
+            case FUTURE_DROP_WRITABLE:
+                return parseCanonFuture(buffer, kind);
+            case FUTURE_READ:
+            case FUTURE_WRITE:
+                return parseCanonFutureIo(buffer, kind);
+            case FUTURE_CANCEL_READ:
+            case FUTURE_CANCEL_WRITE:
+                return parseCanonFutureCancel(buffer, kind);
+            case ERROR_CONTEXT_NEW:
+            case ERROR_CONTEXT_DEBUG_MESSAGE:
+                return parseCanonErrorContext(buffer, kind);
+            case ERROR_CONTEXT_DROP:
+                return new CanonErrorContextDrop();
+            case WAITABLE_SET_NEW:
+            case WAITABLE_SET_DROP:
+                return CanonWaitableSet.of(kind);
+            case WAITABLE_SET_WAIT:
+            case WAITABLE_SET_POLL:
+                return parseCanonWaitableSetIo(buffer, kind);
+            case WAITABLE_JOIN:
+                return new CanonWaitableJoin();
+            case THREAD_INDEX:
+            case THREAD_RESUME_LATER:
+                return CanonThread.of(kind);
+            case THREAD_NEW_INDIRECT:
+                return parseCanonThreadNewIndirect(buffer);
+            case THREAD_SUSPEND:
+            case THREAD_YIELD:
+            case THREAD_SUSPEND_THEN_RESUME:
+            case THREAD_YIELD_THEN_RESUME:
+            case THREAD_SUSPEND_THEN_PROMOTE:
+            case THREAD_YIELD_THEN_PROMOTE:
+                return parseCanonThreadCancellable(buffer, kind);
+            case THREAD_SPAWN_REF:
+                return parseCanonThreadSpawnRef(buffer);
+            case THREAD_SPAWN_INDIRECT:
+                return parseCanonThreadSpawnIndirect(buffer);
+            case THREAD_AVAILABLE_PARALLELISM:
+                return CanonThreadAvailableParallelism.of(parseFlag(buffer, "shared"));
             default:
                 throw new UnsupportedOperationException(
                         "Canon kind " + kind + " is not supported yet");
@@ -580,6 +669,123 @@ public final class ComponentParser {
     private static CanonResource parseCanonResource(ByteBuffer buffer, Canon.Kind kind) {
         var typeIdx = readVarUInt32(buffer);
         return CanonResource.builder().withKind(kind).withTypeIdx(typeIdx).build();
+    }
+
+    private static CanonTaskReturn parseCanonTaskReturn(ByteBuffer buffer) {
+        var result = parseResultList(buffer);
+        var opts = parseCanonOpts(buffer);
+        return CanonTaskReturn.builder().withResult(result).withOpts(opts).build();
+    }
+
+    private static CanonContext parseCanonContext(ByteBuffer buffer, Canon.Kind kind) {
+        var valType = parseValType(buffer);
+        var index = readVarUInt32(buffer);
+        return CanonContext.builder().withKind(kind).withValType(valType).withIndex(index).build();
+    }
+
+    private static CanonStream parseCanonStream(ByteBuffer buffer, Canon.Kind kind) {
+        var typeIdx = readVarUInt32(buffer);
+        return CanonStream.builder().withKind(kind).withTypeIdx(typeIdx).build();
+    }
+
+    private static CanonStreamIo parseCanonStreamIo(ByteBuffer buffer, Canon.Kind kind) {
+        var typeIdx = readVarUInt32(buffer);
+        var opts = parseCanonOpts(buffer);
+        return CanonStreamIo.builder().withKind(kind).withTypeIdx(typeIdx).withOpts(opts).build();
+    }
+
+    private static CanonStreamCancel parseCanonStreamCancel(ByteBuffer buffer, Canon.Kind kind) {
+        var typeIdx = readVarUInt32(buffer);
+        var async = parseFlag(buffer, "async");
+        return CanonStreamCancel.builder()
+                .withKind(kind)
+                .withTypeIdx(typeIdx)
+                .withAsync(async)
+                .build();
+    }
+
+    private static CanonFuture parseCanonFuture(ByteBuffer buffer, Canon.Kind kind) {
+        var typeIdx = readVarUInt32(buffer);
+        return CanonFuture.builder().withKind(kind).withTypeIdx(typeIdx).build();
+    }
+
+    private static CanonFutureIo parseCanonFutureIo(ByteBuffer buffer, Canon.Kind kind) {
+        var typeIdx = readVarUInt32(buffer);
+        var opts = parseCanonOpts(buffer);
+        return CanonFutureIo.builder().withKind(kind).withTypeIdx(typeIdx).withOpts(opts).build();
+    }
+
+    private static CanonFutureCancel parseCanonFutureCancel(ByteBuffer buffer, Canon.Kind kind) {
+        var typeIdx = readVarUInt32(buffer);
+        var async = parseFlag(buffer, "async");
+        return CanonFutureCancel.builder()
+                .withKind(kind)
+                .withTypeIdx(typeIdx)
+                .withAsync(async)
+                .build();
+    }
+
+    private static CanonErrorContext parseCanonErrorContext(ByteBuffer buffer, Canon.Kind kind) {
+        var opts = parseCanonOpts(buffer);
+        return CanonErrorContext.builder().withKind(kind).withOpts(opts).build();
+    }
+
+    private static CanonWaitableSetIo parseCanonWaitableSetIo(ByteBuffer buffer, Canon.Kind kind) {
+        var cancellable = parseFlag(buffer, "cancel");
+        var memIdx = readVarUInt32(buffer);
+        return CanonWaitableSetIo.builder()
+                .withKind(kind)
+                .withCancellable(cancellable)
+                .withMemIdx(memIdx)
+                .build();
+    }
+
+    private static CanonThreadNewIndirect parseCanonThreadNewIndirect(ByteBuffer buffer) {
+        var funcTypeIdx = readVarUInt32(buffer);
+        var tableIdx = readVarUInt32(buffer);
+        return CanonThreadNewIndirect.builder()
+                .withFuncTypeIdx(funcTypeIdx)
+                .withTableIdx(tableIdx)
+                .build();
+    }
+
+    private static CanonThreadCancellable parseCanonThreadCancellable(
+            ByteBuffer buffer, Canon.Kind kind) {
+        var cancellable = parseFlag(buffer, "cancel");
+        return CanonThreadCancellable.builder().withKind(kind).withCancellable(cancellable).build();
+    }
+
+    private static CanonThreadSpawnRef parseCanonThreadSpawnRef(ByteBuffer buffer) {
+        var shared = parseFlag(buffer, "shared");
+        var funcTypeIdx = readVarUInt32(buffer);
+        return CanonThreadSpawnRef.builder()
+                .withShared(shared)
+                .withFuncTypeIdx(funcTypeIdx)
+                .build();
+    }
+
+    private static CanonThreadSpawnIndirect parseCanonThreadSpawnIndirect(ByteBuffer buffer) {
+        var shared = parseFlag(buffer, "shared");
+        var funcTypeIdx = readVarUInt32(buffer);
+        var tableIdx = readVarUInt32(buffer);
+        return CanonThreadSpawnIndirect.builder()
+                .withShared(shared)
+                .withFuncTypeIdx(funcTypeIdx)
+                .withTableIdx(tableIdx)
+                .build();
+    }
+
+    private static boolean parseFlag(ByteBuffer buffer, String flagName) {
+        var value = readByte(buffer);
+        switch (value) {
+            case 0x00:
+                return false;
+            case 0x01:
+                return true;
+            default:
+                throw new MalformedException(
+                        "expected 0x00 or 0x01 for " + flagName + " flag, found " + value);
+        }
     }
 
     private static List<CanonOpt> parseCanonOpts(ByteBuffer buffer) {
@@ -919,11 +1125,15 @@ public final class ComponentParser {
         for (int i = 0; i < numParams && buffer.hasRemaining(); i++) {
             builder.addParam(parseLabelValType(buffer));
         }
+        builder.withResult(parseResultList(buffer));
+        return builder.build();
+    }
+
+    private static ValType parseResultList(ByteBuffer buffer) {
         var resultIndicator = readByte(buffer);
         switch (resultIndicator) {
             case 0x00:
-                builder.withResult(parseValType(buffer));
-                break;
+                return parseValType(buffer);
             case 0x01:
                 var voidIndicator = readByte(buffer);
                 if (voidIndicator != 0x00) {
@@ -931,11 +1141,10 @@ public final class ComponentParser {
                             "unexpected opcode value after void result indicator: "
                                     + voidIndicator);
                 }
-                break;
+                return null;
             default:
                 throw new MalformedException("unknown result opcode: " + resultIndicator);
         }
-        return builder.build();
     }
 
     public static ComponentType parseComponentType(ByteBuffer buffer) {

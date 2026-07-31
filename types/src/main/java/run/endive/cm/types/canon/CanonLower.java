@@ -1,7 +1,9 @@
-package run.endive.cm.types;
+package run.endive.cm.types.canon;
 
 import java.util.List;
 import java.util.Objects;
+import run.endive.cm.types.Sort;
+import run.endive.cm.types.SortIdx;
 
 public final class CanonLower extends Canon {
 
@@ -33,6 +35,9 @@ public final class CanonLower extends Canon {
         private Builder() {}
 
         public Builder withFuncIdx(SortIdx funcIdx) {
+            if (funcIdx.sort().kind() != Sort.Kind.FUNC) {
+                throw new IllegalArgumentException("funcIdx must refer to a function sort");
+            }
             this.funcIdx = funcIdx;
             return this;
         }

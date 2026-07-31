@@ -3,6 +3,7 @@ package run.endive.cm.types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import run.endive.cm.types.canon.Canon;
 
 public final class CanonSection extends Section {
 

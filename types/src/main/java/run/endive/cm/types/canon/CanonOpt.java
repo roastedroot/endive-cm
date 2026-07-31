@@ -1,4 +1,4 @@
-package run.endive.cm.types;
+package run.endive.cm.types.canon;
 
 import java.util.List;
 import java.util.Objects;

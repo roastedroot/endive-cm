@@ -1,12 +1,16 @@
-package run.endive.cm.types;
+package run.endive.cm.types.canon;
 
+import java.util.List;
 import java.util.Objects;
 
-public final class CanonResource extends Canon {
+public final class CanonStream extends Canon {
+
+    private static final List<Kind> VALID_KINDS =
+            List.of(Kind.STREAM_NEW, Kind.STREAM_DROP_READABLE, Kind.STREAM_DROP_WRITABLE);
 
     private final long typeIdx;
 
-    private CanonResource(Kind kind, long typeIdx) {
+    private CanonStream(Kind kind, long typeIdx) {
         super(kind);
         this.typeIdx = typeIdx;
     }
@@ -24,6 +28,9 @@ public final class CanonResource extends Canon {
         private long typeIdx;
 
         public Builder withKind(Kind kind) {
+            if (!VALID_KINDS.contains(kind)) {
+                throw new IllegalArgumentException("Invalid kind for canon stream: " + kind);
+            }
             this.kind = kind;
             return this;
         }
@@ -33,20 +40,20 @@ public final class CanonResource extends Canon {
             return this;
         }
 
-        public CanonResource build() {
-            return new CanonResource(kind, typeIdx);
+        public CanonStream build() {
+            return new CanonStream(kind, typeIdx);
         }
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof CanonResource)) {
+        if (!(o instanceof CanonStream)) {
             return false;
         }
         if (!super.equals(o)) {
             return false;
         }
-        CanonResource that = (CanonResource) o;
+        CanonStream that = (CanonStream) o;
         return typeIdx == that.typeIdx;
     }
 
@@ -57,6 +64,6 @@ public final class CanonResource extends Canon {
 
     @Override
     public String toString() {
-        return "CanonResource{" + "kind=" + kind() + ", typeIdx=" + typeIdx + '}';
+        return "CanonStream{" + "kind=" + kind() + ", typeIdx=" + typeIdx + '}';
     }
 }
