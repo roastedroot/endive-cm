@@ -58,6 +58,7 @@
         <artifactId>cm-test-gen-plugin</artifactId>
         <version>${project.version}</version>
         <configuration>
+          <testSuiteRepoRef>706074c96bc14cfc58469e1bdc452bb4d91921c7</testSuiteRepoRef>
           <includedWasts>
             <wast>wasm-tools/adapt.wast</wast>
             <wast>wasm-tools/alias.wast</wast>
