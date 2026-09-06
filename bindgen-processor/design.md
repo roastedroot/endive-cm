@@ -331,8 +331,39 @@ public final class Calculator {
 
 `BindgenProcessor` reads the annotation, loads the WIT, and hands it to `WorldReader`, which encodes it, parses it, and
 resolves the named world into a `WitWorld` of imported and exported functions. `WorldGenerator` turns that into one
-`GeneratedSource` per file, with `WitTypes` mapping component value types onto Java ones and `Names` doing the
+`GeneratedUnit` per file, with `WitTypes` mapping component value types onto Java ones and `Names` doing the
 kebab-case conversion.
+
+### Generation builds JavaParser nodes rather than source strings
+
+Every generated construct is assembled as a typed AST node. Nothing is parsed back from a string, so a mistake is a
+compile error in the generator rather than a parse failure at annotation processing time, and a debugger stepping
+through generation shows the tree being built.
+
+Seven types carry it, and knowing which one owns a decision is most of finding your way around.
+
+| Type | Owns |
+|---|---|
+| `QualifiedTypes` | The qualified names of every runtime and JDK type generated code refers to |
+| `AstBuilders` | Factories over JavaParser nodes, terse enough that a node reads like the Java it stands for |
+| `GeneratedUnit` | One source file, which imports a type as a consequence of naming it |
+| `WitTypes` | A component value type as a Java type, a rebuilt `ValType`, or a descriptor |
+| `FunctionBindings` | The pieces a WIT function turns into, whichever way the call runs |
+| `HostWiring` | The statements building a `HostInstance` for an imported interface |
+| `InterfaceGenerator` | The Java package mirroring one interface, so `WorldGenerator` holds only the world class |
+
+Two of those are worth knowing the reason for.
+
+`GeneratedUnit.use` returns a type by its simple name and records the import, so the import list follows from what the
+generated code names. The previous arrangement decided imports separately, by asking whether any function mentioned a
+kind, which drifted from what was actually written. Rewriting the generator onto `use` changed the checked-in expected
+sources by exactly one line, an unused `java.math.BigInteger` the old rule added to a world whose only `u64` was in
+another file. A `GeneratedUnit` is also what the processor writes, taking its file name from the type it declares
+rather than from a name passed alongside, so the two cannot disagree.
+
+`AstBuilders` parenthesises a scope that binds less tightly than the expression reaching into it, because
+JavaParser's printer writes a tree structurally rather than by precedence. Without that,
+`((VariantValue) value).label()` would print as `(VariantValue) value.label()`.
 
 `WorldReader` refuses what it cannot yet read rather than guessing. An alias that introduces a type would shift every
 index after it, so a world using types from an interface is rejected by name instead of being mis-numbered in silence.
@@ -493,9 +524,10 @@ thing to avoid. A WIT type that is not supported belongs in the unsupported list
 ## Module Layout
 
 - `bindgen-processor` holds the processor and its golden-file tests, following `HostModuleProcessorTest`. Sources are
-  built with JavaParser, written through the `Filer`, and compared against checked-in expected sources with
+  built as JavaParser AST nodes, written through the `Filer`, and compared against checked-in expected sources with
   `compile-testing`. WIT for those tests lives in `src/test/resources/wit/` and reaches the processor through
-  `withClasspath`.
+  `withClasspath`. `hasSourceEquivalentTo` compares parse trees, so a formatting change does not fail a test, which is
+  why `regenerate-goldens.sh` and its diff are the real review of a generator change.
 - `bindgen-processor-tests` holds the end-to-end tests. A `.wat` fixture and a `.wit` file are turned into a component
   by `ComponentEmbed` and `ComponentNew`, and the same WIT generates the bindings that call it, so nothing is written
   by hand twice.

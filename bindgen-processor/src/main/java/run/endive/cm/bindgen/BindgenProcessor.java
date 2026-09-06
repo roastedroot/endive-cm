@@ -71,8 +71,8 @@ public final class BindgenProcessor extends AbstractProcessor {
         WitWorld world = WorldReader.read(readWit(bindgen), bindgen.world());
 
         String packageName = packageOf(element).getQualifiedName().toString();
-        for (GeneratedSource source : WorldGenerator.generate(world, packageName, generatedBy())) {
-            write(element, world, source);
+        for (GeneratedUnit generated : WorldGenerator.generate(world, packageName, generatedBy())) {
+            write(element, world, generated);
         }
     }
 
@@ -83,13 +83,14 @@ public final class BindgenProcessor extends AbstractProcessor {
      * Java type serving both is what an embedder wants. Two that disagree are a genuine conflict,
      * so that is reported rather than resolved by whichever ran first.
      */
-    private void write(Element element, WitWorld world, GeneratedSource source) {
-        String contents = source.contents();
-        String existing = written.get(source.qualifiedName());
+    private void write(Element element, WitWorld world, GeneratedUnit generated) {
+        String name = generated.qualifiedName();
+        String contents = generated.contents();
+        String existing = written.get(name);
         if (existing != null) {
             if (!existing.equals(contents)) {
                 throw new BindgenException(
-                        source.qualifiedName()
+                        name
                                 + " is generated differently by world \""
                                 + world.name()
                                 + "\" than by a world already read in this package");
@@ -97,14 +98,12 @@ public final class BindgenProcessor extends AbstractProcessor {
             return;
         }
 
-        try (Writer writer =
-                filer().createSourceFile(source.qualifiedName(), element).openWriter()) {
+        try (Writer writer = filer().createSourceFile(name, element).openWriter()) {
             writer.write(contents);
         } catch (IOException e) {
-            throw new BindgenException(
-                    "could not write " + source.qualifiedName() + ": " + e.getMessage(), e);
+            throw new BindgenException("could not write " + name + ": " + e.getMessage(), e);
         }
-        written.put(source.qualifiedName(), contents);
+        written.put(name, contents);
     }
 
     private String generatedBy() {
