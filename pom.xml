@@ -241,6 +241,9 @@
       <activation>
         <jdk>[17,)</jdk>
       </activation>
+      <properties>
+        <google-java-format.version>1.28.0</google-java-format.version>
+      </properties>
       <build>
         <plugins>
           <plugin>
@@ -267,7 +270,7 @@
                   <include>**/src/test/java/**/*.java</include>
                 </includes>
                 <googleJavaFormat>
-                  <version>1.28.0</version>
+                  <version>${google-java-format.version}</version>
                   <style>AOSP</style>
                   <reflowLongStrings>true</reflowLongStrings>
                   <formatJavadoc>false</formatJavadoc>
@@ -322,6 +325,9 @@
       <activation>
         <jdk>[21,)</jdk>
       </activation>
+      <properties>
+        <google-java-format.version>1.36.1</google-java-format.version>
+      </properties>
       <build>
         <plugins>
           <plugin>
