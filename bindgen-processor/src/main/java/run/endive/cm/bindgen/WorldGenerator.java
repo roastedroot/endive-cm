@@ -13,8 +13,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import run.endive.cm.types.DefValType;
-import run.endive.cm.types.Type;
 
 /**
  * Generates the bindings for one world.
@@ -192,10 +190,6 @@ final class WorldGenerator {
         method.addParameter(AstBuilders.type("Imports"), "imports");
         method.setJavadocComment(
                 "Instantiates {@code component}, satisfying its imports with {@code imports}.");
-        if (usesKind(DefValType.Kind.LIST)) {
-            // A list arrives raw, and only the generated cast names its element type.
-            method.addSingleMemberAnnotation(SuppressWarnings.class, AstBuilders.text("unchecked"));
-        }
 
         BlockStmt body = new BlockStmt();
         body.addStatement(
@@ -245,18 +239,6 @@ final class WorldGenerator {
         BlockStmt body = new BlockStmt();
         body.addStatement(new ReturnStmt(value));
         return body;
-    }
-
-    /** Whether any imported interface declares a type of {@code kind}. */
-    private boolean usesKind(DefValType.Kind kind) {
-        for (WitInterface imported : world.importedInterfaces()) {
-            for (Type declared : HostWiring.compoundTypes(imported).values()) {
-                if (declared.defValType().kind() == kind) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     /**

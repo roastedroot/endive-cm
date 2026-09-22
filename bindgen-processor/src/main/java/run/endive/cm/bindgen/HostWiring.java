@@ -7,7 +7,6 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import run.endive.cm.types.DefValType;
 import run.endive.cm.types.Type;
 
 /**
@@ -208,8 +207,7 @@ final class HostWiring {
     }
 
     private static boolean isCompound(Type type) {
-        DefValType.Kind kind = type.defValType().kind();
-        return kind == DefValType.Kind.LIST || kind == DefValType.Kind.ENUM;
+        return WitTypes.isCompound(type.defValType().kind());
     }
 
     /** Only the export declaring a type says what it is called, so an unnamed one gets an index. */

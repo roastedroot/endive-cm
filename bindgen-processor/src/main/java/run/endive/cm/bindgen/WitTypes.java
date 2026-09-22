@@ -41,17 +41,47 @@ final class WitTypes {
                 return AstBuilders.generic(
                         unit.use(QualifiedTypes.LIST), javaType(list.elementType(), scope));
             case ENUM:
-                return AstBuilders.type(enumJavaType(scope, index));
+                return AstBuilders.type(nominalJavaType(scope, index));
             default:
                 throw unsupported(defined.kind().name());
         }
+    }
+
+    /**
+     * The types a host instance has to be told about, since a function type names one by index.
+     *
+     * <p>An allowlist rather than everything non-primitive, because a resource contributes an
+     * {@code own} and a {@code borrow} to the same space and neither is a type to declare.
+     */
+    static boolean isCompound(DefValType.Kind kind) {
+        switch (kind) {
+            case LIST:
+            case ENUM:
+            case RECORD:
+            case VARIANT:
+            case FLAGS:
+            case TUPLE:
+            case OPTION:
+            case RESULT:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Whether a Java value of this kind differs from what the ABI carries, so that the generated
+     * code has to convert at the boundary rather than pass it through.
+     */
+    private static boolean convertsAtBoundary(DefValType.Kind kind) {
+        return kind == DefValType.Kind.ENUM;
     }
 
     /** Whether values of {@code valType} need converting between Java and what the ABI carries. */
     private boolean needsConversion(ValType valType, WitScope scope) {
         return valType != null
                 && valType.primValType() == null
-                && definedAt(scope, valType.typeIdx()).kind() == DefValType.Kind.ENUM;
+                && convertsAtBoundary(definedAt(scope, valType.typeIdx()).kind());
     }
 
     /** Turns a Java value into what the ABI carries. */
@@ -63,11 +93,21 @@ final class WitTypes {
     Expression fromComponent(Expression value, ValType valType, WitScope scope) {
         if (needsConversion(valType, scope)) {
             return AstBuilders.call(
-                    AstBuilders.name(enumJavaType(scope, valType.typeIdx())),
+                    AstBuilders.name(nominalJavaType(scope, valType.typeIdx())),
                     "fromComponent",
                     value);
         }
-        return AstBuilders.cast(javaType(valType, scope), value);
+        Type target = javaType(valType, scope);
+        if (isGeneric(target)) {
+            unit.markUnchecked();
+        }
+        return AstBuilders.cast(target, value);
+    }
+
+    /** A cast to a generic type is the one Java cannot check, so it is what needs suppressing. */
+    private static boolean isGeneric(Type type) {
+        return type instanceof ClassOrInterfaceType
+                && ((ClassOrInterfaceType) type).getTypeArguments().isPresent();
     }
 
     /**
@@ -165,10 +205,16 @@ final class WitTypes {
         return AstBuilders.call(unit.useName(descriptor), "instance");
     }
 
-    private String enumJavaType(WitScope scope, int index) {
+    /**
+     * The Java type generated for a nominal type, which is named by the export declaring it.
+     *
+     * <p>Only the nominal kinds come through here. A structural type such as a list or an option
+     * is written anonymously and has no name to find.
+     */
+    private String nominalJavaType(WitScope scope, int index) {
         String name = scope.nameAt(index);
         if (name == null) {
-            throw unsupported("an unnamed enum");
+            throw unsupported("an unnamed " + definedAt(scope, index).kind().name());
         }
         return reference(scope, name);
     }

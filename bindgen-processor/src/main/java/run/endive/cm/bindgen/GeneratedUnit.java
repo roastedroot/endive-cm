@@ -23,6 +23,7 @@ final class GeneratedUnit {
     private final CompilationUnit unit = new CompilationUnit();
     private final String packageName;
     private final String generatedBy;
+    private boolean unchecked;
 
     GeneratedUnit(String packageName, String generatedBy) {
         this.packageName = packageName;
@@ -47,6 +48,23 @@ final class GeneratedUnit {
     String contents() {
         unit.getImports().sort(Comparator.comparing(ImportDeclaration::getNameAsString));
         return unit.toString();
+    }
+
+    /**
+     * Records that this file casts to a generic type, which Java cannot check.
+     *
+     * <p>A value arrives from the ABI as an {@code Object} and only the generated cast names what
+     * is inside it, so the suppression belongs wherever such a cast is written rather than being
+     * decided from the shape of the world.
+     */
+    void markUnchecked() {
+        if (unchecked) {
+            return;
+        }
+        unchecked = true;
+        unit.getType(0)
+                .addSingleMemberAnnotation(
+                        SuppressWarnings.class, new StringLiteralExpr("unchecked"));
     }
 
     /** Imports {@code qualifiedName} and names the type by its simple name. */
