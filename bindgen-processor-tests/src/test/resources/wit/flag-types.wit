@@ -1,0 +1,29 @@
+package example:flag-types;
+
+/// The host decides which of the permissions asked for are granted.
+interface permissions {
+    flags permission {
+        read,
+        write,
+        exec,
+    }
+
+    grant: func(requested: permission) -> permission;
+}
+
+/// The guest asks for permissions and hands back what it was granted.
+interface runner {
+    flags mode {
+        read,
+        write,
+        exec,
+    }
+
+    run: func(requested: mode) -> mode;
+}
+
+world flag-types {
+    import permissions;
+
+    export runner;
+}

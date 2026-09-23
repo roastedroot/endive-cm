@@ -128,6 +128,46 @@ class BindgenProcessorTest {
                                 "goldens/ExportedResourceHost/exports_example_exportedresources_logging_Logger.java"));
     }
 
+    /** Flags are declared by two interfaces at once, so each gets a wrapper of its own. */
+    @Test
+    void generatesFlagsBindings() {
+        Compilation compilation = compile("FlagsHost.java");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.FlagTypes",
+                        "endive.testing.example.flagtypes.permissions.Host",
+                        "endive.testing.example.flagtypes.permissions.Permission",
+                        "endive.testing.exports.example.flagtypes.runner.Guest",
+                        "endive.testing.exports.example.flagtypes.runner.Mode"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.FlagTypes")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource("goldens/FlagsHost/FlagTypes.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.flagtypes.permissions.Host")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/FlagsHost/example_flagtypes_permissions_Host.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.flagtypes.permissions.Permission")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/FlagsHost/example_flagtypes_permissions_Permission.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.flagtypes.runner.Guest")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/FlagsHost/exports_example_flagtypes_runner_Guest.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.flagtypes.runner.Mode")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/FlagsHost/exports_example_flagtypes_runner_Mode.java"));
+    }
+
     @Test
     void generatesHelloWorldBindings() {
         Compilation compilation = compile("HelloWorldHost.java");

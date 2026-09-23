@@ -6,6 +6,7 @@ import com.github.javaparser.ast.type.Type;
 import java.util.Map;
 import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
+import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.ListType;
 import run.endive.cm.types.ValType;
 
@@ -41,6 +42,7 @@ final class WitTypes {
                 return AstBuilders.generic(
                         unit.use(QualifiedTypes.LIST), javaType(list.elementType(), scope));
             case ENUM:
+            case FLAGS:
                 return AstBuilders.type(nominalJavaType(scope, index));
             default:
                 throw unsupported(defined.kind().name());
@@ -59,6 +61,7 @@ final class WitTypes {
         switch (kind) {
             case LIST:
             case ENUM:
+            case FLAGS:
                 return true;
             default:
                 return false;
@@ -70,7 +73,13 @@ final class WitTypes {
      * code has to convert at the boundary rather than pass it through.
      */
     private static boolean convertsAtBoundary(DefValType.Kind kind) {
-        return kind == DefValType.Kind.ENUM;
+        switch (kind) {
+            case ENUM:
+            case FLAGS:
+                return true;
+            default:
+                return false;
+        }
     }
 
     /** Whether values of {@code valType} need converting between Java and what the ABI carries. */
@@ -146,6 +155,14 @@ final class WitTypes {
                             AstBuilders.call(enumBuilder, "addLabel", AstBuilders.text(label));
                 }
                 return typeOf(AstBuilders.call(enumBuilder, "build"));
+            case FLAGS:
+                Expression flagsBuilder =
+                        AstBuilders.call(unit.useName(QualifiedTypes.FLAGS_TYPE), "builder");
+                for (String label : ((FlagsType) defined).labels()) {
+                    flagsBuilder =
+                            AstBuilders.call(flagsBuilder, "addLabel", AstBuilders.text(label));
+                }
+                return typeOf(AstBuilders.call(flagsBuilder, "build"));
             default:
                 throw unsupported(defined.kind().name());
         }
@@ -171,6 +188,10 @@ final class WitTypes {
                 // What crosses is the variant an enum despecializes to, not the Java enum the
                 // embedder holds, because the generated code converts before it calls.
                 return instanceOf(QualifiedTypes.VARIANT_DESCRIPTOR);
+            case FLAGS:
+                // Flags cross as the label-to-boolean map the ABI carries, which is the shape
+                // RecordHostTypeDescriptor names.
+                return instanceOf(QualifiedTypes.RECORD_DESCRIPTOR);
             default:
                 throw unsupported(defined.kind().name());
         }

@@ -5,10 +5,12 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.InstanceOfExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ThisExpr;
@@ -21,11 +23,13 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import com.github.javaparser.ast.type.WildcardType;
 import java.util.ArrayList;
 import java.util.List;
-import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
+import run.endive.cm.types.FlagsType;
 
 /**
  * Generates the Java package mirroring one WIT interface, holding the interface itself plus
@@ -35,6 +39,9 @@ import run.endive.cm.types.EnumType;
  * embedder implements, and an exported one a {@code Guest} wrapping what the component exports.
  */
 final class InterfaceGenerator {
+
+    /** The nested enum a generated flags wrapper holds one constant of per label. */
+    private static final String FLAG = "Flag";
 
     private final String generatedBy;
 
@@ -47,8 +54,15 @@ final class InterfaceGenerator {
         for (WitType declared : iface.types()) {
             // A kind with no Java source of its own is skipped here and refused where a function
             // names it, so declaring one an interface never uses costs nothing.
-            if (declared.kind() == DefValType.Kind.ENUM) {
-                sources.add(enumSource(iface, declared));
+            switch (declared.kind()) {
+                case ENUM:
+                    sources.add(enumSource(iface, declared));
+                    break;
+                case FLAGS:
+                    sources.add(flagsSource(iface, declared));
+                    break;
+                default:
+                    break;
             }
         }
         for (WitResource resource : iface.resources()) {
@@ -157,6 +171,269 @@ final class InterfaceGenerator {
                 new ThrowStmt(
                         AstBuilders.construct(
                                 AstBuilders.type("IllegalArgumentException"), message)));
+        return body;
+    }
+
+    /**
+     * Flags become an {@link java.util.EnumSet} backed wrapper over a nested enum of labels,
+     * because the ABI carries them as a label to boolean map where an absent label is false.
+     */
+    private GeneratedUnit flagsSource(WitInterface iface, WitType declared) {
+        String className = Names.type(declared.name());
+        if (className.equals(FLAG)) {
+            throw new BindgenException(
+                    "flags \"" + declared.name() + "\" would collide with its own nested enum");
+        }
+        GeneratedUnit unit = unitFor(iface);
+
+        ClassOrInterfaceDeclaration type = unit.addClass(className);
+        type.setJavadocComment(
+                "The WIT flags {@code "
+                        + declared.name()
+                        + "}, declared by {@code "
+                        + iface.name()
+                        + "}.");
+        type.addMember(flagConstants(declared));
+
+        type.addField(flagSet(unit), "flags", Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL);
+
+        ConstructorDeclaration constructor = type.addConstructor(Modifier.Keyword.PRIVATE);
+        constructor.addParameter(flagSet(unit), "flags");
+        constructor
+                .getBody()
+                .addStatement(
+                        AstBuilders.assign(AstBuilders.thisField("flags"), new NameExpr("flags")));
+
+        type.addMember(factory(unit, className));
+        type.addMember(membership());
+        type.addMember(reader(unit));
+        type.addMember(flagsLowered(unit));
+        type.addMember(flagsLifted(unit, className));
+        type.addMember(flagsEquals(className));
+        type.addMember(
+                override(
+                        new MethodDeclaration()
+                                .setName("hashCode")
+                                .setPublic(true)
+                                .setType(PrimitiveType.intType())
+                                .setBody(
+                                        returning(
+                                                AstBuilders.call(
+                                                        new NameExpr("flags"), "hashCode")))));
+        type.addMember(
+                override(
+                        new MethodDeclaration()
+                                .setName("toString")
+                                .setPublic(true)
+                                .setType(AstBuilders.type("String"))
+                                .setBody(
+                                        returning(
+                                                new BinaryExpr(
+                                                        AstBuilders.text(className),
+                                                        new NameExpr("flags"),
+                                                        BinaryExpr.Operator.PLUS)))));
+        return unit;
+    }
+
+    /** One constant per label, each carrying the label the ABI knows it by. */
+    private EnumDeclaration flagConstants(WitType declared) {
+        EnumDeclaration flags = new EnumDeclaration();
+        flags.setName(FLAG);
+        flags.setPublic(true);
+        flags.setJavadocComment("One flag of {@code " + declared.name() + "}.");
+        for (String label : ((FlagsType) declared.defValType()).labels()) {
+            flags.addEnumConstant(constantOf(label)).addArgument(AstBuilders.text(label));
+        }
+        flags.addField(
+                AstBuilders.type("String"),
+                "label",
+                Modifier.Keyword.PRIVATE,
+                Modifier.Keyword.FINAL);
+
+        ConstructorDeclaration constructor = flags.addConstructor();
+        constructor.addParameter(AstBuilders.type("String"), "label");
+        constructor
+                .getBody()
+                .addStatement(
+                        AstBuilders.assign(AstBuilders.thisField("label"), new NameExpr("label")));
+        return flags;
+    }
+
+    /** {@code of(Flag... flags)}, which sets exactly what it is given and nothing else. */
+    private MethodDeclaration factory(GeneratedUnit unit, String className) {
+        Parameter given = new Parameter(AstBuilders.type(FLAG), "flags");
+        given.setVarArgs(true);
+
+        BlockStmt body = new BlockStmt();
+        body.addStatement(AstBuilders.declare(flagSet(unit), "set", noneOf(unit)));
+        BlockStmt adding = new BlockStmt();
+        adding.addStatement(AstBuilders.call(new NameExpr("set"), "add", new NameExpr("flag")));
+        body.addStatement(eachFlag(new NameExpr("flags"), adding));
+        body.addStatement(
+                new ReturnStmt(
+                        AstBuilders.construct(AstBuilders.type(className), new NameExpr("set"))));
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("of").setPublic(true).setStatic(true).setType(AstBuilders.type(className));
+        method.addParameter(given);
+        method.setBody(body);
+        method.setJavadocComment("The value with exactly {@code flags} set.");
+        return method;
+    }
+
+    private MethodDeclaration membership() {
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("has").setPublic(true).setType(PrimitiveType.booleanType());
+        method.addParameter(AstBuilders.type(FLAG), "flag");
+        method.setBody(
+                returning(
+                        AstBuilders.call(new NameExpr("flags"), "contains", new NameExpr("flag"))));
+        method.setJavadocComment("Whether {@code flag} is set.");
+        return method;
+    }
+
+    private MethodDeclaration reader(GeneratedUnit unit) {
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("flags")
+                .setPublic(true)
+                .setType(AstBuilders.generic(unit.use(QualifiedTypes.SET), AstBuilders.type(FLAG)));
+        method.setBody(
+                returning(
+                        AstBuilders.call(
+                                unit.useName(QualifiedTypes.ENUM_SET),
+                                "copyOf",
+                                new NameExpr("flags"))));
+        method.setJavadocComment("The flags that are set.");
+        return method;
+    }
+
+    /** Every label is written, since the ABI packs the bits by reading each of them by name. */
+    private MethodDeclaration flagsLowered(GeneratedUnit unit) {
+        BlockStmt body = new BlockStmt();
+        body.addStatement(
+                AstBuilders.declare(
+                        labelledBooleans(unit),
+                        "value",
+                        AstBuilders.construct(
+                                AstBuilders.diamond(unit.use(QualifiedTypes.LINKED_HASH_MAP)))));
+        BlockStmt putting = new BlockStmt();
+        putting.addStatement(
+                AstBuilders.call(
+                        new NameExpr("value"),
+                        "put",
+                        AstBuilders.field(new NameExpr("flag"), "label"),
+                        AstBuilders.call(new NameExpr("flags"), "contains", new NameExpr("flag"))));
+        body.addStatement(eachFlag(AstBuilders.call(AstBuilders.name(FLAG), "values"), putting));
+        body.addStatement(new ReturnStmt(new NameExpr("value")));
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("toComponent").setPublic(true).setType(labelledBooleans(unit));
+        method.setBody(body);
+        method.setJavadocComment("These flags as the ABI carries them, which is a map per label.");
+        return method;
+    }
+
+    /** A label the map does not mention is false, which is where flags differ from a record. */
+    private MethodDeclaration flagsLifted(GeneratedUnit unit, String className) {
+        BlockStmt body = new BlockStmt();
+        body.addStatement(
+                AstBuilders.declare(
+                        anyMap(unit),
+                        "carried",
+                        AstBuilders.cast(anyMap(unit), new NameExpr("value"))));
+        body.addStatement(AstBuilders.declare(flagSet(unit), "set", noneOf(unit)));
+
+        BlockStmt adding = new BlockStmt();
+        adding.addStatement(AstBuilders.call(new NameExpr("set"), "add", new NameExpr("flag")));
+        BlockStmt testing = new BlockStmt();
+        testing.addStatement(
+                new IfStmt(
+                        AstBuilders.call(
+                                AstBuilders.name("Boolean.TRUE"),
+                                "equals",
+                                AstBuilders.call(
+                                        new NameExpr("carried"),
+                                        "get",
+                                        AstBuilders.field(new NameExpr("flag"), "label"))),
+                        adding,
+                        null));
+        body.addStatement(eachFlag(AstBuilders.call(AstBuilders.name(FLAG), "values"), testing));
+        body.addStatement(
+                new ReturnStmt(
+                        AstBuilders.construct(AstBuilders.type(className), new NameExpr("set"))));
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("fromComponent")
+                .setPublic(true)
+                .setStatic(true)
+                .setType(AstBuilders.type(className));
+        method.addParameter(AstBuilders.type("Object"), "value");
+        method.setBody(body);
+        method.setJavadocComment("The flags a lifted value sets.");
+        return method;
+    }
+
+    private MethodDeclaration flagsEquals(String className) {
+        Expression sameFlags =
+                AstBuilders.call(
+                        new NameExpr("flags"),
+                        "equals",
+                        AstBuilders.field(
+                                AstBuilders.cast(
+                                        AstBuilders.type(className), new NameExpr("other")),
+                                "flags"));
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("equals").setPublic(true).setType(PrimitiveType.booleanType());
+        method.addParameter(AstBuilders.type("Object"), "other");
+        method.setBody(
+                returning(
+                        new BinaryExpr(
+                                new InstanceOfExpr(
+                                        new NameExpr("other"), AstBuilders.type(className), null),
+                                sameFlags,
+                                BinaryExpr.Operator.AND)));
+        return override(method);
+    }
+
+    /** Built fresh each time, since a node may be given to only one parent. */
+    private Type flagSet(GeneratedUnit unit) {
+        return AstBuilders.generic(unit.use(QualifiedTypes.ENUM_SET), AstBuilders.type(FLAG));
+    }
+
+    private Type labelledBooleans(GeneratedUnit unit) {
+        return AstBuilders.generic(
+                unit.use(QualifiedTypes.MAP),
+                AstBuilders.type("String"),
+                AstBuilders.type("Boolean"));
+    }
+
+    private Type anyMap(GeneratedUnit unit) {
+        return AstBuilders.generic(
+                unit.use(QualifiedTypes.MAP), new WildcardType(), new WildcardType());
+    }
+
+    private Expression noneOf(GeneratedUnit unit) {
+        return AstBuilders.call(
+                unit.useName(QualifiedTypes.ENUM_SET),
+                "noneOf",
+                AstBuilders.classLiteral(AstBuilders.type(FLAG)));
+    }
+
+    private static ForEachStmt eachFlag(Expression source, BlockStmt body) {
+        return new ForEachStmt(
+                new VariableDeclarationExpr(new VariableDeclarator(AstBuilders.type(FLAG), "flag")),
+                source,
+                body);
+    }
+
+    private static MethodDeclaration override(MethodDeclaration method) {
+        method.addMarkerAnnotation("Override");
+        return method;
+    }
+
+    private static BlockStmt returning(Expression value) {
+        BlockStmt body = new BlockStmt();
+        body.addStatement(new ReturnStmt(value));
         return body;
     }
 

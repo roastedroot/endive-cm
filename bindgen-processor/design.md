@@ -523,17 +523,24 @@ has to be declared before anything names it. That is also why its constructor an
 `instantiate` rather than held as constants. `own` and `borrow` name the resource by index, and the index is only known
 once `declareResource` has run.
 
-An interface may also declare a `list` or an `enum`. A list is carried by `java.util.List` of whatever carries its
-element, so `list<u8>` arrives as `List<Short>`. An enum becomes a Java enum carrying the label the ABI knows it by,
-and converts at the boundary, because the ABI despecializes an enum to a variant and lifts it as a `VariantValue`
-rather than as anything nominal.
+An interface may also declare a `list`, an `enum` or a `flags`. A list is carried by `java.util.List` of whatever
+carries its element, so `list<u8>` arrives as `List<Short>`. An enum becomes a Java enum carrying the label the ABI
+knows it by, and converts at the boundary, because the ABI despecializes an enum to a variant and lifts it as a
+`VariantValue` rather than as anything nominal.
+
+A `flags` becomes a final class holding an `EnumSet` of a nested `Flag` enum, one constant per label, and is described
+to the runtime by `RecordHostTypeDescriptor`, since the ABI carries it as a label to boolean map. `toComponent` writes
+every label, because `CanonicalAbi.packFlagsIntoInt` reads each one by name, and `fromComponent` reads each back with
+`Boolean.TRUE.equals`, so a label the map leaves out is false rather than a bug the way a missing record field is. A
+flags type whose Java name would be `Flag` is refused, because a nested type may not be named after the class holding
+it. More than 32 flags never reaches the generator, since wasm-tools rejects it while encoding the WIT.
 
 Both have to be declared into the host instance before a function type can name them, the same as a resource, which is
 why every imported interface is built through a local rather than in one chained expression. A `WitScope` carries an
 interface's type index space together with the names its exports give those types, since only the export says what a
 type is called and a Java type has to be called something.
 
-Records, variants, flags, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
+Records, variants, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
 and a compound type on a world's bare function import are each rejected with a message naming what is unsupported. The
 last of those is a limit of `HostFunction`, which builds an instance with no type space, leaving an index nothing
 to resolve.
@@ -623,7 +630,7 @@ Nothing here is started. Each item says what it is and what makes it awkward, so
 `WorldReader` and `WitTypes` reject what they cannot read, by name, rather than guessing. Everything below fails that
 way today, which means adding one is a matter of finding its rejection and replacing it.
 
-- **`record`, `tuple`, `flags`.** The largest gap. A record despecializes to something the ABI carries as a
+- **`record`, `tuple`.** A record despecializes to something the ABI carries as a
   `java.util.Map`, so a generated class needs conversion at the boundary the way an enum already does. This is the
   remaining half of [Generated types are nominal](#generated-types-are-nominal-and-cross-the-boundary-through-descriptors).
 - **`variant`, `option`, `result`.** All carried as `VariantValue`, so they follow the enum pattern, but a variant case

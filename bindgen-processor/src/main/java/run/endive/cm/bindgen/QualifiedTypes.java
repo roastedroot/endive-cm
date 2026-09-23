@@ -3,9 +3,11 @@ package run.endive.cm.bindgen;
 final class QualifiedTypes {
 
     static final String BIG_INTEGER = "java.math.BigInteger";
+    static final String ENUM_SET = "java.util.EnumSet";
     static final String LINKED_HASH_MAP = "java.util.LinkedHashMap";
     static final String LIST = "java.util.List";
     static final String MAP = "java.util.Map";
+    static final String SET = "java.util.Set";
 
     static final String CHAR_VALUE = "run.endive.cm.abi.CharValue";
     static final String RESOURCE_VALUE = "run.endive.cm.abi.ResourceValue";
@@ -23,11 +25,13 @@ final class QualifiedTypes {
 
     static final String LIST_DESCRIPTOR = "run.endive.cm.runtime.ListHostTypeDescriptor";
     static final String PRIMITIVE_DESCRIPTOR = "run.endive.cm.runtime.PrimitiveHostTypeDescriptor";
+    static final String RECORD_DESCRIPTOR = "run.endive.cm.runtime.RecordHostTypeDescriptor";
     static final String RESOURCE_DESCRIPTOR = "run.endive.cm.runtime.ResourceHostTypeDescriptor";
     static final String VARIANT_DESCRIPTOR = "run.endive.cm.runtime.VariantHostTypeDescriptor";
     static final String VOID_DESCRIPTOR = "run.endive.cm.runtime.VoidHostTypeDescriptor";
 
     static final String ENUM_TYPE = "run.endive.cm.types.EnumType";
+    static final String FLAGS_TYPE = "run.endive.cm.types.FlagsType";
     static final String FUNC_TYPE = "run.endive.cm.types.FuncType";
     static final String LABEL_VAL_TYPE = "run.endive.cm.types.LabelValType";
     static final String LIST_TYPE = "run.endive.cm.types.ListType";
