@@ -15,19 +15,19 @@ final class WitInterface {
     private final String name;
     private final List<WitFunction> functions;
     private final List<WitResource> resources;
-    private final List<WitEnum> enums;
+    private final List<WitType> types;
     private final WitScope scope;
 
     WitInterface(
             String name,
             List<WitFunction> functions,
             List<WitResource> resources,
-            List<WitEnum> enums,
+            List<WitType> types,
             WitScope scope) {
         this.name = Objects.requireNonNull(name, "name");
         this.functions = List.copyOf(functions);
         this.resources = List.copyOf(resources);
-        this.enums = List.copyOf(enums);
+        this.types = List.copyOf(types);
         this.scope = scope;
     }
 
@@ -45,8 +45,9 @@ final class WitInterface {
         return resources;
     }
 
-    List<WitEnum> enums() {
-        return enums;
+    /** The types the interface declares, in the order its index space holds them. */
+    List<WitType> types() {
+        return types;
     }
 
     /** The index space against which this interface's value types resolve. */

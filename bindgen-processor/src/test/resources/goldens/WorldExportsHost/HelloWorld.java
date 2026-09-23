@@ -20,6 +20,7 @@ import run.endive.cm.types.WasmComponent;
  * Bindings for the WIT world {@code my:project/hello-world}.
  */
 @Generated("run.endive.cm.bindgen.BindgenProcessor")
+@SuppressWarnings("unchecked")
 public final class HelloWorld {
 
     /**
@@ -45,7 +46,6 @@ public final class HelloWorld {
     /**
      * Instantiates {@code component}, satisfying its imports with {@code imports}.
      */
-    @SuppressWarnings("unchecked")
     public static HelloWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
         Map<String, Object> values = new LinkedHashMap<>();
         endive.testing.my.project.host.Host host = imports.host();

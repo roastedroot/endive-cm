@@ -10,8 +10,6 @@ import run.endive.cm.parser.ComponentParser;
 import run.endive.cm.tools.WitParser;
 import run.endive.cm.types.ComponentDecl;
 import run.endive.cm.types.ComponentType;
-import run.endive.cm.types.DefValType;
-import run.endive.cm.types.EnumType;
 import run.endive.cm.types.Export;
 import run.endive.cm.types.ExportSection;
 import run.endive.cm.types.ExternDesc;
@@ -195,7 +193,7 @@ final class WorldReader {
         WitScope scope = new WitScope();
         scope.withOwner(simpleNameOf(name));
         List<WitFunction> functions = new ArrayList<>();
-        List<WitEnum> enums = new ArrayList<>();
+        List<WitType> types = new ArrayList<>();
         Map<String, ResourceFunctions> resources = new LinkedHashMap<>();
 
         for (InstanceDecl decl : type.getInstanceDecls()) {
@@ -215,7 +213,7 @@ final class WorldReader {
             String exportName = decl.exportDecl().name();
             ExternDesc desc = decl.exportDecl().externDesc();
             if (desc.kind() == ExternDesc.Kind.TYPE) {
-                declareType(scope, enums, resources, exportName, desc);
+                declareType(scope, types, resources, exportName, desc);
                 continue;
             }
             WitFunction function = function(scope, exportName, desc);
@@ -231,7 +229,7 @@ final class WorldReader {
         for (ResourceFunctions resource : resources.values()) {
             read.add(resource.toResource());
         }
-        return new WitInterface(name, functions, read, enums, scope);
+        return new WitInterface(name, functions, read, types, scope);
     }
 
     /**
@@ -243,7 +241,7 @@ final class WorldReader {
      */
     private static void declareType(
             WitScope scope,
-            List<WitEnum> enums,
+            List<WitType> types,
             Map<String, ResourceFunctions> resources,
             String exportName,
             ExternDesc desc) {
@@ -255,10 +253,8 @@ final class WorldReader {
         }
         Type named = scope.at((int) bound.typeIdx());
         scope.add(named, exportName);
-        if (named != null
-                && named.defValType() != null
-                && named.defValType().kind() == DefValType.Kind.ENUM) {
-            enums.add(new WitEnum(exportName, ((EnumType) named.defValType()).labels()));
+        if (named != null && named.defValType() != null) {
+            types.add(new WitType(exportName, named.defValType()));
         }
     }
 

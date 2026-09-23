@@ -228,6 +228,39 @@ The canonical-abi module is not touched. Lifting and lowering keep working on th
 which is what keeps the passing sync ABI spec tests untouched. The cost is one allocation per aggregate per call, which
 is the right trade for now and can be revisited once there is something to measure.
 
+### The Java shape of each WIT type
+
+A WIT type has to arrive as something a Java embedder would have written, which for several of them is not what the
+Canonical ABI carries. These are the shapes the generator targets.
+
+| WIT | Java | Carried as |
+|---|---|---|
+| `record` | a class with final fields, a constructor, getters, `equals`, `hashCode` and `toString` | `Map` |
+| `flags` | an `EnumSet` backed wrapper | `Map` of booleans |
+| `tuple<A, B>` | `Tuple2<A, B>` through `TupleN`, which the runtime module provides | `Map` keyed `"0"`, `"1"` |
+| `variant` | an abstract base class with a nested final class per case | `VariantValue` |
+| `enum` | a Java enum | `VariantValue` |
+| `option<T>` | a nullable `T` | `VariantValue` |
+| `result<T, E>` | an unchecked exception carrying the error payload | `VariantValue` |
+
+Three of those need a reason recorded.
+
+A nullable `option` reads as Java rather than as a translation of WIT, at the cost of `option<option<T>>`, where
+`some(none)` and `none` both become null. That case is refused by name rather than encoded wrongly. An option payload
+always lowers to its own `VariantValue.of("none", null)`, never to a bare Java null, or a variant case carrying `none`
+would be indistinguishable from a case carrying nothing.
+
+A `result` becomes control flow rather than a value, so it is meaningful only as a function's direct result. One in a
+record field, a list element or a variant case is refused. The generated exception is unchecked, so a signature stays
+free of `throws`. A world's bindings catch only that exception when lowering an import, because catching
+`RuntimeException` would deliver a genuine bug in embedder code to the guest as a well formed error.
+
+An exception is named after the error payload's type when that type has a name, so `parse-error` gives
+`ParseErrorException`. An anonymous result type is shared by every function with the same signature, so it cannot be
+named after a function, and it falls back to the interface and the type's index in the scope. A `variant` becomes case
+subclasses rather than a visitor because an `instanceof` test allocates nothing, and because the same generated classes
+become `sealed` once the Java baseline allows it.
+
 ### Type metadata is generated as builder code
 
 Generated code reconstructs the `ValType` and `FuncType` graph with the existing builders. Value types are written
@@ -617,6 +650,14 @@ list a directory. Supporting a directory needs a route to a real filesystem path
 `BindgenProcessor.write` generates an interface once per package and reports a conflict when two worlds would generate
 the same file differently. Neither branch has a test. It needs a fixture with two `@Bindgen` annotations in one package
 importing the same interface, and one where they disagree.
+
+### The unchecked suppression covers a whole file
+
+A value arrives from the ABI as an `Object`, so the generated cast naming what is inside it cannot be checked.
+`GeneratedUnit.markUnchecked` records that a file writes such a cast and annotates the type it declares, which silences
+unchecked warnings for everything else in that file as well. Narrowing it to the member holding the cast needs the
+enclosing member threaded through expression construction, since a cast is built deep inside `WitTypes` while the
+member is built by the caller.
 
 ### A Maven plugin
 

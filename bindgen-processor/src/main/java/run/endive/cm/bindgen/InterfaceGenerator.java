@@ -24,6 +24,8 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.VoidType;
 import java.util.ArrayList;
 import java.util.List;
+import run.endive.cm.types.DefValType;
+import run.endive.cm.types.EnumType;
 
 /**
  * Generates the Java package mirroring one WIT interface, holding the interface itself plus
@@ -42,8 +44,12 @@ final class InterfaceGenerator {
 
     List<GeneratedUnit> sources(WitInterface iface, boolean exported) {
         List<GeneratedUnit> sources = new ArrayList<>();
-        for (WitEnum declared : iface.enums()) {
-            sources.add(enumSource(iface, declared));
+        for (WitType declared : iface.types()) {
+            // A kind with no Java source of its own is skipped here and refused where a function
+            // names it, so declaring one an interface never uses costs nothing.
+            if (declared.kind() == DefValType.Kind.ENUM) {
+                sources.add(enumSource(iface, declared));
+            }
         }
         for (WitResource resource : iface.resources()) {
             sources.add(
@@ -60,7 +66,7 @@ final class InterfaceGenerator {
      * variant and lifts it as a {@link run.endive.cm.abi.VariantValue} rather than as anything
      * nominal.
      */
-    private GeneratedUnit enumSource(WitInterface iface, WitEnum declared) {
+    private GeneratedUnit enumSource(WitInterface iface, WitType declared) {
         String className = Names.type(declared.name());
         GeneratedUnit unit = unitFor(iface);
 
@@ -71,7 +77,7 @@ final class InterfaceGenerator {
                         + "}, declared by {@code "
                         + iface.name()
                         + "}.");
-        for (String label : declared.labels()) {
+        for (String label : ((EnumType) declared.defValType()).labels()) {
             type.addEnumConstant(constantOf(label)).addArgument(AstBuilders.text(label));
         }
 
@@ -112,7 +118,7 @@ final class InterfaceGenerator {
         return unit;
     }
 
-    private BlockStmt matchLabel(GeneratedUnit unit, String className, WitEnum declared) {
+    private BlockStmt matchLabel(GeneratedUnit unit, String className, WitType declared) {
         BlockStmt body = new BlockStmt();
         body.addStatement(
                 AstBuilders.declare(
