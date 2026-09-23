@@ -45,8 +45,8 @@ final class InterfaceGenerator {
     List<GeneratedUnit> sources(WitInterface iface, boolean exported) {
         List<GeneratedUnit> sources = new ArrayList<>();
         for (WitType declared : iface.types()) {
-            // A type with no Java source of its own is carried by what the ABI already uses for
-            // it, and is refused at the point of use if that is not yet supported.
+            // A kind with no Java source of its own is skipped here and refused where a function
+            // names it, so declaring one an interface never uses costs nothing.
             if (declared.kind() == DefValType.Kind.ENUM) {
                 sources.add(enumSource(iface, declared));
             }

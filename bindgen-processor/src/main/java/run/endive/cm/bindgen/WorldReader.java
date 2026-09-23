@@ -252,9 +252,9 @@ final class WorldReader {
             return;
         }
         Type named = scope.at((int) bound.typeIdx());
-        int index = scope.add(named, exportName);
+        scope.add(named, exportName);
         if (named != null && named.defValType() != null) {
-            types.add(new WitType(exportName, index, named.defValType()));
+            types.add(new WitType(exportName, named.defValType()));
         }
     }
 

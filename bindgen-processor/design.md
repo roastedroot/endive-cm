@@ -651,6 +651,14 @@ list a directory. Supporting a directory needs a route to a real filesystem path
 the same file differently. Neither branch has a test. It needs a fixture with two `@Bindgen` annotations in one package
 importing the same interface, and one where they disagree.
 
+### The unchecked suppression covers a whole file
+
+A value arrives from the ABI as an `Object`, so the generated cast naming what is inside it cannot be checked.
+`GeneratedUnit.markUnchecked` records that a file writes such a cast and annotates the type it declares, which silences
+unchecked warnings for everything else in that file as well. Narrowing it to the member holding the cast needs the
+enclosing member threaded through expression construction, since a cast is built deep inside `WitTypes` while the
+member is built by the caller.
+
 ### A Maven plugin
 
 `docs/phases/04-wit-bindgen.md` calls for a `bindgen-maven-plugin` running at `generate-sources`. The annotation

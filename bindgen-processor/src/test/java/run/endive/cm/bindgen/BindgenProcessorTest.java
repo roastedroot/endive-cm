@@ -46,6 +46,36 @@ class BindgenProcessorTest {
                         JavaFileObjects.forResource("goldens/HelloWorldHost/HelloWorld.java"));
     }
 
+    /**
+     * A kind with no binding yet is refused where a function names it, so an interface may declare
+     * one that nothing uses.
+     */
+    @Test
+    void declaringAnUnusedTypeOfAnUnboundKindIsAllowed() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.UnusedTypeHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"unused-record\", inline ="
+                                        + " \"package my:project;\\n"
+                                        + "interface logging {\\n"
+                                        + "  record config { verbose: bool }\\n"
+                                        + "  log: func(msg: string);\\n"
+                                        + "}\\n"
+                                        + "world unused-record {\\n"
+                                        + "  import logging;\\n"
+                                        + "  export go: func();\\n"
+                                        + "}\\n\")\n"
+                                        + "public class UnusedTypeHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of("endive.testing.UnusedRecord", "endive.testing.my.project.logging.Host"));
+    }
+
     /** Every world generates a package tree mirroring the WIT ids, which is what this pins. */
     private static void assertGenerated(Compilation compilation, List<String> expected) {
         List<String> actual =

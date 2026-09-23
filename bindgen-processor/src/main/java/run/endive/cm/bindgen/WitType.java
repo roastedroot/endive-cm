@@ -6,28 +6,22 @@ import run.endive.cm.types.DefValType;
 /**
  * A type an interface declares, under the name its export gives it.
  *
- * <p>The index is the slot the type occupies in the interface's {@link WitScope}, which is how a
- * function type names it and how a generated exception for an anonymous type is told apart from
- * another.
+ * <p>Only a named type is carried here, since a name is what a generated Java type needs. A type
+ * written anonymously, such as a list or an option, is reached through the {@link WitScope}
+ * instead.
  */
 final class WitType {
 
     private final String name;
-    private final int index;
     private final DefValType defValType;
 
-    WitType(String name, int index, DefValType defValType) {
+    WitType(String name, DefValType defValType) {
         this.name = Objects.requireNonNull(name, "name");
-        this.index = index;
         this.defValType = Objects.requireNonNull(defValType, "defValType");
     }
 
     String name() {
         return name;
-    }
-
-    int index() {
-        return index;
     }
 
     DefValType defValType() {

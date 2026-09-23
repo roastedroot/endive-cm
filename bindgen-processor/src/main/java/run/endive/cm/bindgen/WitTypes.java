@@ -50,19 +50,15 @@ final class WitTypes {
     /**
      * The types a host instance has to be told about, since a function type names one by index.
      *
-     * <p>An allowlist rather than everything non-primitive, because a resource contributes an
-     * {@code own} and a {@code borrow} to the same space and neither is a type to declare.
+     * <p>A kind belongs here once {@link #defValType} can rebuild it, and not before. Declaring a
+     * kind ahead of that refuses an interface for merely declaring the type, whether or not
+     * anything uses it. An allowlist also keeps out the {@code own} and {@code borrow} a resource
+     * contributes to the same space, neither of which is a type to declare.
      */
     static boolean isCompound(DefValType.Kind kind) {
         switch (kind) {
             case LIST:
             case ENUM:
-            case RECORD:
-            case VARIANT:
-            case FLAGS:
-            case TUPLE:
-            case OPTION:
-            case RESULT:
                 return true;
             default:
                 return false;
@@ -125,7 +121,7 @@ final class WitTypes {
         }
         String local = declared.get(valType.typeIdx());
         if (local == null) {
-            throw unsupported("a type that was never declared");
+            throw undeclared(scope, valType.typeIdx());
         }
         return AstBuilders.name(local);
     }
@@ -256,6 +252,19 @@ final class WitTypes {
             throw unsupported("a named type");
         }
         return type.defValType();
+    }
+
+    /**
+     * A type a function names but that the enclosing instance never declared, which is what a kind
+     * outside {@link #isCompound} amounts to. Naming that kind is what tells a reader which WIT
+     * feature is missing.
+     */
+    private static BindgenException undeclared(WitScope scope, int index) {
+        run.endive.cm.types.Type type = scope.at(index);
+        if (type == null || type.defValType() == null) {
+            return unsupported("a type that was never declared");
+        }
+        return unsupported(type.defValType().kind().name());
     }
 
     private static BindgenException unsupported(String described) {
