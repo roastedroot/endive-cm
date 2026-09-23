@@ -76,6 +76,55 @@ class BindgenProcessorTest {
                 List.of("endive.testing.UnusedFuture", "endive.testing.my.project.logging.Host"));
     }
 
+    /**
+     * A type that converts at the boundary lowers each of its own members through the same pair,
+     * so an {@code option} member crosses as a nested variant rather than as a Java null. Nothing
+     * else pins the way one kind composes with another.
+     */
+    @Test
+    void aTypeLowersItsMembersThroughTheirOwnConversions() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.SeamHost",
+                                "package endive.testing;\n"
+                                    + "import run.endive.cm.runtime.Bindgen;\n"
+                                    + "@Bindgen(world = \"seams\", inline = \"package"
+                                    + " example:seams;\\n"
+                                    + "interface types {\\n"
+                                    + "  record profile { name: string, nickname: option<string>"
+                                    + " }\\n"
+                                    + "  variant event { quiet, noted(option<string>) }\\n"
+                                    + "  describe: func(p: profile) -> profile;\\n"
+                                    + "  note: func(e: event) -> event;\\n"
+                                    + "  batch: func(items: list<profile>) -> list<profile>;\\n"
+                                    + "}\\n"
+                                    + "world seams {\\n"
+                                    + "  import types;\\n"
+                                    + "  export go: func();\\n"
+                                    + "}\\n"
+                                    + "\")\n"
+                                    + "public class SeamHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.seams.types.Profile")
+                .contentsAsUtf8String()
+                .contains("Optional.ofNullable(nickname)");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.seams.types.Event")
+                .contentsAsUtf8String()
+                .contains("VariantValue.of(\"quiet\", null)");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.seams.types.Event")
+                .contentsAsUtf8String()
+                .contains("VariantValue.of(\"none\", null)");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.Seams")
+                .contentsAsUtf8String()
+                .contains("Profile.fromComponent(element)");
+    }
+
     /** Every world generates a package tree mirroring the WIT ids, which is what this pins. */
     private static void assertGenerated(Compilation compilation, List<String> expected) {
         List<String> actual =
