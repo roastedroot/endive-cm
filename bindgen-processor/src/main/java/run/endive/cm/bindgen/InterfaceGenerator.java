@@ -31,8 +31,13 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.type.WildcardType;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import run.endive.cm.types.Case;
+import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.VariantType;
@@ -691,18 +696,46 @@ final class InterfaceGenerator {
             type.addMember(bindings.signature(function, 0));
         }
         for (WitResource resource : iface.resources()) {
-            if (resource.constructor() == null) {
-                continue;
+            if (resource.constructor() != null) {
+                MethodDeclaration factory =
+                        hostSignature(
+                                bindings,
+                                resource,
+                                resource.constructor(),
+                                Names.member(resource.name()));
+                factory.setJavadocComment("Makes a {@code " + resource.name() + "}.");
+                type.addMember(factory);
             }
-            MethodDeclaration factory = new MethodDeclaration();
-            factory.setName(Names.member(resource.name()));
-            factory.setType(AstBuilders.type(Names.type(resource.name())));
-            factory.removeBody();
-            bindings.addParameters(factory, resource.constructor(), 0);
-            factory.setJavadocComment("Makes a {@code " + resource.name() + "}.");
-            type.addMember(factory);
+            for (WitFunction function : resource.statics()) {
+                MethodDeclaration method =
+                        hostSignature(
+                                bindings,
+                                resource,
+                                function,
+                                Names.qualifiedMember(resource.name(), function.name()));
+                method.setJavadocComment(
+                        "The static {@code " + resource.name() + "." + function.name() + "}.");
+                type.addMember(method);
+            }
         }
         return unit;
+    }
+
+    /**
+     * One signature on a {@code Host}, named by the caller because neither a constructor nor a
+     * static is called what its own WIT name says. A returned handle is named by hand too, since
+     * an {@code own} has no Java type of its own.
+     */
+    private MethodDeclaration hostSignature(
+            FunctionBindings bindings, WitResource resource, WitFunction function, String name) {
+        if (!resource.returnsOwnHandle(function)) {
+            return bindings.signature(function, 0).setName(name);
+        }
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName(name);
+        method.setType(AstBuilders.type(Names.type(resource.name())));
+        method.removeBody();
+        return bindings.addParameters(method, function, 0);
     }
 
     /** A resource an imported interface declares, which the embedder implements. */
@@ -743,12 +776,13 @@ final class InterfaceGenerator {
                     Modifier.Keyword.PRIVATE,
                     Modifier.Keyword.FINAL);
         }
+        ResourceFields fields = new ResourceFields(iface);
         for (WitResource resource : iface.resources()) {
             for (WitFunction function : resourceFunctions(resource)) {
                 // Read by the resource wrapper, which is a class of its own in this package.
                 type.addField(
                         unit.use(QualifiedTypes.COMPONENT_FUNCTION),
-                        resourceField(resource, function),
+                        fields.of(function),
                         Modifier.Keyword.FINAL);
             }
         }
@@ -766,7 +800,7 @@ final class InterfaceGenerator {
                             bindings.descriptors(function, null, null)));
         }
         for (WitResource resource : iface.resources()) {
-            addResourceNarrowing(body, bindings, resource);
+            addResourceNarrowing(body, bindings, fields, resource);
         }
 
         for (WitFunction function : iface.functions()) {
@@ -778,23 +812,67 @@ final class InterfaceGenerator {
                             List.of()));
         }
         for (WitResource resource : iface.resources()) {
-            if (resource.constructor() != null) {
-                type.addMember(guestResourceFactory(unit, bindings, resource));
+            WitFunction maker = resource.constructor();
+            if (maker != null) {
+                MethodDeclaration factory =
+                        guestFactory(
+                                unit,
+                                bindings,
+                                resource,
+                                maker,
+                                fields.of(maker),
+                                Names.member(resource.name()));
+                factory.setJavadocComment(
+                        "Makes a {@code " + resource.name() + "} inside the component.");
+                type.addMember(factory);
+            }
+            for (WitFunction function : resource.statics()) {
+                type.addMember(guestStatic(unit, bindings, fields, resource, function));
             }
         }
         return unit;
     }
 
     /**
-     * The Canonical ABI names a resource's functions rather than nesting them, and neither a
-     * constructor's type nor a method's names the handle, so both are described by hand.
+     * A static has no handle to hold, so it belongs on the {@code Guest} rather than on the
+     * wrapper. One handing back an {@code own} to its own resource wraps it the way a constructor
+     * does, and one handing back an ordinary value is called like any other export.
+     */
+    private MethodDeclaration guestStatic(
+            GeneratedUnit unit,
+            FunctionBindings bindings,
+            ResourceFields fields,
+            WitResource resource,
+            WitFunction function) {
+        String name = Names.qualifiedMember(resource.name(), function.name());
+        MethodDeclaration method =
+                resource.returnsOwnHandle(function)
+                        ? guestFactory(
+                                unit, bindings, resource, function, fields.of(function), name)
+                        : bindings.callMethod(
+                                        function,
+                                        0,
+                                        AstBuilders.thisField(fields.of(function)),
+                                        List.of())
+                                .setName(name);
+        method.setJavadocComment(
+                "The static {@code " + resource.name() + "." + function.name() + "}.");
+        return method;
+    }
+
+    /**
+     * The Canonical ABI names a resource's functions rather than nesting them, and no function's
+     * own type names the handle it takes or returns, so each one is described by hand.
      */
     private void addResourceNarrowing(
-            BlockStmt body, FunctionBindings bindings, WitResource resource) {
+            BlockStmt body,
+            FunctionBindings bindings,
+            ResourceFields fields,
+            WitResource resource) {
         if (resource.constructor() != null) {
             body.addStatement(
                     narrow(
-                            resourceField(resource, resource.constructor()),
+                            fields.of(resource.constructor()),
                             "[constructor]" + resource.name(),
                             bindings.descriptors(
                                     resource.constructor(), bindings.resourceDescriptor(), null)));
@@ -802,9 +880,18 @@ final class InterfaceGenerator {
         for (WitFunction method : resource.methods()) {
             body.addStatement(
                     narrow(
-                            resourceField(resource, method),
+                            fields.of(method),
                             "[method]" + resource.name() + "." + method.name(),
                             bindings.descriptors(method, null, bindings.resourceDescriptor())));
+        }
+        for (WitFunction function : resource.statics()) {
+            Expression result =
+                    resource.returnsOwnHandle(function) ? bindings.resourceDescriptor() : null;
+            body.addStatement(
+                    narrow(
+                            fields.of(function),
+                            "[static]" + resource.name() + "." + function.name(),
+                            bindings.descriptors(function, result, null)));
         }
     }
 
@@ -824,6 +911,8 @@ final class InterfaceGenerator {
         String className = Names.type(resource.name());
         GeneratedUnit unit = unitFor(iface);
         FunctionBindings bindings = FunctionBindings.forUnit(unit);
+
+        ResourceFields fields = new ResourceFields(iface);
 
         ClassOrInterfaceDeclaration type = unit.addClass(className);
         type.addImplementedType("AutoCloseable");
@@ -863,8 +952,7 @@ final class InterfaceGenerator {
                     bindings.callMethod(
                             method,
                             1,
-                            AstBuilders.field(
-                                    new NameExpr("owner"), resourceField(resource, method)),
+                            AstBuilders.field(new NameExpr("owner"), fields.of(method)),
                             List.of(new NameExpr("handle"))));
         }
         type.addMember(close(unit));
@@ -898,16 +986,19 @@ final class InterfaceGenerator {
         return method;
     }
 
-    private MethodDeclaration guestResourceFactory(
-            GeneratedUnit unit, FunctionBindings bindings, WitResource resource) {
+    /** A call handing back an {@code own} handle, which the wrapper is built around. */
+    private MethodDeclaration guestFactory(
+            GeneratedUnit unit,
+            FunctionBindings bindings,
+            WitResource resource,
+            WitFunction function,
+            String field,
+            String name) {
         String className = Names.type(resource.name());
-        WitFunction constructor = resource.constructor();
 
         Expression made =
                 AstBuilders.call(
-                        AstBuilders.thisField(resourceField(resource, constructor)),
-                        "apply",
-                        bindings.callArguments(constructor, 0));
+                        AstBuilders.thisField(field), "apply", bindings.callArguments(function, 0));
         BlockStmt body = new BlockStmt();
         body.addStatement(
                 new ReturnStmt(
@@ -919,21 +1010,15 @@ final class InterfaceGenerator {
                                         AstBuilders.element(made, 0)))));
 
         MethodDeclaration factory = new MethodDeclaration();
-        factory.setName(Names.member(resource.name())).setPublic(true);
+        factory.setName(name).setPublic(true);
         factory.setType(AstBuilders.type(className));
-        bindings.addParameters(factory, constructor, 0);
+        bindings.addParameters(factory, function, 0);
         factory.setBody(body);
-        factory.setJavadocComment("Makes a {@code " + resource.name() + "} inside the component.");
         return factory;
     }
 
     private GeneratedUnit unitFor(WitInterface iface) {
         return new GeneratedUnit(iface.scope().javaPackage(), generatedBy);
-    }
-
-    /** The name of the field holding one of a resource's narrowed functions. */
-    private static String resourceField(WitResource resource, WitFunction function) {
-        return Names.member(resource.name()) + Names.type(function.name());
     }
 
     private static List<WitFunction> resourceFunctions(WitResource resource) {
@@ -942,7 +1027,38 @@ final class InterfaceGenerator {
             all.add(resource.constructor());
         }
         all.addAll(resource.methods());
+        all.addAll(resource.statics());
         return all;
+    }
+
+    /**
+     * Names the field holding each of an interface's narrowed resource functions. A constructor is
+     * named after its resource and everything else after itself, and a name two functions would
+     * otherwise share is numbered apart.
+     */
+    private static final class ResourceFields {
+
+        private final Map<WitFunction, String> names = new IdentityHashMap<>();
+
+        ResourceFields(WitInterface iface) {
+            Set<String> taken = new HashSet<>();
+            for (WitResource resource : iface.resources()) {
+                for (WitFunction function : resourceFunctions(resource)) {
+                    String base = Names.qualifiedMember(resource.name(), function.name());
+                    String name = base;
+                    int next = 2;
+                    while (!taken.add(name)) {
+                        name = base + next;
+                        next++;
+                    }
+                    names.put(function, name);
+                }
+            }
+        }
+
+        String of(WitFunction function) {
+            return names.get(function);
+        }
     }
 
     private static String constantOf(String label) {

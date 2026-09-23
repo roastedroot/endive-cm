@@ -518,6 +518,29 @@ integer rather than an object, so the bindings keep a `HostResourceTable` per re
 and the generated destructor hands the object to `drop` before forgetting it. `drop` is a default method, so observing
 a drop is optional rather than forced on every embedder.
 
+A resource may also carry `static` functions, which reach it without a receiver, so there is no borrowed first
+parameter to drop. What a static hands back is what decides its shape, and that is read off its declared result rather
+than off a flag. One returning an `own` handle to its own resource mints a resource exactly as a constructor does, and
+one returning an ordinary value is wired like any other function.
+
+```java
+// <base>.example.resources.types.Host
+public interface Host {
+    File file(String name);
+
+    File fileOpen(String name);
+    Long fileCount();
+}
+```
+
+A static has no handle to hold, so on the export side it sits on the `Guest` rather than on the resource wrapper. It is
+not a Java `static` either, since the `Host` side has to be overridable and the `Guest` side reads the narrowed function
+off the instance. Both sides name it after the resource owning it, so two resources may each declare an `open`.
+
+The `Guest` field holding a narrowed resource function is named the same way, which is why a constructor yields
+`fileFile`. Two functions that would otherwise share one field name are numbered apart, since `[constructor]file` and
+`[static]file.file` both want the first spelling.
+
 An interface declaring a resource is built through a local rather than in one chained expression, because a resource
 has to be declared before anything names it. That is also why its constructor and method types are built inside
 `instantiate` rather than held as constants. `own` and `borrow` name the resource by index, and the index is only known
@@ -560,18 +583,17 @@ because Java forbids a nested class sharing the simple name of a class enclosing
 cannot map is refused where the variant is declared rather than where a function names it, since the case class needs
 a Java type for its field either way.
 
-Records, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
-and a compound type on a world's bare function import are each rejected with a message naming what is unsupported. The
-last of those is a limit of `HostFunction`, which builds an instance with no type space, leaving an index nothing
-to resolve.
+Records, a world's `use`, an interface that uses types from elsewhere, and a compound type on a world's bare function
+import are each rejected with a message naming what is unsupported. The last of those is a limit of `HostFunction`,
+which builds an instance with no type space, leaving an index nothing to resolve.
 
 ## Fidelity to the bindgen! examples
 
 The WIT under `src/test/resources/wit` in `bindgen-processor` is the bindgen! example world for that stage, verbatim.
 That is what the golden files are generated from, so a difference from the example is visible rather than assumed.
 
-All seven of the non-async example worlds are present. A world covering a WIT type no example declares is written for
-the purpose and named after that type, which is where `variant-types` comes from.
+All seven of the non-async example worlds are present. A world covering a WIT feature no example declares is written
+for the purpose and named after it, which is where `variant-types` and `static-functions` come from.
 
 The end-to-end fixtures use the same WIT, with one exception that has to be stated wherever it appears. A world that
 imports without exporting cannot be driven, since nothing enters the guest, so `with-imports`,
@@ -656,8 +678,6 @@ way today, which means adding one is a matter of finding its rejection and repla
   remaining half of [Generated types are nominal](#generated-types-are-nominal-and-cross-the-boundary-through-descriptors).
 - **`variant`, `option`, `result`.** All carried as `VariantValue`, so they follow the enum pattern, but a variant case
   has a payload and `option`/`result` want idiomatic Java shapes rather than a literal case class.
-- **A resource's `static` functions.** `[static]file.open` is recognised and rejected in
-  `WorldReader.ResourceFunctions.add`. It maps to a static Java method, so the wiring is simpler than a method's.
 - **A world's `use`, and an interface using types from elsewhere.** Both are aliases that grow the type index space,
   which `WorldReader.track` refuses rather than mis-number. Supporting them means resolving an alias to the interface
   that declared the type and referring to the Java type already generated for it.

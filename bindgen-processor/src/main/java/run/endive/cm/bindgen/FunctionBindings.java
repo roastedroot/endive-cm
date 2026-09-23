@@ -103,9 +103,15 @@ final class FunctionBindings {
 
     /** The lambda handing an imported call to the embedder. */
     LambdaExpr importLambda(Expression receiver, WitFunction function, int skip) {
-        Expression call =
-                AstBuilders.call(
-                        receiver, Names.member(function.name()), lambdaArguments(function, skip));
+        return importLambda(receiver, Names.member(function.name()), function, skip);
+    }
+
+    /**
+     * The lambda handing an imported call to the embedder, under a Java name of its own, which is
+     * what a resource's static function needs since its Java name carries the resource too.
+     */
+    LambdaExpr importLambda(Expression receiver, String method, WitFunction function, int skip) {
+        Expression call = AstBuilders.call(receiver, method, lambdaArguments(function, skip));
         if (function.type().hasResult()) {
             Expression lifted = types.toComponent(call, function.type().result(), function.scope());
             return lambda(AstBuilders.objects(List.of(lifted)));

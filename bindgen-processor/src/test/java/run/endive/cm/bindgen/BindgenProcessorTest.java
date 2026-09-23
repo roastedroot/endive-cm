@@ -334,6 +334,71 @@ class BindgenProcessorTest {
     }
 
     @Test
+    void generatesStaticResourceFunctionBindings() {
+        Compilation compilation = compile("StaticFunctionHost.java");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.StaticFunctions",
+                        "endive.testing.example.staticfunctions.hostcounters.Counter",
+                        "endive.testing.example.staticfunctions.hostcounters.Host",
+                        "endive.testing.exports.example.staticfunctions.guestcounters.Guest",
+                        "endive.testing.exports.example.staticfunctions.guestcounters.Tally"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.StaticFunctions")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/StaticFunctionHost/StaticFunctions.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.staticfunctions.hostcounters.Counter")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/StaticFunctionHost/example_staticfunctions_hostcounters_Counter.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.staticfunctions.hostcounters.Host")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/StaticFunctionHost/example_staticfunctions_hostcounters_Host.java"));
+        assertThat(compilation)
+                .generatedSourceFile(
+                        "endive.testing.exports.example.staticfunctions.guestcounters.Guest")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/StaticFunctionHost/exports_example_staticfunctions_guestcounters_Guest.java"));
+        assertThat(compilation)
+                .generatedSourceFile(
+                        "endive.testing.exports.example.staticfunctions.guestcounters.Tally")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/StaticFunctionHost/exports_example_staticfunctions_guestcounters_Tally.java"));
+    }
+
+    /** A handle to another resource has no Java type to name, so a static returning one is refused. */
+    @Test
+    void aStaticReturningAnotherResourcesHandleIsReported() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.OtherHandleHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"w\", inline = \"package t:t;\\n"
+                                        + "interface i {\\n"
+                                        + "  resource a { constructor(); }\\n"
+                                        + "  resource b { make: static func() -> a; }\\n"
+                                        + "}\\n"
+                                        + "world w {\\n"
+                                        + "  import i;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class OtherHandleHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("own is not yet supported");
+    }
+
+    @Test
     void generatesEveryKindOfWorldExport() {
         Compilation compilation = compile("WorldExportKindsHost.java");
 
