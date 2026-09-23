@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import run.endive.cm.types.Case;
-import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.VariantType;

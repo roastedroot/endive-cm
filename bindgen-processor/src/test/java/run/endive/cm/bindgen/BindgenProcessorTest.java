@@ -399,6 +399,55 @@ class BindgenProcessorTest {
     }
 
     @Test
+    void generatesOptionBindings() {
+        Compilation compilation = compile("OptionHost.java");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.OptionTypes",
+                        "endive.testing.example.optiontypes.maybe.Host"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.OptionTypes")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource("goldens/OptionHost/OptionTypes.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.optiontypes.maybe.Host")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/OptionHost/example_optiontypes_maybe_Host.java"));
+    }
+
+    /**
+     * A nullable {@code T} cannot tell {@code some(none)} from {@code none}, so a nested option is
+     * refused. The payload is named by index, so one reached through an alias is refused too.
+     */
+    @Test
+    void aNestedOptionIsRefused() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.NestedOptionHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"nested-option\", inline ="
+                                        + " \"package my:project;\\n"
+                                        + "interface maybe {\\n"
+                                        + "  type maybe-num = option<u32>;\\n"
+                                        + "  echo: func(value: option<maybe-num>);\\n"
+                                        + "}\\n"
+                                        + "world nested-option {\\n"
+                                        + "  import maybe;\\n"
+                                        + "  export go: func();\\n"
+                                        + "}\\n\")\n"
+                                        + "public class NestedOptionHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("option<option<T>> is not supported");
+    }
+
+    @Test
     void generatesEveryKindOfWorldExport() {
         Compilation compilation = compile("WorldExportKindsHost.java");
 

@@ -1,0 +1,14 @@
+package example:option-types;
+
+interface maybe {
+    echo: func(value: option<u32>) -> option<u32>;
+    label: func(text: option<string>) -> option<string>;
+    first: func(values: list<option<u32>>) -> option<u32>;
+    nested: func(values: option<list<option<u32>>>) -> option<u32>;
+}
+
+world option-types {
+    import maybe;
+
+    export run: func(value: option<u32>) -> option<u32>;
+}

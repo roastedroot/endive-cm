@@ -558,6 +558,19 @@ every label, because `CanonicalAbi.packFlagsIntoInt` reads each one by name, and
 flags type whose Java name would be `Flag` is refused, because a nested type may not be named after the class holding
 it. More than 32 flags never reaches the generator, since wasm-tools rejects it while encoding the WIT.
 
+An `option<T>` is a nullable `T`, so it generates no Java type of its own. It is structural rather than nominal and
+has no WIT name, so it is reached only through the `WitScope` and never looked up by name. It converts at the boundary in both directions, lowering to
+`VariantValue.of("some", payload)` or `VariantValue.of("none", null)` and lifting a `none` back to Java `null`.
+Lowering never yields a bare `null`, both because `ComponentFunctionInstance` reads `arg.getClass()` without a null
+guard and because a `none` nested in another type would otherwise be indistinguishable from a case carrying no payload
+at all. `option<option<T>>` is refused, by resolving the payload through the scope rather than reading the WIT text, so
+that one reached through a named alias is refused as well.
+
+Conversion is written as an expression transform that evaluates its input exactly once and recurses into whatever a
+compound type holds, which is what lets `option` nest. A container is therefore responsible for routing its own
+payloads through `WitTypes.toComponent` and `WitTypes.fromComponent` rather than passing them through. A list does so
+element by element, so `list<option<u32>>` arrives as a `List<Long>` whose entries may be null.
+
 Both have to be declared into the host instance before a function type can name them, the same as a resource, which is
 why every imported interface is built through a local rather than in one chained expression. A `WitScope` carries an
 interface's type index space together with the names its exports give those types, since only the export says what a
@@ -676,8 +689,8 @@ way today, which means adding one is a matter of finding its rejection and repla
 - **`record`.** The largest gap. A record despecializes to something the ABI carries as a
   `java.util.Map`, so a generated class needs conversion at the boundary the way an enum already does. This is the
   remaining half of [Generated types are nominal](#generated-types-are-nominal-and-cross-the-boundary-through-descriptors).
-- **`variant`, `option`, `result`.** All carried as `VariantValue`, so they follow the enum pattern, but a variant case
-  has a payload and `option`/`result` want idiomatic Java shapes rather than a literal case class.
+- **`result`.** Carried as `VariantValue`, so it follows the enum pattern, but `result` wants an idiomatic Java shape
+  rather than a literal case class.
 - **A world's `use`, and an interface using types from elsewhere.** Both are aliases that grow the type index space,
   which `WorldReader.track` refuses rather than mis-number. Supporting them means resolving an alias to the interface
   that declared the type and referring to the Java type already generated for it.

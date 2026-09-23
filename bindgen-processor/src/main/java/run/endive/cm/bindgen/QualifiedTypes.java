@@ -3,11 +3,13 @@ package run.endive.cm.bindgen;
 final class QualifiedTypes {
 
     static final String BIG_INTEGER = "java.math.BigInteger";
+    static final String COLLECTORS = "java.util.stream.Collectors";
     static final String ENUM_SET = "java.util.EnumSet";
     static final String LINKED_HASH_MAP = "java.util.LinkedHashMap";
     static final String LIST = "java.util.List";
     static final String MAP = "java.util.Map";
     static final String OBJECTS = "java.util.Objects";
+    static final String OPTIONAL = "java.util.Optional";
     static final String SET = "java.util.Set";
 
     static final String CHAR_VALUE = "run.endive.cm.abi.CharValue";
@@ -40,6 +42,7 @@ final class QualifiedTypes {
     static final String FUNC_TYPE = "run.endive.cm.types.FuncType";
     static final String LABEL_VAL_TYPE = "run.endive.cm.types.LabelValType";
     static final String LIST_TYPE = "run.endive.cm.types.ListType";
+    static final String OPTION_TYPE = "run.endive.cm.types.OptionType";
     static final String PRIM_VAL_TYPE = "run.endive.cm.types.PrimValType";
     static final String TUPLE_TYPE = "run.endive.cm.types.TupleType";
     static final String TYPE = "run.endive.cm.types.Type";

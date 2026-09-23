@@ -1,6 +1,8 @@
 package run.endive.cm.bindgen;
 
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import java.util.ArrayList;
@@ -11,6 +13,7 @@ import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.ListType;
+import run.endive.cm.types.OptionType;
 import run.endive.cm.types.TupleType;
 import run.endive.cm.types.ValType;
 import run.endive.cm.types.VariantType;
@@ -31,6 +34,12 @@ final class WitTypes {
     /** The largest tuple the runtime carries, which is the highest {@code TupleN} it declares. */
     private static final int MAX_TUPLE_SIZE = 8;
 
+    /** The name bound to a present option payload while it is converted. */
+    private static final String SOME = "some";
+
+    /** The name bound to a list element while it is converted. */
+    private static final String ELEMENT = "element";
+
     private final GeneratedUnit unit;
 
     WitTypes(GeneratedUnit unit) {
@@ -49,6 +58,8 @@ final class WitTypes {
                 ListType list = (ListType) defined;
                 return AstBuilders.generic(
                         unit.use(QualifiedTypes.LIST), javaType(list.elementType(), scope));
+            case OPTION:
+                return javaType(optionPayload((OptionType) defined, scope), scope);
             case ENUM:
             case FLAGS:
             case VARIANT:
@@ -66,6 +77,23 @@ final class WitTypes {
     }
 
     /**
+     * The payload of an option, refused when another option is reached through it.
+     *
+     * <p>A nullable {@code T} is what an {@code option<T>} becomes, so {@code some(none)} and
+     * {@code none} would both be {@code null} and neither could be told from the other.
+     */
+    private ValType optionPayload(OptionType option, WitScope scope) {
+        ValType payload = option.valType();
+        if (payload.primValType() == null
+                && definedAt(scope, payload.typeIdx()).kind() == DefValType.Kind.OPTION) {
+            throw new BindgenException(
+                    "option<option<T>> is not supported, because a nullable option cannot tell"
+                            + " some(none) from none");
+        }
+        return payload;
+    }
+
+    /**
      * The types a host instance has to be told about, since a function type names one by index.
      *
      * <p>A kind belongs here once {@link #defValType} can rebuild it, and not before. Declaring a
@@ -80,6 +108,7 @@ final class WitTypes {
             case FLAGS:
             case TUPLE:
             case VARIANT:
+            case OPTION:
                 return true;
             default:
                 return false;
@@ -96,35 +125,69 @@ final class WitTypes {
             case FLAGS:
             case TUPLE:
             case VARIANT:
+            case OPTION:
                 return true;
             default:
                 return false;
         }
     }
 
-    /** Whether values of {@code valType} need converting between Java and what the ABI carries. */
+    /**
+     * Whether values of {@code valType} need converting between Java and what the ABI carries.
+     *
+     * <p>A container converts whenever what it holds does, so that a nested value is converted
+     * rather than passed through in the enclosing type's own representation.
+     */
     private boolean needsConversion(ValType valType, WitScope scope) {
-        return valType != null
-                && valType.primValType() == null
-                && convertsAtBoundary(definedAt(scope, valType.typeIdx()).kind());
+        if (valType == null || valType.primValType() != null) {
+            return false;
+        }
+        DefValType defined = definedAt(scope, valType.typeIdx());
+        if (defined.kind() == DefValType.Kind.LIST) {
+            return needsConversion(((ListType) defined).elementType(), scope);
+        }
+        return convertsAtBoundary(defined.kind());
     }
 
-    /** Turns a Java value into what the ABI carries. */
+    /**
+     * Turns a Java value into what the ABI carries, evaluating {@code value} once so that a call
+     * may be converted in place.
+     */
     Expression toComponent(Expression value, ValType valType, WitScope scope) {
-        return needsConversion(valType, scope) ? AstBuilders.call(value, "toComponent") : value;
+        if (!needsConversion(valType, scope)) {
+            return value;
+        }
+        DefValType defined = definedAt(scope, valType.typeIdx());
+        switch (defined.kind()) {
+            case OPTION:
+                return lowerOption(value, (OptionType) defined, scope);
+            case LIST:
+                return mapElements(
+                        value,
+                        toComponent(
+                                new NameExpr(ELEMENT), ((ListType) defined).elementType(), scope));
+            default:
+                return AstBuilders.call(value, "toComponent");
+        }
     }
 
-    /** Turns what the ABI carries into a Java value. */
+    /** Turns what the ABI carries into a Java value, evaluating {@code value} once. */
     Expression fromComponent(Expression value, ValType valType, WitScope scope) {
         if (needsConversion(valType, scope)) {
             DefValType defined = definedAt(scope, valType.typeIdx());
-            if (defined.kind() == DefValType.Kind.TUPLE) {
-                return tupleFromComponent(value, (TupleType) defined, scope);
+            switch (defined.kind()) {
+                case TUPLE:
+                    return tupleFromComponent(value, (TupleType) defined, scope);
+                case OPTION:
+                    return liftOption(value, (OptionType) defined, scope);
+                case LIST:
+                    return liftElements(value, ((ListType) defined).elementType(), scope);
+                default:
+                    return AstBuilders.call(
+                            AstBuilders.name(nominalJavaType(scope, valType.typeIdx())),
+                            "fromComponent",
+                            value);
             }
-            return AstBuilders.call(
-                    AstBuilders.name(nominalJavaType(scope, valType.typeIdx())),
-                    "fromComponent",
-                    value);
         }
         Type target = javaType(valType, scope);
         if (isGeneric(target)) {
@@ -167,6 +230,75 @@ final class WitTypes {
             throw unsupported("a tuple of " + size + " elements");
         }
         return QualifiedTypes.TUPLE + size;
+    }
+
+    /**
+     * A nullable Java value as the {@code none} or {@code some} variant the ABI carries, which is
+     * never a bare {@code null}, so that a nested option stays distinguishable from no payload.
+     *
+     * @see <a href="https://github.com/WebAssembly/component-model/blob/706074c96bc14cfc58469e1bdc452bb4d91921c7/design/mvp/Explainer.md#specialized-value-types">Explainer.md, specialized value types</a>
+     */
+    private Expression lowerOption(Expression value, OptionType option, WitScope scope) {
+        Expression some =
+                AstBuilders.call(
+                        unit.useName(QualifiedTypes.VARIANT_VALUE),
+                        "of",
+                        AstBuilders.text("some"),
+                        toComponent(new NameExpr(SOME), optionPayload(option, scope), scope));
+        Expression none =
+                AstBuilders.call(
+                        unit.useName(QualifiedTypes.VARIANT_VALUE),
+                        "of",
+                        AstBuilders.text("none"),
+                        new NullLiteralExpr());
+        Expression present =
+                AstBuilders.call(unit.useName(QualifiedTypes.OPTIONAL), "ofNullable", value);
+        return AstBuilders.call(
+                AstBuilders.call(present, "map", AstBuilders.lambda(SOME, some)), "orElse", none);
+    }
+
+    /** Lifts the variant an option is carried as, giving back a nullable Java value. */
+    private Expression liftOption(Expression value, OptionType option, WitScope scope) {
+        ValType payload = optionPayload(option, scope);
+        Expression carried =
+                AstBuilders.call(
+                        AstBuilders.cast(unit.use(QualifiedTypes.VARIANT_VALUE), value), "value");
+        if (!needsConversion(payload, scope)) {
+            return fromComponent(carried, payload, scope);
+        }
+        Expression present =
+                AstBuilders.call(unit.useName(QualifiedTypes.OPTIONAL), "ofNullable", carried);
+        Expression mapped =
+                AstBuilders.call(
+                        present,
+                        "map",
+                        AstBuilders.lambda(
+                                SOME, fromComponent(new NameExpr(SOME), payload, scope)));
+        return AstBuilders.call(mapped, "orElse", new NullLiteralExpr());
+    }
+
+    /** A list whose elements the ABI carries differently, converted one element at a time. */
+    private Expression liftElements(Expression value, ValType element, WitScope scope) {
+        unit.markUnchecked();
+        Expression carried =
+                AstBuilders.cast(
+                        AstBuilders.generic(
+                                unit.use(QualifiedTypes.LIST), AstBuilders.type("Object")),
+                        value);
+        return mapElements(carried, fromComponent(new NameExpr(ELEMENT), element, scope));
+    }
+
+    /** {@code value.stream().map(element -> converted).collect(Collectors.toList())} */
+    private Expression mapElements(Expression value, Expression converted) {
+        Expression mapped =
+                AstBuilders.call(
+                        AstBuilders.call(value, "stream"),
+                        "map",
+                        AstBuilders.lambda(ELEMENT, converted));
+        return AstBuilders.call(
+                mapped,
+                "collect",
+                AstBuilders.call(unit.useName(QualifiedTypes.COLLECTORS), "toList"));
     }
 
     /** A cast to a generic type is the one Java cannot check, so it is what needs suppressing. */
@@ -245,6 +377,14 @@ final class WitTypes {
                                     caseOf(declaredCase, scope, declared));
                 }
                 return typeOf(AstBuilders.call(variantBuilder, "build"));
+            case OPTION:
+                // The specialized form, since linking compares kinds without despecializing.
+                Expression payload = valType(((OptionType) defined).valType(), scope, declared);
+                Expression optionBuilder =
+                        AstBuilders.call(unit.useName(QualifiedTypes.OPTION_TYPE), "builder");
+                return typeOf(
+                        AstBuilders.call(
+                                AstBuilders.call(optionBuilder, "withValType", payload), "build"));
             default:
                 throw unsupported(defined.kind().name());
         }
@@ -268,8 +408,9 @@ final class WitTypes {
                 return instanceOf(QualifiedTypes.LIST_DESCRIPTOR);
             case ENUM:
             case VARIANT:
-                // What crosses is a VariantValue, not the nominal Java type the embedder holds,
-                // because the generated code converts before it calls.
+            case OPTION:
+                // What crosses is the variant these despecialize to, not the Java value the
+                // embedder holds, because the generated code converts before it calls.
                 return instanceOf(QualifiedTypes.VARIANT_DESCRIPTOR);
             case FLAGS:
             case TUPLE:
