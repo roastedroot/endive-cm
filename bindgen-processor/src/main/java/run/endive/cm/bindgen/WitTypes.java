@@ -6,12 +6,14 @@ import com.github.javaparser.ast.type.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import run.endive.cm.types.Case;
 import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.ListType;
 import run.endive.cm.types.TupleType;
 import run.endive.cm.types.ValType;
+import run.endive.cm.types.VariantType;
 
 /**
  * Maps a component value type onto the Java type carrying it, and onto the expressions that rebuild
@@ -49,6 +51,7 @@ final class WitTypes {
                         unit.use(QualifiedTypes.LIST), javaType(list.elementType(), scope));
             case ENUM:
             case FLAGS:
+            case VARIANT:
                 return AstBuilders.type(nominalJavaType(scope, index));
             case TUPLE:
                 List<Type> elements = new ArrayList<>();
@@ -76,6 +79,7 @@ final class WitTypes {
             case ENUM:
             case FLAGS:
             case TUPLE:
+            case VARIANT:
                 return true;
             default:
                 return false;
@@ -91,6 +95,7 @@ final class WitTypes {
             case ENUM:
             case FLAGS:
             case TUPLE:
+            case VARIANT:
                 return true;
             default:
                 return false;
@@ -229,6 +234,17 @@ final class WitTypes {
                                     valType(elementType, scope, declared));
                 }
                 return typeOf(AstBuilders.call(tupleBuilder, "build"));
+            case VARIANT:
+                Expression variantBuilder =
+                        AstBuilders.call(unit.useName(QualifiedTypes.VARIANT_TYPE), "builder");
+                for (Case declaredCase : ((VariantType) defined).cases()) {
+                    variantBuilder =
+                            AstBuilders.call(
+                                    variantBuilder,
+                                    "addCase",
+                                    caseOf(declaredCase, scope, declared));
+                }
+                return typeOf(AstBuilders.call(variantBuilder, "build"));
             default:
                 throw unsupported(defined.kind().name());
         }
@@ -251,8 +267,9 @@ final class WitTypes {
             case LIST:
                 return instanceOf(QualifiedTypes.LIST_DESCRIPTOR);
             case ENUM:
-                // What crosses is the variant an enum despecializes to, not the Java enum the
-                // embedder holds, because the generated code converts before it calls.
+            case VARIANT:
+                // What crosses is a VariantValue, not the nominal Java type the embedder holds,
+                // because the generated code converts before it calls.
                 return instanceOf(QualifiedTypes.VARIANT_DESCRIPTOR);
             case FLAGS:
             case TUPLE:
@@ -278,6 +295,20 @@ final class WitTypes {
         return declaredIn == null || declaredIn.equals(unit.packageName())
                 ? simple
                 : declaredIn + "." + simple;
+    }
+
+    /** Rebuilds one case of a variant, whose payload type is written only when it has one. */
+    private Expression caseOf(Case declaredCase, WitScope scope, Map<Integer, String> declared) {
+        Expression builder = AstBuilders.call(unit.useName(QualifiedTypes.CASE), "builder");
+        builder = AstBuilders.call(builder, "withLabel", AstBuilders.text(declaredCase.label()));
+        if (declaredCase.hasValType()) {
+            builder =
+                    AstBuilders.call(
+                            builder,
+                            "withValType",
+                            valType(declaredCase.valType(), scope, declared));
+        }
+        return AstBuilders.call(builder, "build");
     }
 
     private Expression typeOf(Expression built) {

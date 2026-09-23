@@ -548,7 +548,19 @@ the tuple type a caller expects without an unchecked cast. An element the conver
 which covers an element that converts on its own such as an `enum`, and one carrying a type argument such as a `list`.
 A tuple wider than the runtime carries is refused too.
 
-Records, variants, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
+A `variant` becomes an abstract base class with one nested final class per case, as
+[The Java shape of each WIT type](#the-java-shape-of-each-wit-type) settled. A case carrying a payload holds it in a
+field reached through `value()`, since a WIT case payload is anonymous, and one carrying none has no field at all.
+Which case a value is comes from its Java class rather than from whether a payload is present, so a case carrying
+`none` stays distinct from a case carrying nothing. `fromComponent` switches on the label and refuses an unknown one
+the way an enum's does.
+
+Two limits follow from generating a nested class per case. A case named after the variant it belongs to is refused,
+because Java forbids a nested class sharing the simple name of a class enclosing it. A payload of a kind the generator
+cannot map is refused where the variant is declared rather than where a function names it, since the case class needs
+a Java type for its field either way.
+
+Records, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
 and a compound type on a world's bare function import are each rejected with a message naming what is unsupported. The
 last of those is a limit of `HostFunction`, which builds an instance with no type space, leaving an index nothing
 to resolve.
@@ -558,7 +570,8 @@ to resolve.
 The WIT under `src/test/resources/wit` in `bindgen-processor` is the bindgen! example world for that stage, verbatim.
 That is what the golden files are generated from, so a difference from the example is visible rather than assumed.
 
-All seven of the non-async example worlds are present.
+All seven of the non-async example worlds are present. A world covering a WIT type no example declares is written for
+the purpose and named after that type, which is where `variant-types` comes from.
 
 The end-to-end fixtures use the same WIT, with one exception that has to be stated wherever it appears. A world that
 imports without exporting cannot be driven, since nothing enters the guest, so `with-imports`,

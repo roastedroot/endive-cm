@@ -1,6 +1,7 @@
 package run.endive.cm.bindgen;
 
 import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
@@ -9,6 +10,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
+import com.github.javaparser.ast.expr.EnclosedExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.InstanceOfExpr;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -21,6 +23,8 @@ import com.github.javaparser.ast.stmt.ForEachStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.SwitchEntry;
+import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
@@ -28,8 +32,10 @@ import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.type.WildcardType;
 import java.util.ArrayList;
 import java.util.List;
+import run.endive.cm.types.Case;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
+import run.endive.cm.types.VariantType;
 
 /**
  * Generates the Java package mirroring one WIT interface, holding the interface itself plus
@@ -42,6 +48,9 @@ final class InterfaceGenerator {
 
     /** The nested enum a generated flags wrapper holds one constant of per label. */
     private static final String FLAG = "Flag";
+
+    /** The name a variant case gives the payload it carries, since a WIT case payload has none. */
+    private static final String VALUE = "value";
 
     private final String generatedBy;
 
@@ -60,6 +69,9 @@ final class InterfaceGenerator {
                     break;
                 case FLAGS:
                     sources.add(flagsSource(iface, declared));
+                    break;
+                case VARIANT:
+                    sources.add(variantSource(iface, declared));
                     break;
                 default:
                     break;
@@ -429,6 +441,236 @@ final class InterfaceGenerator {
     private static MethodDeclaration override(MethodDeclaration method) {
         method.addMarkerAnnotation("Override");
         return method;
+    }
+
+    /**
+     * A variant becomes an abstract base class with one nested class per case, told apart with
+     * {@code instanceof}. The base carries nothing, so a payload is a field on the case alone.
+     */
+    private GeneratedUnit variantSource(WitInterface iface, WitType declared) {
+        String className = Names.type(declared.name());
+        GeneratedUnit unit = unitFor(iface);
+        WitTypes types = new WitTypes(unit);
+
+        ClassOrInterfaceDeclaration type = unit.addAbstractClass(className);
+        type.setJavadocComment(
+                "The WIT variant {@code "
+                        + declared.name()
+                        + "}, declared by {@code "
+                        + iface.name()
+                        + "}. A value is one of the nested case classes, told apart with {@code"
+                        + " instanceof}.");
+        type.addConstructor(Modifier.Keyword.PRIVATE);
+
+        MethodDeclaration lowered =
+                type.addMethod("toComponent", Modifier.Keyword.PUBLIC, Modifier.Keyword.ABSTRACT)
+                        .setType(unit.use(QualifiedTypes.VARIANT_VALUE));
+        lowered.removeBody();
+        lowered.setJavadocComment("This case as the ABI carries it.");
+
+        MethodDeclaration lifted =
+                type.addMethod("fromComponent", Modifier.Keyword.PUBLIC, Modifier.Keyword.STATIC)
+                        .setType(AstBuilders.type(className));
+        lifted.addParameter(AstBuilders.type("Object"), VALUE);
+        lifted.setBody(matchCase(unit, types, iface, declared));
+        lifted.setJavadocComment("The case a lifted value names.");
+
+        for (Case declaredCase : cases(declared)) {
+            type.addMember(caseSource(unit, types, iface, className, declaredCase));
+        }
+        return unit;
+    }
+
+    /** The label is all a lifted value carries of its case, so matching one is a switch on it. */
+    private BlockStmt matchCase(
+            GeneratedUnit unit, WitTypes types, WitInterface iface, WitType declared) {
+        BlockStmt body = new BlockStmt();
+        body.addStatement(
+                AstBuilders.declare(
+                        unit.use(QualifiedTypes.VARIANT_VALUE),
+                        "variant",
+                        AstBuilders.cast(
+                                unit.use(QualifiedTypes.VARIANT_VALUE), new NameExpr(VALUE))));
+
+        NodeList<SwitchEntry> entries = new NodeList<>();
+        for (Case declaredCase : cases(declared)) {
+            List<Expression> payload = new ArrayList<>();
+            if (declaredCase.hasValType()) {
+                payload.add(
+                        types.fromComponent(
+                                AstBuilders.call(new NameExpr("variant"), VALUE),
+                                declaredCase.valType(),
+                                iface.scope()));
+            }
+            entries.add(
+                    entry(
+                            AstBuilders.text(declaredCase.label()),
+                            new ReturnStmt(
+                                    AstBuilders.construct(
+                                            AstBuilders.type(Names.type(declaredCase.label())),
+                                            payload.toArray(new Expression[0])))));
+        }
+        Expression message =
+                new BinaryExpr(
+                        AstBuilders.text("unknown " + declared.name() + ": "),
+                        AstBuilders.call(new NameExpr("variant"), "label"),
+                        BinaryExpr.Operator.PLUS);
+        entries.add(
+                entry(
+                        null,
+                        new ThrowStmt(
+                                AstBuilders.construct(
+                                        AstBuilders.type("IllegalArgumentException"), message))));
+        body.addStatement(
+                new SwitchStmt(AstBuilders.call(new NameExpr("variant"), "label"), entries));
+        return body;
+    }
+
+    /** One arm of the label switch, or its default arm when {@code label} is {@code null}. */
+    private static SwitchEntry entry(Expression label, Statement statement) {
+        SwitchEntry entry = new SwitchEntry();
+        if (label != null) {
+            entry.setLabels(NodeList.nodeList(label));
+        }
+        entry.setStatements(NodeList.nodeList(statement));
+        return entry;
+    }
+
+    /**
+     * One case of a variant. Which case a value is comes from its Java class rather than from
+     * whether a payload is present, so a case carrying {@code none} stays distinct from a case
+     * carrying nothing at all.
+     */
+    private ClassOrInterfaceDeclaration caseSource(
+            GeneratedUnit unit,
+            WitTypes types,
+            WitInterface iface,
+            String baseName,
+            Case declaredCase) {
+        String className = Names.type(declaredCase.label());
+        if (className.equals(baseName)) {
+            throw new BindgenException(
+                    "variant case \""
+                            + declaredCase.label()
+                            + "\" is named after the variant itself, which Java forbids for a"
+                            + " nested class");
+        }
+
+        ClassOrInterfaceDeclaration type = new ClassOrInterfaceDeclaration();
+        type.setName(className).setPublic(true).setStatic(true).setFinal(true);
+        type.addExtendedType(baseName);
+        type.setJavadocComment("The case {@code " + declaredCase.label() + "}.");
+
+        Expression payload = new NullLiteralExpr();
+        if (declaredCase.hasValType()) {
+            Type carried = types.javaType(declaredCase.valType(), iface.scope());
+            type.addField(carried, VALUE, Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL);
+
+            ConstructorDeclaration constructor = type.addConstructor(Modifier.Keyword.PUBLIC);
+            constructor.addParameter(carried.clone(), VALUE);
+            constructor
+                    .getBody()
+                    .addStatement(
+                            AstBuilders.assign(AstBuilders.thisField(VALUE), new NameExpr(VALUE)));
+
+            type.addMethod(VALUE, Modifier.Keyword.PUBLIC)
+                    .setType(carried.clone())
+                    .setBody(returning(new NameExpr(VALUE)))
+                    .setJavadocComment("The payload this case carries.");
+            payload = types.toComponent(new NameExpr(VALUE), declaredCase.valType(), iface.scope());
+        }
+
+        type.addMethod("toComponent", Modifier.Keyword.PUBLIC)
+                .setType(unit.use(QualifiedTypes.VARIANT_VALUE))
+                .setBody(
+                        returning(
+                                AstBuilders.call(
+                                        unit.useName(QualifiedTypes.VARIANT_VALUE),
+                                        "of",
+                                        AstBuilders.text(declaredCase.label()),
+                                        payload)))
+                .addMarkerAnnotation("Override");
+
+        type.addMember(equalsMethod(unit, className, declaredCase.hasValType()));
+        type.addMember(hashCodeMethod(unit, declaredCase));
+        type.addMember(toStringMethod(declaredCase));
+        return type;
+    }
+
+    private MethodDeclaration equalsMethod(
+            GeneratedUnit unit, String className, boolean hasPayload) {
+        Expression sameCase = new InstanceOfExpr(new NameExpr("o"), AstBuilders.type(className));
+        BlockStmt body = new BlockStmt();
+        if (hasPayload) {
+            BlockStmt mismatched = new BlockStmt();
+            mismatched.addStatement(new ReturnStmt(new BooleanLiteralExpr(false)));
+            body.addStatement(
+                    new IfStmt(
+                            new UnaryExpr(
+                                    new EnclosedExpr(sameCase),
+                                    UnaryExpr.Operator.LOGICAL_COMPLEMENT),
+                            mismatched,
+                            null));
+            body.addStatement(
+                    new ReturnStmt(
+                            AstBuilders.call(
+                                    unit.useName(QualifiedTypes.OBJECTS),
+                                    "equals",
+                                    new NameExpr(VALUE),
+                                    AstBuilders.field(
+                                            AstBuilders.cast(
+                                                    AstBuilders.type(className), new NameExpr("o")),
+                                            VALUE))));
+        } else {
+            body.addStatement(new ReturnStmt(sameCase));
+        }
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("equals").setType(PrimitiveType.booleanType()).setPublic(true);
+        method.addParameter(AstBuilders.type("Object"), "o");
+        method.setBody(body);
+        method.addMarkerAnnotation("Override");
+        return method;
+    }
+
+    private MethodDeclaration hashCodeMethod(GeneratedUnit unit, Case declaredCase) {
+        Expression hash =
+                declaredCase.hasValType()
+                        ? AstBuilders.call(
+                                unit.useName(QualifiedTypes.OBJECTS),
+                                "hashCode",
+                                new NameExpr(VALUE))
+                        : AstBuilders.call(AstBuilders.text(declaredCase.label()), "hashCode");
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("hashCode").setType(PrimitiveType.intType()).setPublic(true);
+        method.setBody(returning(hash));
+        method.addMarkerAnnotation("Override");
+        return method;
+    }
+
+    private MethodDeclaration toStringMethod(Case declaredCase) {
+        Expression described = AstBuilders.text(declaredCase.label());
+        if (declaredCase.hasValType()) {
+            described =
+                    new BinaryExpr(
+                            new BinaryExpr(
+                                    AstBuilders.text(declaredCase.label() + "("),
+                                    new NameExpr(VALUE),
+                                    BinaryExpr.Operator.PLUS),
+                            AstBuilders.text(")"),
+                            BinaryExpr.Operator.PLUS);
+        }
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("toString").setType(AstBuilders.type("String")).setPublic(true);
+        method.setBody(returning(described));
+        method.addMarkerAnnotation("Override");
+        return method;
+    }
+
+    private static List<Case> cases(WitType declared) {
+        return ((VariantType) declared.defValType()).cases();
     }
 
     private static BlockStmt returning(Expression value) {

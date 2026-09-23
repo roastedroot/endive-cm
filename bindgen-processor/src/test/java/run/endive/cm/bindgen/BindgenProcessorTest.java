@@ -242,6 +242,97 @@ class BindgenProcessorTest {
                                 "goldens/InterfaceImportsHost/example_interfaceimports_logging_Level.java"));
     }
 
+    /** A variant is nominal both ways round, so an imported and an exported one look the same. */
+    @Test
+    void generatesVariantBindings() {
+        Compilation compilation = compile("VariantHost.java");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.VariantTypes",
+                        "endive.testing.example.varianttypes.commands.Command",
+                        "endive.testing.example.varianttypes.commands.Host",
+                        "endive.testing.exports.example.varianttypes.replies.Guest",
+                        "endive.testing.exports.example.varianttypes.replies.Reply"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.VariantTypes")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource("goldens/VariantHost/VariantTypes.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.varianttypes.commands.Command")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/VariantHost/example_varianttypes_commands_Command.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.varianttypes.commands.Host")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/VariantHost/example_varianttypes_commands_Host.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.varianttypes.replies.Guest")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/VariantHost/exports_example_varianttypes_replies_Guest.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.varianttypes.replies.Reply")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/VariantHost/exports_example_varianttypes_replies_Reply.java"));
+    }
+
+    /** A payload of a generic type is the cast Java cannot check, so the case suppresses it. */
+    @Test
+    void aVariantCaseCarryingAListIsSuppressed() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.ListPayloadHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"list-payload\", inline ="
+                                        + " \"package my:project;\\n"
+                                        + "interface blobs {\\n"
+                                        + "  variant blob { empty, bytes(list<u8>) }\\n"
+                                        + "  take: func(b: blob);\\n"
+                                        + "}\\n"
+                                        + "world list-payload {\\n"
+                                        + "  import blobs;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class ListPayloadHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.my.project.blobs.Blob")
+                .contentsAsUtf8String()
+                .contains("@SuppressWarnings(\"unchecked\")");
+    }
+
+    /** A case named after the variant would be a nested class sharing its enclosing class's name. */
+    @Test
+    void aVariantCaseNamedAfterItsVariantIsReported() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.SelfNamedCaseHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"self-named\", inline ="
+                                        + " \"package my:project;\\n"
+                                        + "interface shapes {\\n"
+                                        + "  variant shape { shape(u32), blank }\\n"
+                                        + "  pick: func() -> shape;\\n"
+                                        + "}\\n"
+                                        + "world self-named {\\n"
+                                        + "  import shapes;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class SelfNamedCaseHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("is named after the variant itself");
+    }
+
     @Test
     void generatesEveryKindOfWorldExport() {
         Compilation compilation = compile("WorldExportKindsHost.java");

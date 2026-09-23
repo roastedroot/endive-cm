@@ -7,6 +7,7 @@ final class QualifiedTypes {
     static final String LINKED_HASH_MAP = "java.util.LinkedHashMap";
     static final String LIST = "java.util.List";
     static final String MAP = "java.util.Map";
+    static final String OBJECTS = "java.util.Objects";
     static final String SET = "java.util.Set";
 
     static final String CHAR_VALUE = "run.endive.cm.abi.CharValue";
@@ -33,6 +34,7 @@ final class QualifiedTypes {
     static final String VARIANT_DESCRIPTOR = "run.endive.cm.runtime.VariantHostTypeDescriptor";
     static final String VOID_DESCRIPTOR = "run.endive.cm.runtime.VoidHostTypeDescriptor";
 
+    static final String CASE = "run.endive.cm.types.Case";
     static final String ENUM_TYPE = "run.endive.cm.types.EnumType";
     static final String FLAGS_TYPE = "run.endive.cm.types.FlagsType";
     static final String FUNC_TYPE = "run.endive.cm.types.FuncType";
@@ -42,6 +44,7 @@ final class QualifiedTypes {
     static final String TUPLE_TYPE = "run.endive.cm.types.TupleType";
     static final String TYPE = "run.endive.cm.types.Type";
     static final String VAL_TYPE = "run.endive.cm.types.ValType";
+    static final String VARIANT_TYPE = "run.endive.cm.types.VariantType";
     static final String WASM_COMPONENT = "run.endive.cm.types.WasmComponent";
 
     private QualifiedTypes() {}
