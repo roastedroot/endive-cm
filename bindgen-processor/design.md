@@ -617,14 +617,10 @@ the embedder's call in a `try` that catches only the generated exception and tur
 Catching every `RuntimeException` there would deliver a genuine bug in embedder code to the guest as a well formed
 error, which is why the catch is narrow.
 
-Records, variants, flags, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
-a compound type on a world's bare function import and a `result` reached as anything but a function's own result are
-each rejected with a message naming what is unsupported. A compound type on a bare function import is a limit of
-`HostFunction`, which builds an instance with no type space, leaving an index nothing to resolve.
-
-A world's `use`, an interface that uses types from elsewhere, and a compound type on a world's bare function import
-are each rejected with a message naming what is unsupported. The last of those is a limit of `HostFunction`, which
-builds an instance with no type space, leaving an index nothing to resolve.
+A world's `use`, an interface that uses types from elsewhere, a compound type on a world's bare function import, and
+a `result` reached as anything but a function's own result are each rejected with a message naming what is
+unsupported. The bare function import is a limit of `HostFunction`, which builds an instance with no type space,
+leaving an index nothing to resolve.
 
 ## Fidelity to the bindgen! examples
 

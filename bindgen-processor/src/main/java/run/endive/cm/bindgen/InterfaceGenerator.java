@@ -656,6 +656,19 @@ final class InterfaceGenerator {
                             + "\" is named after the variant itself, which Java forbids for a"
                             + " nested class");
         }
+        for (WitType declared : iface.types()) {
+            // A nested case shadows a type of the same name, so the case class would stand in
+            // for it wherever the variant names it.
+            if (!declared.name().equals(baseName)
+                    && className.equals(Names.type(declared.name()))) {
+                throw new BindgenException(
+                        "variant case \""
+                                + declaredCase.label()
+                                + "\" has the Java name of type \""
+                                + declared.name()
+                                + "\", which it would shadow inside the variant");
+            }
+        }
 
         ClassOrInterfaceDeclaration type = new ClassOrInterfaceDeclaration();
         type.setName(className).setPublic(true).setStatic(true).setFinal(true);

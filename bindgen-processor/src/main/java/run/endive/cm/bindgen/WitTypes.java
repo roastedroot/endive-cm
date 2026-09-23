@@ -201,18 +201,30 @@ final class WitTypes {
      * may be converted in place.
      */
     Expression toComponent(Expression value, ValType valType, WitScope scope) {
+        return toComponent(value, valType, scope, 0);
+    }
+
+    /**
+     * @param depth how many conversion lambdas enclose this one, which is what keeps their
+     *     parameters from shadowing each other when a container holds another
+     */
+    private Expression toComponent(Expression value, ValType valType, WitScope scope, int depth) {
         if (!needsConversion(valType, scope)) {
             return value;
         }
         DefValType defined = definedAt(scope, valType.typeIdx());
         switch (defined.kind()) {
             case OPTION:
-                return lowerOption(value, (OptionType) defined, scope);
+                return lowerOption(value, (OptionType) defined, scope, depth);
             case LIST:
                 return mapElements(
                         value,
                         toComponent(
-                                new NameExpr(ELEMENT), ((ListType) defined).elementType(), scope));
+                                new NameExpr(elementName(depth)),
+                                ((ListType) defined).elementType(),
+                                scope,
+                                depth + 1),
+                        depth);
             default:
                 return AstBuilders.call(value, "toComponent");
         }
@@ -220,15 +232,22 @@ final class WitTypes {
 
     /** Turns what the ABI carries into a Java value, evaluating {@code value} once. */
     Expression fromComponent(Expression value, ValType valType, WitScope scope) {
+        return fromComponent(value, valType, scope, 0);
+    }
+
+    /**
+     * @param depth how many conversion lambdas enclose this one
+     */
+    private Expression fromComponent(Expression value, ValType valType, WitScope scope, int depth) {
         if (needsConversion(valType, scope)) {
             DefValType defined = definedAt(scope, valType.typeIdx());
             switch (defined.kind()) {
                 case TUPLE:
                     return tupleFromComponent(value, (TupleType) defined, scope);
                 case OPTION:
-                    return liftOption(value, (OptionType) defined, scope);
+                    return liftOption(value, (OptionType) defined, scope, depth);
                 case LIST:
-                    return liftElements(value, ((ListType) defined).elementType(), scope);
+                    return liftElements(value, ((ListType) defined).elementType(), scope, depth);
                 default:
                     return AstBuilders.call(
                             AstBuilders.name(nominalJavaType(scope, valType.typeIdx())),
@@ -285,13 +304,18 @@ final class WitTypes {
      *
      * @see <a href="https://github.com/WebAssembly/component-model/blob/706074c96bc14cfc58469e1bdc452bb4d91921c7/design/mvp/Explainer.md#specialized-value-types">Explainer.md, specialized value types</a>
      */
-    private Expression lowerOption(Expression value, OptionType option, WitScope scope) {
+    private Expression lowerOption(Expression value, OptionType option, WitScope scope, int depth) {
+        String bound = someName(depth);
         Expression some =
                 AstBuilders.call(
                         unit.useName(QualifiedTypes.VARIANT_VALUE),
                         "of",
                         AstBuilders.text("some"),
-                        toComponent(new NameExpr(SOME), optionPayload(option, scope), scope));
+                        toComponent(
+                                new NameExpr(bound),
+                                optionPayload(option, scope),
+                                scope,
+                                depth + 1));
         Expression none =
                 AstBuilders.call(
                         unit.useName(QualifiedTypes.VARIANT_VALUE),
@@ -301,18 +325,19 @@ final class WitTypes {
         Expression present =
                 AstBuilders.call(unit.useName(QualifiedTypes.OPTIONAL), "ofNullable", value);
         return AstBuilders.call(
-                AstBuilders.call(present, "map", AstBuilders.lambda(SOME, some)), "orElse", none);
+                AstBuilders.call(present, "map", AstBuilders.lambda(bound, some)), "orElse", none);
     }
 
     /** Lifts the variant an option is carried as, giving back a nullable Java value. */
-    private Expression liftOption(Expression value, OptionType option, WitScope scope) {
+    private Expression liftOption(Expression value, OptionType option, WitScope scope, int depth) {
         ValType payload = optionPayload(option, scope);
         Expression carried =
                 AstBuilders.call(
                         AstBuilders.cast(unit.use(QualifiedTypes.VARIANT_VALUE), value), "value");
         if (!needsConversion(payload, scope)) {
-            return fromComponent(carried, payload, scope);
+            return fromComponent(carried, payload, scope, depth);
         }
+        String bound = someName(depth);
         Expression present =
                 AstBuilders.call(unit.useName(QualifiedTypes.OPTIONAL), "ofNullable", carried);
         Expression mapped =
@@ -320,28 +345,41 @@ final class WitTypes {
                         present,
                         "map",
                         AstBuilders.lambda(
-                                SOME, fromComponent(new NameExpr(SOME), payload, scope)));
+                                bound,
+                                fromComponent(new NameExpr(bound), payload, scope, depth + 1)));
         return AstBuilders.call(mapped, "orElse", new NullLiteralExpr());
     }
 
     /** A list whose elements the ABI carries differently, converted one element at a time. */
-    private Expression liftElements(Expression value, ValType element, WitScope scope) {
+    private Expression liftElements(Expression value, ValType element, WitScope scope, int depth) {
         unit.markUnchecked();
         Expression carried =
                 AstBuilders.cast(
                         AstBuilders.generic(
                                 unit.use(QualifiedTypes.LIST), AstBuilders.type("Object")),
                         value);
-        return mapElements(carried, fromComponent(new NameExpr(ELEMENT), element, scope));
+        return mapElements(
+                carried,
+                fromComponent(new NameExpr(elementName(depth)), element, scope, depth + 1),
+                depth);
+    }
+
+    /** A conversion lambda's parameter, kept apart from the ones enclosing it. */
+    private static String elementName(int depth) {
+        return depth == 0 ? ELEMENT : ELEMENT + depth;
+    }
+
+    private static String someName(int depth) {
+        return depth == 0 ? SOME : SOME + depth;
     }
 
     /** {@code value.stream().map(element -> converted).collect(Collectors.toList())} */
-    private Expression mapElements(Expression value, Expression converted) {
+    private Expression mapElements(Expression value, Expression converted, int depth) {
         Expression mapped =
                 AstBuilders.call(
                         AstBuilders.call(value, "stream"),
                         "map",
-                        AstBuilders.lambda(ELEMENT, converted));
+                        AstBuilders.lambda(elementName(depth), converted));
         return AstBuilders.call(
                 mapped,
                 "collect",

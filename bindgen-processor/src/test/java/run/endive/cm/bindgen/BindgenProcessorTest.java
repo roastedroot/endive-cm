@@ -125,6 +125,66 @@ class BindgenProcessorTest {
                 .contains("Profile.fromComponent(element)");
     }
 
+    /**
+     * A container inside a container converts through a lambda inside a lambda, so the two
+     * parameters have to differ or the generated source does not compile.
+     */
+    @Test
+    void nestedContainersDoNotShadowTheirConversionParameters() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.NestHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"nest\", inline = \"package"
+                                        + " example:nest;\\n"
+                                        + "interface types {\\n"
+                                        + "  enum level { low, high }\\n"
+                                        + "  grid: func(rows: list<list<level>>) ->"
+                                        + " list<list<level>>;\\n"
+                                        + "  deep: func(v: option<list<option<u32>>>) ->"
+                                        + " option<u32>;\\n"
+                                        + "}\\n"
+                                        + "world nest {\\n"
+                                        + "  import types;\\n"
+                                        + "  export go: func();\\n"
+                                        + "}\\n"
+                                        + "\")\n"
+                                        + "public class NestHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.Nest")
+                .contentsAsUtf8String()
+                .contains("element1 ->");
+    }
+
+    /** A nested case class stands in for any type of the same name wherever the variant names it. */
+    @Test
+    void aVariantCaseShadowingAnotherTypeIsReported() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.ShadowingCaseHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"shadowing\", inline ="
+                                        + " \"package example:shadowing;\\n"
+                                        + "interface types {\\n"
+                                        + "  record point { x: u32 }\\n"
+                                        + "  variant shape { point, circle(point) }\\n"
+                                        + "  draw: func(s: shape) -> shape;\\n"
+                                        + "}\\n"
+                                        + "world shadowing {\\n"
+                                        + "  import types;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class ShadowingCaseHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("which it would shadow inside the variant");
+    }
+
     /** Every world generates a package tree mirroring the WIT ids, which is what this pins. */
     private static void assertGenerated(Compilation compilation, List<String> expected) {
         List<String> actual =
