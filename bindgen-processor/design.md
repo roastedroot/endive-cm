@@ -540,6 +540,14 @@ why every imported interface is built through a local rather than in one chained
 interface's type index space together with the names its exports give those types, since only the export says what a
 type is called and a Java type has to be called something.
 
+A `tuple` is structural rather than nominal, so it has no WIT name and generates no source of its own. It arrives as
+one of the runtime's `Tuple2` through `Tuple8` classes and converts at the boundary, because the ABI despecializes a
+tuple to a record whose fields are labelled by position and carries it as a `java.util.Map`. Lifting one names each
+element by its class, as `Tuple2.fromComponent(value, String.class, Long.class)`, which is what gives the conversion
+the tuple type a caller expects without an unchecked cast. An element the conversion cannot name that way is refused,
+which covers an element that converts on its own such as an `enum`, and one carrying a type argument such as a `list`.
+A tuple wider than the runtime carries is refused too.
+
 Records, variants, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
 and a compound type on a world's bare function import are each rejected with a message naming what is unsupported. The
 last of those is a limit of `HostFunction`, which builds an instance with no type space, leaving an index nothing
@@ -630,7 +638,7 @@ Nothing here is started. Each item says what it is and what makes it awkward, so
 `WorldReader` and `WitTypes` reject what they cannot read, by name, rather than guessing. Everything below fails that
 way today, which means adding one is a matter of finding its rejection and replacing it.
 
-- **`record`, `tuple`.** A record despecializes to something the ABI carries as a
+- **`record`.** The largest gap. A record despecializes to something the ABI carries as a
   `java.util.Map`, so a generated class needs conversion at the boundary the way an enum already does. This is the
   remaining half of [Generated types are nominal](#generated-types-are-nominal-and-cross-the-boundary-through-descriptors).
 - **`variant`, `option`, `result`.** All carried as `VariantValue`, so they follow the enum pattern, but a variant case

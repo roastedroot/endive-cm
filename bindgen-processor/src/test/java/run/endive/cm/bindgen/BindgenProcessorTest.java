@@ -315,6 +315,75 @@ class BindgenProcessorTest {
                                 "goldens/WorldImportsHost/mycustomhost_Host.java"));
     }
 
+    /** A tuple has no WIT name, so nothing is generated for it and the runtime carries it. */
+    @Test
+    void generatesTupleBindings() {
+        Compilation compilation = compile("TupleHost.java");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of("endive.testing.TupleTypes", "endive.testing.example.tuples.points.Host"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.TupleTypes")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource("goldens/TupleHost/TupleTypes.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.tuples.points.Host")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/TupleHost/example_tuples_points_Host.java"));
+    }
+
+    @Test
+    void aTupleWiderThanTheRuntimeCarriesIsReported() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.WideTupleHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"wide\", inline ="
+                                        + " \"package t:w;\\n"
+                                        + "interface points {\\n"
+                                        + "  wide: func() -> tuple<u32, u32, u32, u32, u32, u32,"
+                                        + " u32, u32, u32>;\\n"
+                                        + "}\\n"
+                                        + "world wide {\\n"
+                                        + "  import points;\\n"
+                                        + "  export go: func();\\n"
+                                        + "}\\n\")\n"
+                                        + "public class WideTupleHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("a tuple of 9 elements is not yet supported");
+    }
+
+    /** An element is named by its class when a tuple is lifted, so a list has no way through. */
+    @Test
+    void aTupleElementThatCannotBeNamedByItsClassIsReported() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.NestedTupleHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"nested\", inline ="
+                                        + " \"package t:n;\\n"
+                                        + "interface points {\\n"
+                                        + "  nested: func() -> tuple<string, list<u8>>;\\n"
+                                        + "}\\n"
+                                        + "world nested {\\n"
+                                        + "  import points;\\n"
+                                        + "  export go: func();\\n"
+                                        + "}\\n\")\n"
+                                        + "public class NestedTupleHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation)
+                .hadErrorContaining("a tuple element of kind list is not yet supported");
+    }
+
     /**
      * WIT reserves fewer words than Java does, so a name like {@code new} is a WIT name but not a
      * Java one and has to be escaped. Generation used to fail on one with a parser crash.

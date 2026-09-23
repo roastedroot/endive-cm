@@ -23,6 +23,9 @@ final class QualifiedTypes {
     static final String HOST_RESOURCE = "run.endive.cm.runtime.HostResource";
     static final String HOST_RESOURCE_TABLE = "run.endive.cm.runtime.HostResourceTable";
 
+    /** The runtime names a tuple class by its arity, so an element count completes this. */
+    static final String TUPLE = "run.endive.cm.runtime.Tuple";
+
     static final String LIST_DESCRIPTOR = "run.endive.cm.runtime.ListHostTypeDescriptor";
     static final String PRIMITIVE_DESCRIPTOR = "run.endive.cm.runtime.PrimitiveHostTypeDescriptor";
     static final String RECORD_DESCRIPTOR = "run.endive.cm.runtime.RecordHostTypeDescriptor";
@@ -36,6 +39,7 @@ final class QualifiedTypes {
     static final String LABEL_VAL_TYPE = "run.endive.cm.types.LabelValType";
     static final String LIST_TYPE = "run.endive.cm.types.ListType";
     static final String PRIM_VAL_TYPE = "run.endive.cm.types.PrimValType";
+    static final String TUPLE_TYPE = "run.endive.cm.types.TupleType";
     static final String TYPE = "run.endive.cm.types.Type";
     static final String VAL_TYPE = "run.endive.cm.types.ValType";
     static final String WASM_COMPONENT = "run.endive.cm.types.WasmComponent";

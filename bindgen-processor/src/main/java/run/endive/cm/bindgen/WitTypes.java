@@ -3,11 +3,14 @@ package run.endive.cm.bindgen;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.ListType;
+import run.endive.cm.types.TupleType;
 import run.endive.cm.types.ValType;
 
 /**
@@ -22,6 +25,9 @@ import run.endive.cm.types.ValType;
  * against which it was written.
  */
 final class WitTypes {
+
+    /** The largest tuple the runtime carries, which is the highest {@code TupleN} it declares. */
+    private static final int MAX_TUPLE_SIZE = 8;
 
     private final GeneratedUnit unit;
 
@@ -44,6 +50,13 @@ final class WitTypes {
             case ENUM:
             case FLAGS:
                 return AstBuilders.type(nominalJavaType(scope, index));
+            case TUPLE:
+                List<Type> elements = new ArrayList<>();
+                for (ValType element : ((TupleType) defined).elementTypes()) {
+                    elements.add(elementJavaType(element, scope));
+                }
+                return AstBuilders.generic(
+                        unit.use(tupleClass(elements.size())), elements.toArray(new Type[0]));
             default:
                 throw unsupported(defined.kind().name());
         }
@@ -62,6 +75,7 @@ final class WitTypes {
             case LIST:
             case ENUM:
             case FLAGS:
+            case TUPLE:
                 return true;
             default:
                 return false;
@@ -76,6 +90,7 @@ final class WitTypes {
         switch (kind) {
             case ENUM:
             case FLAGS:
+            case TUPLE:
                 return true;
             default:
                 return false;
@@ -97,6 +112,10 @@ final class WitTypes {
     /** Turns what the ABI carries into a Java value. */
     Expression fromComponent(Expression value, ValType valType, WitScope scope) {
         if (needsConversion(valType, scope)) {
+            DefValType defined = definedAt(scope, valType.typeIdx());
+            if (defined.kind() == DefValType.Kind.TUPLE) {
+                return tupleFromComponent(value, (TupleType) defined, scope);
+            }
             return AstBuilders.call(
                     AstBuilders.name(nominalJavaType(scope, valType.typeIdx())),
                     "fromComponent",
@@ -107,6 +126,42 @@ final class WitTypes {
             unit.markUnchecked();
         }
         return AstBuilders.cast(target, value);
+    }
+
+    /**
+     * A tuple is anonymous, so there is no generated class to call. Each element is named by its
+     * class instead, which is what gives the conversion the tuple type a caller expects.
+     */
+    private Expression tupleFromComponent(Expression value, TupleType tuple, WitScope scope) {
+        List<ValType> elements = tuple.elementTypes();
+        List<Expression> arguments = new ArrayList<>();
+        arguments.add(value);
+        for (ValType element : elements) {
+            arguments.add(AstBuilders.classLiteral(elementJavaType(element, scope)));
+        }
+        return AstBuilders.call(
+                unit.useName(tupleClass(elements.size())), "fromComponent", arguments);
+    }
+
+    /**
+     * The Java type of a tuple element, which a conversion names by its class, so an element that
+     * converts on its own or that carries a type argument has no way through.
+     */
+    private Type elementJavaType(ValType element, WitScope scope) {
+        Type carrier = javaType(element, scope);
+        if (isGeneric(carrier) || needsConversion(element, scope)) {
+            throw unsupported(
+                    "a tuple element of kind " + definedAt(scope, element.typeIdx()).kind().name());
+        }
+        return carrier;
+    }
+
+    /** The runtime class carrying a tuple of {@code size} elements. */
+    private static String tupleClass(int size) {
+        if (size < 2 || size > MAX_TUPLE_SIZE) {
+            throw unsupported("a tuple of " + size + " elements");
+        }
+        return QualifiedTypes.TUPLE + size;
     }
 
     /** A cast to a generic type is the one Java cannot check, so it is what needs suppressing. */
@@ -163,6 +218,17 @@ final class WitTypes {
                             AstBuilders.call(flagsBuilder, "addLabel", AstBuilders.text(label));
                 }
                 return typeOf(AstBuilders.call(flagsBuilder, "build"));
+            case TUPLE:
+                Expression tupleBuilder =
+                        AstBuilders.call(unit.useName(QualifiedTypes.TUPLE_TYPE), "builder");
+                for (ValType elementType : ((TupleType) defined).elementTypes()) {
+                    tupleBuilder =
+                            AstBuilders.call(
+                                    tupleBuilder,
+                                    "addElementType",
+                                    valType(elementType, scope, declared));
+                }
+                return typeOf(AstBuilders.call(tupleBuilder, "build"));
             default:
                 throw unsupported(defined.kind().name());
         }
@@ -189,8 +255,8 @@ final class WitTypes {
                 // embedder holds, because the generated code converts before it calls.
                 return instanceOf(QualifiedTypes.VARIANT_DESCRIPTOR);
             case FLAGS:
-                // Flags cross as the label-to-boolean map the ABI carries, which is the shape
-                // RecordHostTypeDescriptor names.
+            case TUPLE:
+                // Both cross as the map the ABI carries, which RecordHostTypeDescriptor names.
                 return instanceOf(QualifiedTypes.RECORD_DESCRIPTOR);
             default:
                 throw unsupported(defined.kind().name());

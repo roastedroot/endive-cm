@@ -1,0 +1,72 @@
+package endive.testing;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.ComponentLinker;
+import run.endive.cm.runtime.ComponentStore;
+import run.endive.cm.runtime.HostInstance;
+import run.endive.cm.runtime.PrimitiveHostTypeDescriptor;
+import run.endive.cm.runtime.RecordHostTypeDescriptor;
+import run.endive.cm.runtime.Tuple2;
+import run.endive.cm.types.FuncType;
+import run.endive.cm.types.LabelValType;
+import run.endive.cm.types.PrimValType;
+import run.endive.cm.types.TupleType;
+import run.endive.cm.types.Type;
+import run.endive.cm.types.ValType;
+import run.endive.cm.types.WasmComponent;
+
+/**
+ * Bindings for the WIT world {@code example:tuples/tuple-types}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class TupleTypes {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:tuples/points}.
+         */
+        endive.testing.example.tuples.points.Host points();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction shift;
+
+    private TupleTypes(ComponentInstance instance) {
+        this.instance = instance;
+        this.shift = instance.export("shift").typed(RecordHostTypeDescriptor.instance(), RecordHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Long.class));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static TupleTypes instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        endive.testing.example.tuples.points.Host points = imports.points();
+        HostInstance.Builder pointsBuilder = HostInstance.builder(store);
+        ValType pointsType0 = pointsBuilder.declareType(Type.of(TupleType.builder().addElementType(ValType.builder().withPrimValType(PrimValType.STRING).build()).addElementType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()));
+        ValType pointsType1 = pointsBuilder.declareType(Type.of(TupleType.builder().addElementType(ValType.builder().withPrimValType(PrimValType.U32).build()).addElementType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()));
+        pointsBuilder.addFunction("describe", FuncType.builder().addParam(LabelValType.builder().withLabel("point").withValType(pointsType0).build()).withResult(pointsType1).build(), args -> new Object[] { points.describe(Tuple2.fromComponent(args[0], String.class, Long.class)).toComponent() });
+        values.put("example:tuples/points", pointsBuilder.build());
+        return new TupleTypes(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public Tuple2<String, Long> shift(Tuple2<Long, Long> point, Long by) {
+        return Tuple2.fromComponent(this.shift.apply(point.toComponent(), by)[0], String.class, Long.class);
+    }
+}
