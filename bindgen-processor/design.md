@@ -257,9 +257,10 @@ free of `throws`. A world's bindings catch only that exception when lowering an 
 
 An exception is named after the error payload's type when that type has a name, so `parse-error` gives
 `ParseErrorException`. An anonymous result type is shared by every function with the same signature, so it cannot be
-named after a function, and it falls back to the interface and the type's index in the scope. A `variant` becomes case
-subclasses rather than a visitor because an `instanceof` test allocates nothing, and because the same generated classes
-become `sealed` once the Java baseline allows it.
+named after a function, and it falls back to the interface and the type's index in the scope, giving
+`RunningResult6Exception`. Two results sharing an error payload share the exception named after it, since the exception
+carries the payload and nothing else. A `variant` becomes case subclasses rather than a visitor because an `instanceof`
+test allocates nothing, and because the same generated classes become `sealed` once the Java baseline allows it.
 
 ### Type metadata is generated as builder code
 
@@ -604,6 +605,23 @@ reported. A field naming another record converts through that record's own pair,
 definition before whatever uses it. Three things a record cannot yet carry are refused by name: a resource handle,
 whose type is declared into the instance only after its value types, and any field of a kind the generator does not yet read.
 
+An interface may also declare a `result`, which becomes control flow rather than a value. The ok payload is the Java
+return value and the error case is a generated unchecked exception carrying the error payload, so `parse: func(text:
+string) -> result<u32, parse-error>` binds as `Long parse(String text)` throwing `ParseErrorException`. All four shapes
+are bound, and two of them, `result` and `result<_, E>`, return nothing at all even though `FuncType.hasResult()` holds
+for every one of them.
+
+Which way the call runs decides where the exception is built and where it is caught. Calling into the component reads
+the label off the `VariantValue` that comes back and either returns the ok payload or throws. Satisfying an import wraps
+the embedder's call in a `try` that catches only the generated exception and turns it back into the `error` case.
+Catching every `RuntimeException` there would deliver a genuine bug in embedder code to the guest as a well formed
+error, which is why the catch is narrow.
+
+Records, variants, flags, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
+a compound type on a world's bare function import and a `result` reached as anything but a function's own result are
+each rejected with a message naming what is unsupported. A compound type on a bare function import is a limit of
+`HostFunction`, which builds an instance with no type space, leaving an index nothing to resolve.
+
 A world's `use`, an interface that uses types from elsewhere, and a compound type on a world's bare function import
 are each rejected with a message naming what is unsupported. The last of those is a limit of `HostFunction`, which
 builds an instance with no type space, leaving an index nothing to resolve.
@@ -616,6 +634,9 @@ That is what the golden files are generated from, so a difference from the examp
 All seven of the non-async example worlds are present. A world covering a WIT feature no example declares is written
 for the purpose and named after it, which is where `record-types`, `variant-types` and `static-functions` come from,
 and each such fixture says so at the top.
+
+All seven of the non-async example worlds are present. `result-types` is not one of them, because no bindgen! example
+uses a `result`, so that world is written for these tests and its fixtures say so at the top.
 
 The end-to-end fixtures use the same WIT, with one exception that has to be stated wherever it appears. A world that
 imports without exporting cannot be driven, since nothing enters the guest, so `with-imports`,
@@ -695,8 +716,16 @@ Nothing here is started. Each item says what it is and what makes it awkward, so
 `WorldReader` and `WitTypes` reject what they cannot read, by name, rather than guessing. Everything below fails that
 way today, which means adding one is a matter of finding its rejection and replacing it.
 
-- **`result`.** Carried as `VariantValue`, so it follows the enum pattern, but `result` wants an idiomatic Java shape
-  rather than a literal case class.
+- **`record`, `tuple`, `flags`.** The largest gap. A record despecializes to something the ABI carries as a
+  `java.util.Map`, so a generated class needs conversion at the boundary the way an enum already does. This is the
+  remaining half of [Generated types are nominal](#generated-types-are-nominal-and-cross-the-boundary-through-descriptors).
+- **`variant`, `option`.** Both carried as `VariantValue`, so they follow the enum pattern, but a variant case has a
+  payload and `option` wants an idiomatic Java shape rather than a literal case class.
+- **A `result` on a function a world declares in its own right.** The exception generated for one lives in the Java
+  package of the interface declaring the result, and a world declares no such package. Moving a result into an
+  interface is enough, and the refusal says so.
+- **A resource's `static` functions.** `[static]file.open` is recognised and rejected in
+  `WorldReader.ResourceFunctions.add`. It maps to a static Java method, so the wiring is simpler than a method's.
 - **A world's `use`, and an interface using types from elsewhere.** Both are aliases that grow the type index space,
   which `WorldReader.track` refuses rather than mis-number. Supporting them means resolving an alias to the interface
   that declared the type and referring to the Java type already generated for it.

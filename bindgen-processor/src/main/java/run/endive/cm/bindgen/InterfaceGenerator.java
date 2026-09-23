@@ -13,12 +13,14 @@ import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.EnclosedExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.InstanceOfExpr;
+import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ThisExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
 import com.github.javaparser.ast.stmt.ForEachStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
@@ -38,10 +40,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import run.endive.cm.types.Case;
+import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.LabelValType;
 import run.endive.cm.types.RecordType;
+import run.endive.cm.types.ResultType;
 import run.endive.cm.types.VariantType;
 
 /**
@@ -87,6 +91,7 @@ final class InterfaceGenerator {
                     break;
             }
         }
+        sources.addAll(exceptionSources(iface));
         for (WitResource resource : iface.resources()) {
             sources.add(
                     exported
@@ -95,6 +100,92 @@ final class InterfaceGenerator {
         }
         sources.add(exported ? guestSource(iface) : hostSource(iface));
         return sources;
+    }
+
+    /**
+     * One exception per {@code result} the interface declares, since a result is encoded as
+     * control flow rather than as a value.
+     *
+     * <p>A result is written anonymously, so the scope is walked rather than the named types, and
+     * two results sharing an error payload share the exception named after it.
+     */
+    private List<GeneratedUnit> exceptionSources(WitInterface iface) {
+        List<GeneratedUnit> sources = new ArrayList<>();
+        Set<String> named = new HashSet<>();
+        WitScope scope = iface.scope();
+        for (int i = 0; i < scope.size(); i++) {
+            run.endive.cm.types.Type declared = scope.at(i);
+            if (declared == null
+                    || declared.defValType() == null
+                    || declared.defValType().kind() != DefValType.Kind.RESULT) {
+                continue;
+            }
+            String className = WitTypes.exceptionName(scope, i);
+            if (named.add(className)) {
+                sources.add(exceptionSource(iface, className, (ResultType) declared.defValType()));
+            }
+        }
+        return sources;
+    }
+
+    /**
+     * The error case of a {@code result}, as an unchecked exception carrying the error payload so
+     * that a bound signature stays free of {@code throws}.
+     */
+    private GeneratedUnit exceptionSource(WitInterface iface, String className, ResultType result) {
+        GeneratedUnit unit = unitFor(iface);
+        WitTypes types = new WitTypes(unit);
+
+        ClassOrInterfaceDeclaration type = unit.addClass(className);
+        type.addExtendedType("RuntimeException");
+        type.setJavadocComment(
+                "The error case of a WIT result declared by {@code " + iface.name() + "}.");
+        type.addFieldWithInitializer(
+                PrimitiveType.longType(),
+                "serialVersionUID",
+                new LongLiteralExpr("1L"),
+                Modifier.Keyword.PRIVATE,
+                Modifier.Keyword.STATIC,
+                Modifier.Keyword.FINAL);
+
+        if (!result.hasError()) {
+            type.addConstructor(Modifier.Keyword.PUBLIC)
+                    .getBody()
+                    .addStatement(superCall(AstBuilders.text(iface.name() + " returned an error")));
+            return unit;
+        }
+
+        type.addField(
+                types.javaType(result.error(), iface.scope()),
+                "error",
+                Modifier.Keyword.PRIVATE,
+                Modifier.Keyword.FINAL);
+
+        ConstructorDeclaration constructor = type.addConstructor(Modifier.Keyword.PUBLIC);
+        constructor.addParameter(types.javaType(result.error(), iface.scope()), "error");
+        constructor
+                .getBody()
+                .addStatement(
+                        superCall(
+                                AstBuilders.call(
+                                        AstBuilders.name("String"),
+                                        "valueOf",
+                                        new NameExpr("error"))))
+                .addStatement(
+                        AstBuilders.assign(AstBuilders.thisField("error"), new NameExpr("error")));
+
+        MethodDeclaration accessor =
+                type.addMethod("error", Modifier.Keyword.PUBLIC)
+                        .setType(types.javaType(result.error(), iface.scope()));
+        BlockStmt read = new BlockStmt();
+        read.addStatement(new ReturnStmt(new NameExpr("error")));
+        accessor.setBody(read);
+        accessor.setJavadocComment("The error payload the failing side supplied.");
+        return unit;
+    }
+
+    private static Statement superCall(Expression message) {
+        return new ExplicitConstructorInvocationStmt(false, null, NodeList.nodeList(message));
     }
 
     /**

@@ -16,6 +16,7 @@ import run.endive.cm.types.LabelValType;
 import run.endive.cm.types.ListType;
 import run.endive.cm.types.OptionType;
 import run.endive.cm.types.RecordType;
+import run.endive.cm.types.ResultType;
 import run.endive.cm.types.TupleType;
 import run.endive.cm.types.ValType;
 import run.endive.cm.types.VariantType;
@@ -74,6 +75,8 @@ final class WitTypes {
                 }
                 return AstBuilders.generic(
                         unit.use(tupleClass(elements.size())), elements.toArray(new Type[0]));
+            case RESULT:
+                throw resultOutOfPlace();
             default:
                 throw unsupported(defined.kind().name());
         }
@@ -97,6 +100,41 @@ final class WitTypes {
     }
 
     /**
+     * The {@code result} {@code valType} names, or {@code null} when it names anything else.
+     *
+     * <p>A result is control flow rather than a value, so a caller resolves one here instead of
+     * asking for a Java type for it.
+     */
+    ResultType resultType(ValType valType, WitScope scope) {
+        if (valType == null || valType.primValType() != null) {
+            return null;
+        }
+        DefValType defined = definedAt(scope, valType.typeIdx());
+        return defined.kind() == DefValType.Kind.RESULT ? (ResultType) defined : null;
+    }
+
+    /**
+     * The exception generated for the result at {@code index}, by its simple Java name.
+     *
+     * <p>The error payload's own name is what an embedder recognises, so it is used whenever the
+     * payload has one. An anonymous result is shared by every function of the same signature, so
+     * it falls back to the interface and the type's index instead.
+     */
+    static String exceptionName(WitScope scope, int index) {
+        ValType error = ((ResultType) definedAt(scope, index)).error();
+        String named =
+                error == null || error.primValType() != null ? null : scope.nameAt(error.typeIdx());
+        return named != null
+                ? Names.type(named) + "Exception"
+                : Names.type(scope.owner()) + "Result" + index + "Exception";
+    }
+
+    /** The exception generated for the result at {@code index}, as this unit has to write it. */
+    ClassOrInterfaceType exceptionType(WitScope scope, int index) {
+        return AstBuilders.type(qualify(scope, exceptionName(scope, index)));
+    }
+
+    /**
      * The types a host instance has to be told about, since a function type names one by index.
      *
      * <p>A kind belongs here once {@link #defValType} can rebuild it, and not before. Declaring a
@@ -113,6 +151,7 @@ final class WitTypes {
             case VARIANT:
             case OPTION:
             case RECORD:
+            case RESULT:
                 return true;
             default:
                 return false;
@@ -148,6 +187,9 @@ final class WitTypes {
             return false;
         }
         DefValType defined = definedAt(scope, valType.typeIdx());
+        if (defined.kind() == DefValType.Kind.RESULT) {
+            throw resultOutOfPlace();
+        }
         if (defined.kind() == DefValType.Kind.LIST) {
             return needsConversion(((ListType) defined).elementType(), scope);
         }
@@ -405,6 +447,23 @@ final class WitTypes {
                                             valType(field.valType(), scope, declared)));
                 }
                 return typeOf(AstBuilders.call(recordBuilder, "build"));
+            case RESULT:
+                ResultType result = (ResultType) defined;
+                Expression resultBuilder =
+                        AstBuilders.call(unit.useName(QualifiedTypes.RESULT_TYPE), "builder");
+                if (result.hasOk()) {
+                    resultBuilder =
+                            AstBuilders.call(
+                                    resultBuilder, "withOk", valType(result.ok(), scope, declared));
+                }
+                if (result.hasError()) {
+                    resultBuilder =
+                            AstBuilders.call(
+                                    resultBuilder,
+                                    "withError",
+                                    valType(result.error(), scope, declared));
+                }
+                return typeOf(AstBuilders.call(resultBuilder, "build"));
             default:
                 throw unsupported(defined.kind().name());
         }
@@ -457,6 +516,7 @@ final class WitTypes {
             case ENUM:
             case VARIANT:
             case OPTION:
+            case RESULT:
                 // What crosses is the variant these despecialize to, not the Java value the
                 // embedder holds, because the generated code converts before it calls.
                 return instanceOf(QualifiedTypes.VARIANT_DESCRIPTOR);
@@ -480,11 +540,15 @@ final class WitTypes {
      * elsewhere, since the generated units do not import from one another.
      */
     private String reference(WitScope scope, String witName) {
-        String simple = Names.type(witName);
+        return qualify(scope, Names.type(witName));
+    }
+
+    /** {@code simpleName} as this unit has to write it, qualified when it is another package. */
+    private String qualify(WitScope scope, String simpleName) {
         String declaredIn = scope.javaPackage();
         return declaredIn == null || declaredIn.equals(unit.packageName())
-                ? simple
-                : declaredIn + "." + simple;
+                ? simpleName
+                : declaredIn + "." + simpleName;
     }
 
     /** Rebuilds one case of a variant, whose payload type is written only when it has one. */
@@ -573,6 +637,16 @@ final class WitTypes {
             return unsupported("a type that was never declared");
         }
         return unsupported(type.defValType().kind().name());
+    }
+
+    /**
+     * A result is encoded as control flow, which only a function's own result can carry, so one
+     * reached as a value has nowhere to go.
+     */
+    private static BindgenException resultOutOfPlace() {
+        return new BindgenException(
+                "a result is only meaningful as a function's own result, so one reached as a"
+                        + " parameter or inside another type is not supported");
     }
 
     private static BindgenException unsupported(String described) {

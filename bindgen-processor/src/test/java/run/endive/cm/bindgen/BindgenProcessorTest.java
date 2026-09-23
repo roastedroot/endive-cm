@@ -448,6 +448,90 @@ class BindgenProcessorTest {
     }
 
     @Test
+    void generatesResultBindings() {
+        Compilation compilation = compile("ResultHost.java");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.ResultTypes",
+                        "endive.testing.example.resulttypes.parsing.Host",
+                        "endive.testing.example.resulttypes.parsing.ParseError",
+                        "endive.testing.example.resulttypes.parsing.ParseErrorException",
+                        "endive.testing.exports.example.resulttypes.running.Guest",
+                        "endive.testing.exports.example.resulttypes.running.RunError",
+                        "endive.testing.exports.example.resulttypes.running.RunErrorException",
+                        "endive.testing.exports.example.resulttypes.running.RunningResult6Exception",
+                        "endive.testing.exports.example.resulttypes.running.RunningResult8Exception"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.ResultTypes")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource("goldens/ResultHost/ResultTypes.java"));
+        assertThat(compilation)
+                .generatedSourceFile(
+                        "endive.testing.example.resulttypes.parsing.ParseErrorException")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/ResultHost/example_resulttypes_parsing_ParseErrorException.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.resulttypes.running.Guest")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/ResultHost/exports_example_resulttypes_running_Guest.java"));
+        assertThat(compilation)
+                .generatedSourceFile(
+                        "endive.testing.exports.example.resulttypes.running.RunningResult8Exception")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/ResultHost/exports_example_resulttypes_running_RunningResult8Exception.java"));
+    }
+
+    /** A result encodes as control flow, so it says nothing anywhere but a function's result. */
+    @Test
+    void aResultReachedAsAValueIsRefused() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.ResultParamHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"result-param\", inline ="
+                                        + " \"package my:project;\\n"
+                                        + "interface calc {\\n"
+                                        + "  report: func(outcome: result<u32, string>);\\n"
+                                        + "}\\n"
+                                        + "world result-param {\\n"
+                                        + "  import calc;\\n"
+                                        + "  export go: func();\\n"
+                                        + "}\\n\")\n"
+                                        + "public class ResultParamHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("only meaningful as a function's own result");
+    }
+
+    /** A world declares no Java package for the generated exception to belong to. */
+    @Test
+    void aResultOnAWorldsOwnFunctionIsRefused() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.WorldResultHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"world-result\", inline ="
+                                        + " \"package my:project;\\n"
+                                        + "world world-result {\\n"
+                                        + "  export go: func() -> result<u32, string>;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class WorldResultHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("a function a world declares in its own right");
+    }
+
+    @Test
     void generatesEveryKindOfWorldExport() {
         Compilation compilation = compile("WorldExportKindsHost.java");
 

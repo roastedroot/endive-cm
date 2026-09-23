@@ -45,6 +45,7 @@ final class QualifiedTypes {
     static final String OPTION_TYPE = "run.endive.cm.types.OptionType";
     static final String PRIM_VAL_TYPE = "run.endive.cm.types.PrimValType";
     static final String RECORD_TYPE = "run.endive.cm.types.RecordType";
+    static final String RESULT_TYPE = "run.endive.cm.types.ResultType";
     static final String TUPLE_TYPE = "run.endive.cm.types.TupleType";
     static final String TYPE = "run.endive.cm.types.Type";
     static final String VAL_TYPE = "run.endive.cm.types.ValType";
