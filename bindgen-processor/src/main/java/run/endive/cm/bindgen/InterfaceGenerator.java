@@ -26,6 +26,7 @@ import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.stmt.SwitchEntry;
 import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
@@ -39,6 +40,8 @@ import java.util.Set;
 import run.endive.cm.types.Case;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
+import run.endive.cm.types.LabelValType;
+import run.endive.cm.types.RecordType;
 import run.endive.cm.types.VariantType;
 
 /**
@@ -76,6 +79,9 @@ final class InterfaceGenerator {
                     break;
                 case VARIANT:
                     sources.add(variantSource(iface, declared));
+                    break;
+                case RECORD:
+                    sources.add(recordSource(iface, declared));
                     break;
                 default:
                     break;
@@ -675,6 +681,221 @@ final class InterfaceGenerator {
 
     private static List<Case> cases(WitType declared) {
         return ((VariantType) declared.defValType()).cases();
+    }
+
+    /**
+     * A record is carried as a map keyed by field label, so it converts at the boundary. Every
+     * field is written, because a label the map leaves out is stored as a null field rather than
+     * reported.
+     */
+    private GeneratedUnit recordSource(WitInterface iface, WitType declared) {
+        String className = Names.type(declared.name());
+        GeneratedUnit unit = unitFor(iface);
+        WitTypes types = FunctionBindings.forUnit(unit).types();
+        WitScope scope = iface.scope();
+        RecordType record = (RecordType) declared.defValType();
+        types.requireNoHandles(record, scope);
+
+        ClassOrInterfaceDeclaration type = unit.addClass(className);
+        type.setJavadocComment(
+                "The WIT record {@code "
+                        + declared.name()
+                        + "}, declared by {@code "
+                        + iface.name()
+                        + "}.");
+
+        for (LabelValType field : record.fields()) {
+            type.addField(
+                    types.javaType(field.valType(), scope),
+                    Names.member(field.label()),
+                    Modifier.Keyword.PRIVATE,
+                    Modifier.Keyword.FINAL);
+        }
+
+        ConstructorDeclaration constructor = type.addConstructor(Modifier.Keyword.PUBLIC);
+        for (LabelValType field : record.fields()) {
+            String member = Names.member(field.label());
+            constructor.addParameter(types.javaType(field.valType(), scope), member);
+            constructor
+                    .getBody()
+                    .addStatement(
+                            AstBuilders.assign(
+                                    AstBuilders.thisField(member), new NameExpr(member)));
+        }
+
+        for (LabelValType field : record.fields()) {
+            String member = Names.member(field.label());
+            BlockStmt read = new BlockStmt();
+            read.addStatement(new ReturnStmt(new NameExpr(member)));
+            type.addMethod(member, Modifier.Keyword.PUBLIC)
+                    .setType(types.javaType(field.valType(), scope))
+                    .setBody(read);
+        }
+
+        type.addMember(lowerRecord(unit, types, scope, record));
+        type.addMember(liftRecord(unit, types, scope, record, className));
+        type.addMember(recordEquals(unit, record, className));
+        type.addMember(recordHashCode(unit, record));
+        type.addMember(recordToString(record, className));
+        return unit;
+    }
+
+    /** {@code toComponent}, which writes every field under the label the ABI knows it by. */
+    private MethodDeclaration lowerRecord(
+            GeneratedUnit unit, WitTypes types, WitScope scope, RecordType record) {
+        BlockStmt body = new BlockStmt();
+        body.addStatement(
+                AstBuilders.declare(
+                        mapOfObject(unit),
+                        "fields",
+                        AstBuilders.construct(
+                                AstBuilders.diamond(unit.use(QualifiedTypes.LINKED_HASH_MAP)))));
+        for (LabelValType field : record.fields()) {
+            body.addStatement(
+                    AstBuilders.call(
+                            new NameExpr("fields"),
+                            "put",
+                            AstBuilders.text(field.label()),
+                            types.toComponent(
+                                    new NameExpr(Names.member(field.label())),
+                                    field.valType(),
+                                    scope)));
+        }
+        body.addStatement(new ReturnStmt(new NameExpr("fields")));
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("toComponent").setPublic(true).setType(mapOfObject(unit)).setBody(body);
+        method.setJavadocComment(
+                "This record as the ABI carries it, which is a map keyed by field label.");
+        return method;
+    }
+
+    /** {@code fromComponent}, which reads every field back by that same label. */
+    private MethodDeclaration liftRecord(
+            GeneratedUnit unit,
+            WitTypes types,
+            WitScope scope,
+            RecordType record,
+            String className) {
+        BlockStmt body = new BlockStmt();
+        body.addStatement(
+                AstBuilders.declare(
+                        mapOfAnything(unit),
+                        "fields",
+                        AstBuilders.cast(mapOfAnything(unit), new NameExpr("value"))));
+        List<Expression> arguments = new ArrayList<>();
+        for (LabelValType field : record.fields()) {
+            arguments.add(
+                    types.fromComponent(
+                            AstBuilders.call(
+                                    new NameExpr("fields"), "get", AstBuilders.text(field.label())),
+                            field.valType(),
+                            scope));
+        }
+        body.addStatement(
+                new ReturnStmt(AstBuilders.construct(AstBuilders.type(className), arguments)));
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("fromComponent")
+                .setPublic(true)
+                .setStatic(true)
+                .setType(AstBuilders.type(className))
+                .setBody(body);
+        method.addParameter(AstBuilders.type("Object"), "value");
+        method.setJavadocComment("The record a lifted value carries.");
+        return method;
+    }
+
+    private MethodDeclaration recordEquals(
+            GeneratedUnit unit, RecordType record, String className) {
+        BlockStmt mismatched = new BlockStmt();
+        mismatched.addStatement(new ReturnStmt(new BooleanLiteralExpr(false)));
+
+        BlockStmt body = new BlockStmt();
+        body.addStatement(
+                new IfStmt(
+                        new UnaryExpr(
+                                new EnclosedExpr(
+                                        new InstanceOfExpr(
+                                                new NameExpr("o"), AstBuilders.type(className))),
+                                UnaryExpr.Operator.LOGICAL_COMPLEMENT),
+                        mismatched,
+                        null));
+        body.addStatement(
+                AstBuilders.declare(
+                        AstBuilders.type(className),
+                        "that",
+                        AstBuilders.cast(AstBuilders.type(className), new NameExpr("o"))));
+        List<Expression> comparisons = new ArrayList<>();
+        for (LabelValType field : record.fields()) {
+            String member = Names.member(field.label());
+            comparisons.add(
+                    AstBuilders.call(
+                            unit.useName(QualifiedTypes.OBJECTS),
+                            "equals",
+                            new NameExpr(member),
+                            AstBuilders.field(new NameExpr("that"), member)));
+        }
+        body.addStatement(new ReturnStmt(AstBuilders.join(comparisons, BinaryExpr.Operator.AND)));
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("equals").setPublic(true).setType(PrimitiveType.booleanType()).setBody(body);
+        method.addParameter(AstBuilders.type("Object"), "o");
+        method.addMarkerAnnotation("Override");
+        return method;
+    }
+
+    private MethodDeclaration recordHashCode(GeneratedUnit unit, RecordType record) {
+        List<Expression> members = new ArrayList<>();
+        for (LabelValType field : record.fields()) {
+            members.add(new NameExpr(Names.member(field.label())));
+        }
+        BlockStmt body = new BlockStmt();
+        body.addStatement(
+                new ReturnStmt(
+                        AstBuilders.call(unit.useName(QualifiedTypes.OBJECTS), "hash", members)));
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("hashCode").setPublic(true).setType(PrimitiveType.intType()).setBody(body);
+        method.addMarkerAnnotation("Override");
+        return method;
+    }
+
+    private MethodDeclaration recordToString(RecordType record, String className) {
+        List<Expression> parts = new ArrayList<>();
+        parts.add(AstBuilders.text(className + "{"));
+        String separator = "";
+        for (LabelValType field : record.fields()) {
+            String member = Names.member(field.label());
+            parts.add(AstBuilders.text(separator + member + "="));
+            parts.add(new NameExpr(member));
+            separator = ", ";
+        }
+        parts.add(AstBuilders.text("}"));
+
+        BlockStmt body = new BlockStmt();
+        body.addStatement(new ReturnStmt(AstBuilders.join(parts, BinaryExpr.Operator.PLUS)));
+
+        MethodDeclaration method = new MethodDeclaration();
+        method.setName("toString")
+                .setPublic(true)
+                .setType(AstBuilders.type("String"))
+                .setBody(body);
+        method.addMarkerAnnotation("Override");
+        return method;
+    }
+
+    private ClassOrInterfaceType mapOfObject(GeneratedUnit unit) {
+        return AstBuilders.generic(
+                unit.use(QualifiedTypes.MAP),
+                AstBuilders.type("String"),
+                AstBuilders.type("Object"));
+    }
+
+    /** {@code Map<?, ?>}, which reads a lifted record without an unchecked cast. */
+    private ClassOrInterfaceType mapOfAnything(GeneratedUnit unit) {
+        return AstBuilders.generic(
+                unit.use(QualifiedTypes.MAP), new WildcardType(), new WildcardType());
     }
 
     private static BlockStmt returning(Expression value) {

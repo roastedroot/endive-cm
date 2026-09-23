@@ -596,9 +596,17 @@ because Java forbids a nested class sharing the simple name of a class enclosing
 cannot map is refused where the variant is declared rather than where a function names it, since the case class needs
 a Java type for its field either way.
 
-Records, a world's `use`, an interface that uses types from elsewhere, and a compound type on a world's bare function
-import are each rejected with a message naming what is unsupported. The last of those is a limit of `HostFunction`,
-which builds an instance with no type space, leaving an index nothing to resolve.
+An interface may also declare a `record`, which becomes a final class with final fields, a constructor taking them in
+declaration order, accessors named after the fields, and `equals`, `hashCode` and `toString`. The ABI carries a record
+as a map keyed by field label, so it converts at the boundary and `toComponent` writes every field, because
+`CanonicalAbi.storeRecord` reads each by label and a label the map leaves out is stored as a null field rather than
+reported. A field naming another record converts through that record's own pair, since the encoding orders a
+definition before whatever uses it. Three things a record cannot yet carry are refused by name: a resource handle,
+whose type is declared into the instance only after its value types, and any field of a kind the generator does not yet read.
+
+A world's `use`, an interface that uses types from elsewhere, and a compound type on a world's bare function import
+are each rejected with a message naming what is unsupported. The last of those is a limit of `HostFunction`, which
+builds an instance with no type space, leaving an index nothing to resolve.
 
 ## Fidelity to the bindgen! examples
 
@@ -606,7 +614,8 @@ The WIT under `src/test/resources/wit` in `bindgen-processor` is the bindgen! ex
 That is what the golden files are generated from, so a difference from the example is visible rather than assumed.
 
 All seven of the non-async example worlds are present. A world covering a WIT feature no example declares is written
-for the purpose and named after it, which is where `variant-types` and `static-functions` come from.
+for the purpose and named after it, which is where `record-types`, `variant-types` and `static-functions` come from,
+and each such fixture says so at the top.
 
 The end-to-end fixtures use the same WIT, with one exception that has to be stated wherever it appears. A world that
 imports without exporting cannot be driven, since nothing enters the guest, so `with-imports`,
@@ -686,9 +695,6 @@ Nothing here is started. Each item says what it is and what makes it awkward, so
 `WorldReader` and `WitTypes` reject what they cannot read, by name, rather than guessing. Everything below fails that
 way today, which means adding one is a matter of finding its rejection and replacing it.
 
-- **`record`.** The largest gap. A record despecializes to something the ABI carries as a
-  `java.util.Map`, so a generated class needs conversion at the boundary the way an enum already does. This is the
-  remaining half of [Generated types are nominal](#generated-types-are-nominal-and-cross-the-boundary-through-descriptors).
 - **`result`.** Carried as `VariantValue`, so it follows the enum pattern, but `result` wants an idiomatic Java shape
   rather than a literal case class.
 - **A world's `use`, and an interface using types from elsewhere.** Both are aliases that grow the type index space,

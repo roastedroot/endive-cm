@@ -58,13 +58,13 @@ class BindgenProcessorTest {
                                 "endive.testing.UnusedTypeHost",
                                 "package endive.testing;\n"
                                         + "import run.endive.cm.runtime.Bindgen;\n"
-                                        + "@Bindgen(world = \"unused-record\", inline ="
+                                        + "@Bindgen(world = \"unused-future\", inline ="
                                         + " \"package my:project;\\n"
                                         + "interface logging {\\n"
-                                        + "  record config { verbose: bool }\\n"
+                                        + "  type pending = future<u32>;\\n"
                                         + "  log: func(msg: string);\\n"
                                         + "}\\n"
-                                        + "world unused-record {\\n"
+                                        + "world unused-future {\\n"
                                         + "  import logging;\\n"
                                         + "  export go: func();\\n"
                                         + "}\\n\")\n"
@@ -73,7 +73,7 @@ class BindgenProcessorTest {
         assertThat(compilation).succeededWithoutWarnings();
         assertGenerated(
                 compilation,
-                List.of("endive.testing.UnusedRecord", "endive.testing.my.project.logging.Host"));
+                List.of("endive.testing.UnusedFuture", "endive.testing.my.project.logging.Host"));
     }
 
     /** Every world generates a package tree mirroring the WIT ids, which is what this pins. */
@@ -473,6 +473,77 @@ class BindgenProcessorTest {
                 .hasSourceEquivalentTo(
                         JavaFileObjects.forResource(
                                 "goldens/WorldExportKindsHost/exports_example_worldexports_units_Guest.java"));
+    }
+
+    @Test
+    void generatesRecordBindings() {
+        Compilation compilation = compile("RecordHost.java");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.RecordTypes",
+                        "endive.testing.example.records.types.Host",
+                        "endive.testing.example.records.types.Person",
+                        "endive.testing.example.records.types.Point",
+                        "endive.testing.exports.example.records.shapes.Guest",
+                        "endive.testing.exports.example.records.shapes.Span"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.RecordTypes")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource("goldens/RecordHost/RecordTypes.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.records.types.Host")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/RecordHost/example_records_types_Host.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.records.types.Person")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/RecordHost/example_records_types_Person.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.records.types.Point")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/RecordHost/example_records_types_Point.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.records.shapes.Guest")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/RecordHost/exports_example_records_shapes_Guest.java"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.records.shapes.Span")
+                .hasSourceEquivalentTo(
+                        JavaFileObjects.forResource(
+                                "goldens/RecordHost/exports_example_records_shapes_Span.java"));
+    }
+
+    /** A record's map has to carry a resource by value, which a handle is not. */
+    @Test
+    void aRecordFieldNamingAResourceHandleIsReported() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.HandleFieldHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"handle-field\", inline ="
+                                        + " \"package my:project;\\n"
+                                        + "interface store {\\n"
+                                        + "  resource conn {}\\n"
+                                        + "  record session { c: conn }\\n"
+                                        + "  open: func() -> session;\\n"
+                                        + "}\\n"
+                                        + "world handle-field {\\n"
+                                        + "  import store;\\n"
+                                        + "  export go: func();\\n"
+                                        + "}\\n\")\n"
+                                        + "public class HandleFieldHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("names a resource handle");
     }
 
     @Test

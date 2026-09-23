@@ -12,8 +12,10 @@ import run.endive.cm.types.Case;
 import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
 import run.endive.cm.types.FlagsType;
+import run.endive.cm.types.LabelValType;
 import run.endive.cm.types.ListType;
 import run.endive.cm.types.OptionType;
+import run.endive.cm.types.RecordType;
 import run.endive.cm.types.TupleType;
 import run.endive.cm.types.ValType;
 import run.endive.cm.types.VariantType;
@@ -63,6 +65,7 @@ final class WitTypes {
             case ENUM:
             case FLAGS:
             case VARIANT:
+            case RECORD:
                 return AstBuilders.type(nominalJavaType(scope, index));
             case TUPLE:
                 List<Type> elements = new ArrayList<>();
@@ -109,6 +112,7 @@ final class WitTypes {
             case TUPLE:
             case VARIANT:
             case OPTION:
+            case RECORD:
                 return true;
             default:
                 return false;
@@ -126,6 +130,7 @@ final class WitTypes {
             case TUPLE:
             case VARIANT:
             case OPTION:
+            case RECORD:
                 return true;
             default:
                 return false;
@@ -385,8 +390,51 @@ final class WitTypes {
                 return typeOf(
                         AstBuilders.call(
                                 AstBuilders.call(optionBuilder, "withValType", payload), "build"));
+            case RECORD:
+                RecordType record = (RecordType) defined;
+                requireNoHandles(record, scope);
+                Expression recordBuilder =
+                        AstBuilders.call(unit.useName(QualifiedTypes.RECORD_TYPE), "builder");
+                for (LabelValType field : record.fields()) {
+                    recordBuilder =
+                            AstBuilders.call(
+                                    recordBuilder,
+                                    "addField",
+                                    labelValType(
+                                            field.label(),
+                                            valType(field.valType(), scope, declared)));
+                }
+                return typeOf(AstBuilders.call(recordBuilder, "build"));
             default:
                 throw unsupported(defined.kind().name());
+        }
+    }
+
+    /** {@code LabelValType.builder().withLabel(<label>).withValType(<valType>).build()}. */
+    Expression labelValType(String label, Expression valType) {
+        Expression builder =
+                AstBuilders.call(unit.useName(QualifiedTypes.LABEL_VAL_TYPE), "builder");
+        builder = AstBuilders.call(builder, "withLabel", AstBuilders.text(label));
+        return AstBuilders.call(AstBuilders.call(builder, "withValType", valType), "build");
+    }
+
+    /**
+     * A handle names a resource the enclosing instance declares after its value types, so a record
+     * carrying one has nothing to resolve by the time it is built.
+     */
+    void requireNoHandles(RecordType record, WitScope scope) {
+        for (LabelValType field : record.fields()) {
+            ValType valType = field.valType();
+            if (valType.primValType() != null) {
+                continue;
+            }
+            DefValType.Kind kind = definedAt(scope, valType.typeIdx()).kind();
+            if (kind == DefValType.Kind.OWN || kind == DefValType.Kind.BORROW) {
+                throw new BindgenException(
+                        "field \""
+                                + field.label()
+                                + "\" names a resource handle, which a record cannot yet carry");
+            }
         }
     }
 
@@ -414,7 +462,8 @@ final class WitTypes {
                 return instanceOf(QualifiedTypes.VARIANT_DESCRIPTOR);
             case FLAGS:
             case TUPLE:
-                // Both cross as the map the ABI carries, which RecordHostTypeDescriptor names.
+            case RECORD:
+                // All cross as the map the ABI carries, which RecordHostTypeDescriptor names.
                 return instanceOf(QualifiedTypes.RECORD_DESCRIPTOR);
             default:
                 throw unsupported(defined.kind().name());

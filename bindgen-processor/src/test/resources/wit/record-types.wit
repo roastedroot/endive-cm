@@ -1,0 +1,38 @@
+package example:records;
+
+interface types {
+    record point {
+        x: u32,
+        y: u32,
+    }
+
+    record person {
+        name: string,
+        active: bool,
+        id: u64,
+        initial: char,
+        tags: list<string>,
+        home: point,
+    }
+
+    /// The person the host holds.
+    resident: func() -> person;
+}
+
+interface shapes {
+    record span {
+        start: u32,
+        end: u32,
+    }
+
+    /// Moves a span's end out by the given amount.
+    widen: func(s: span, by: u32) -> span;
+}
+
+world record-types {
+    import types;
+
+    export shapes;
+
+    export check: func() -> u32;
+}

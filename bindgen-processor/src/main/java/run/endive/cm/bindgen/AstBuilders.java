@@ -8,6 +8,7 @@ import com.github.javaparser.ast.expr.ArrayAccessExpr;
 import com.github.javaparser.ast.expr.ArrayCreationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
@@ -86,6 +87,19 @@ final class AstBuilders {
 
     static ObjectCreationExpr construct(ClassOrInterfaceType type, Expression... arguments) {
         return new ObjectCreationExpr(null, type, NodeList.nodeList(arguments));
+    }
+
+    static ObjectCreationExpr construct(ClassOrInterfaceType type, List<Expression> arguments) {
+        return new ObjectCreationExpr(null, type, NodeList.nodeList(arguments));
+    }
+
+    /** {@code left op right op ...}, folded left to right. */
+    static Expression join(List<Expression> parts, BinaryExpr.Operator operator) {
+        Expression result = parts.get(0);
+        for (int i = 1; i < parts.size(); i++) {
+            result = new BinaryExpr(result, parts.get(i), operator);
+        }
+        return result;
     }
 
     static FieldAccessExpr field(Expression scope, String name) {

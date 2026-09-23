@@ -208,10 +208,7 @@ final class FunctionBindings {
     }
 
     private Expression param(String label, Expression valType) {
-        Expression builder =
-                AstBuilders.call(unit.useName(QualifiedTypes.LABEL_VAL_TYPE), "builder");
-        builder = AstBuilders.call(builder, "withLabel", AstBuilders.text(label));
-        return AstBuilders.call(AstBuilders.call(builder, "withValType", valType), "build");
+        return types.labelValType(label, valType);
     }
 
     private Type returnType(WitFunction function) {
