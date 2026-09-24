@@ -96,6 +96,19 @@ final class Names {
     }
 
     /**
+     * A generated name kept clear of {@code taken}, which holds the Java names a WIT declaration
+     * has already put in scope. Generated code introduces locals and lambda parameters of its own,
+     * and a WIT name is free to be any of them.
+     */
+    static String free(String preferred, Set<String> taken) {
+        String name = preferred;
+        while (taken.contains(name)) {
+            name = name + "_";
+        }
+        return name;
+    }
+
+    /**
      * A WIT name as a Java package segment, which Google's style says is lowercase letters and
      * digits with consecutive words run together. A segment Java reserves gains a trailing
      * underscore, since there is no lowercase-only spelling that would not be a keyword.

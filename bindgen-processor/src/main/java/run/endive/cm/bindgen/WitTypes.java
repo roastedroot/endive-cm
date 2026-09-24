@@ -8,6 +8,7 @@ import com.github.javaparser.ast.type.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import run.endive.cm.types.Case;
 import run.endive.cm.types.DefValType;
 import run.endive.cm.types.EnumType;
@@ -44,6 +45,9 @@ final class WitTypes {
     private static final String ELEMENT = "element";
 
     private final GeneratedUnit unit;
+
+    /** What the scope holding the conversion being written already names. */
+    private Set<String> taken = Set.of();
 
     WitTypes(GeneratedUnit unit) {
         this.unit = unit;
@@ -201,6 +205,15 @@ final class WitTypes {
      * may be converted in place.
      */
     Expression toComponent(Expression value, ValType valType, WitScope scope) {
+        return toComponent(value, valType, scope, Set.of());
+    }
+
+    /**
+     * @param taken the Java names already in scope where this conversion is written, which its
+     *     lambda parameters must avoid
+     */
+    Expression toComponent(Expression value, ValType valType, WitScope scope, Set<String> taken) {
+        this.taken = taken;
         return toComponent(value, valType, scope, 0);
     }
 
@@ -232,6 +245,14 @@ final class WitTypes {
 
     /** Turns what the ABI carries into a Java value, evaluating {@code value} once. */
     Expression fromComponent(Expression value, ValType valType, WitScope scope) {
+        return fromComponent(value, valType, scope, Set.of());
+    }
+
+    /**
+     * @param taken the Java names already in scope where this conversion is written
+     */
+    Expression fromComponent(Expression value, ValType valType, WitScope scope, Set<String> taken) {
+        this.taken = taken;
         return fromComponent(value, valType, scope, 0);
     }
 
@@ -364,13 +385,16 @@ final class WitTypes {
                 depth);
     }
 
-    /** A conversion lambda's parameter, kept apart from the ones enclosing it. */
-    private static String elementName(int depth) {
-        return depth == 0 ? ELEMENT : ELEMENT + depth;
+    /**
+     * A conversion lambda's parameter, kept apart from the lambdas enclosing it and from whatever
+     * the surrounding Java scope already names.
+     */
+    private String elementName(int depth) {
+        return Names.free(depth == 0 ? ELEMENT : ELEMENT + depth, taken);
     }
 
-    private static String someName(int depth) {
-        return depth == 0 ? SOME : SOME + depth;
+    private String someName(int depth) {
+        return Names.free(depth == 0 ? SOME : SOME + depth, taken);
     }
 
     /** {@code value.stream().map(element -> converted).collect(Collectors.toList())} */

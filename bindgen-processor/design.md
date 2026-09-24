@@ -751,6 +751,15 @@ unchecked warnings for everything else in that file as well. Narrowing it to the
 enclosing member threaded through expression construction, since a cast is built deep inside `WitTypes` while the
 member is built by the caller.
 
+### A variant case may still shadow an imported type
+
+Generated code introduces names of its own, and a WIT name is free to be any of them. A record's locals, a
+conversion's lambda parameters and a resource function's field all give way to the WIT names already in scope, and a
+variant case is refused when it is named after its own variant or after a type the interface declares. What is not
+checked is a case named after a type the generated file imports, such as `objects`, whose nested class would shadow
+`java.util.Objects` inside the variant. It surfaces as a javac error rather than a bindgen one, and closing it means
+knowing what the unit will import before the case is written.
+
 ### A Maven plugin
 
 `docs/phases/04-wit-bindgen.md` calls for a `bindgen-maven-plugin` running at `generate-sources`. The annotation

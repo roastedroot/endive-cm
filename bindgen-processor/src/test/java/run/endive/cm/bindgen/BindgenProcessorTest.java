@@ -181,6 +181,50 @@ class BindgenProcessorTest {
         assertThat(compilation).hadErrorContaining("which it would shadow inside the variant");
     }
 
+    /**
+     * Generated code introduces locals and lambda parameters of its own, and a WIT name is free to
+     * be any of them. Shadowing one is either a compile error or, for a record, silently wrong.
+     */
+    @Test
+    void generatedNamesGiveWayToWitNames() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.ShadowHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"shadow\", inline ="
+                                        + " \"package example:shadow;\\n"
+                                        + "interface types {\\n"
+                                        + "  record boxed { fields: string, that: u32, o: bool }\\n"
+                                        + "  keep: func(b: boxed) -> boxed;\\n"
+                                        + "}\\n"
+                                        + "interface ops {\\n"
+                                        + "  enum tone { low, high }\\n"
+                                        + "  sift: func(element: list<tone>) -> list<tone>;\\n"
+                                        + "  pick: func(some: option<u32>) -> option<u32>;\\n"
+                                        + "}\\n"
+                                        + "world shadow {\\n"
+                                        + "  import types;\\n"
+                                        + "  export ops;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class ShadowHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.shadow.types.Boxed")
+                .contentsAsUtf8String()
+                .contains("Objects.equals(that, that_.that)");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.example.shadow.types.Boxed")
+                .contentsAsUtf8String()
+                .contains("fields_.put(\"fields\", fields)");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.shadow.ops.Guest")
+                .contentsAsUtf8String()
+                .contains("element_ ->");
+    }
+
     /** Every world generates a package tree mirroring the WIT ids, which is what this pins. */
     private static void assertGenerated(Compilation compilation, List<String> expected) {
         List<String> actual =

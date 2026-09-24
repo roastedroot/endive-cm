@@ -115,7 +115,8 @@ final class FunctionBindings {
                             types.fromComponent(
                                     AstBuilders.element(call, 0),
                                     function.type().result(),
-                                    function.scope())));
+                                    function.scope(),
+                                    memberNames(function, skip))));
         } else {
             body.addStatement(call);
         }
@@ -146,7 +147,8 @@ final class FunctionBindings {
                                         types.fromComponent(
                                                 AstBuilders.call(new NameExpr(local), "value"),
                                                 result.error(),
-                                                function.scope()))
+                                                function.scope(),
+                                                memberNames(function, skip)))
                                 : AstBuilders.construct(exceptionType(function))));
         body.addStatement(
                 new IfStmt(
@@ -164,7 +166,8 @@ final class FunctionBindings {
                             types.fromComponent(
                                     AstBuilders.call(new NameExpr(local), "value"),
                                     result.ok(),
-                                    function.scope())));
+                                    function.scope(),
+                                    memberNames(function, skip))));
         }
     }
 
@@ -269,7 +272,8 @@ final class FunctionBindings {
                     types.toComponent(
                             new NameExpr(Names.member(param.label())),
                             param.valType(),
-                            function.scope()));
+                            function.scope(),
+                            memberNames(function, skip)));
         }
         return values;
     }
@@ -384,15 +388,16 @@ final class FunctionBindings {
 
     /** A local the generated body names, kept clear of the function's own parameter names. */
     private static String localName(String preferred, WitFunction function, int skip) {
+        return Names.free(preferred, memberNames(function, skip));
+    }
+
+    /** The Java names a function's own parameters occupy in the method written around them. */
+    private static Set<String> memberNames(WitFunction function, int skip) {
         Set<String> taken = new HashSet<>();
         for (LabelValType param : parameters(function, skip)) {
             taken.add(Names.member(param.label()));
         }
-        String name = preferred;
-        while (taken.contains(name)) {
-            name = name + "_";
-        }
-        return name;
+        return taken;
     }
 
     private static List<LabelValType> parameters(WitFunction function, int skip) {

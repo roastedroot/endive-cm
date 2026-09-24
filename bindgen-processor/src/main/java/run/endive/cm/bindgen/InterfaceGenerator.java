@@ -844,28 +844,39 @@ final class InterfaceGenerator {
         return unit;
     }
 
+    /** The Java names a record's own fields occupy, which its generated locals must avoid. */
+    private static Set<String> members(RecordType record) {
+        Set<String> taken = new HashSet<>();
+        for (LabelValType field : record.fields()) {
+            taken.add(Names.member(field.label()));
+        }
+        return taken;
+    }
+
     /** {@code toComponent}, which writes every field under the label the ABI knows it by. */
     private MethodDeclaration lowerRecord(
             GeneratedUnit unit, WitTypes types, WitScope scope, RecordType record) {
+        String fields = Names.free("fields", members(record));
         BlockStmt body = new BlockStmt();
         body.addStatement(
                 AstBuilders.declare(
                         mapOfObject(unit),
-                        "fields",
+                        fields,
                         AstBuilders.construct(
                                 AstBuilders.diamond(unit.use(QualifiedTypes.LINKED_HASH_MAP)))));
         for (LabelValType field : record.fields()) {
             body.addStatement(
                     AstBuilders.call(
-                            new NameExpr("fields"),
+                            new NameExpr(fields),
                             "put",
                             AstBuilders.text(field.label()),
                             types.toComponent(
                                     new NameExpr(Names.member(field.label())),
                                     field.valType(),
-                                    scope)));
+                                    scope,
+                                    members(record))));
         }
-        body.addStatement(new ReturnStmt(new NameExpr("fields")));
+        body.addStatement(new ReturnStmt(new NameExpr(fields)));
 
         MethodDeclaration method = new MethodDeclaration();
         method.setName("toComponent").setPublic(true).setType(mapOfObject(unit)).setBody(body);
@@ -881,18 +892,19 @@ final class InterfaceGenerator {
             WitScope scope,
             RecordType record,
             String className) {
+        String fields = Names.free("fields", members(record));
         BlockStmt body = new BlockStmt();
         body.addStatement(
                 AstBuilders.declare(
                         mapOfAnything(unit),
-                        "fields",
+                        fields,
                         AstBuilders.cast(mapOfAnything(unit), new NameExpr("value"))));
         List<Expression> arguments = new ArrayList<>();
         for (LabelValType field : record.fields()) {
             arguments.add(
                     types.fromComponent(
                             AstBuilders.call(
-                                    new NameExpr("fields"), "get", AstBuilders.text(field.label())),
+                                    new NameExpr(fields), "get", AstBuilders.text(field.label())),
                             field.valType(),
                             scope));
         }
@@ -912,6 +924,10 @@ final class InterfaceGenerator {
 
     private MethodDeclaration recordEquals(
             GeneratedUnit unit, RecordType record, String className) {
+        Set<String> members = members(record);
+        String other = Names.free("o", members);
+        String that = Names.free("that", members);
+
         BlockStmt mismatched = new BlockStmt();
         mismatched.addStatement(new ReturnStmt(new BooleanLiteralExpr(false)));
 
@@ -921,15 +937,15 @@ final class InterfaceGenerator {
                         new UnaryExpr(
                                 new EnclosedExpr(
                                         new InstanceOfExpr(
-                                                new NameExpr("o"), AstBuilders.type(className))),
+                                                new NameExpr(other), AstBuilders.type(className))),
                                 UnaryExpr.Operator.LOGICAL_COMPLEMENT),
                         mismatched,
                         null));
         body.addStatement(
                 AstBuilders.declare(
                         AstBuilders.type(className),
-                        "that",
-                        AstBuilders.cast(AstBuilders.type(className), new NameExpr("o"))));
+                        that,
+                        AstBuilders.cast(AstBuilders.type(className), new NameExpr(other))));
         List<Expression> comparisons = new ArrayList<>();
         for (LabelValType field : record.fields()) {
             String member = Names.member(field.label());
@@ -938,13 +954,13 @@ final class InterfaceGenerator {
                             unit.useName(QualifiedTypes.OBJECTS),
                             "equals",
                             new NameExpr(member),
-                            AstBuilders.field(new NameExpr("that"), member)));
+                            AstBuilders.field(new NameExpr(that), member)));
         }
         body.addStatement(new ReturnStmt(AstBuilders.join(comparisons, BinaryExpr.Operator.AND)));
 
         MethodDeclaration method = new MethodDeclaration();
         method.setName("equals").setPublic(true).setType(PrimitiveType.booleanType()).setBody(body);
-        method.addParameter(AstBuilders.type("Object"), "o");
+        method.addParameter(AstBuilders.type("Object"), other);
         method.addMarkerAnnotation("Override");
         return method;
     }
@@ -1366,6 +1382,11 @@ final class InterfaceGenerator {
 
         ResourceFields(WitInterface iface) {
             Set<String> taken = new HashSet<>();
+            // The interface's own functions are written alongside these, so their names are
+            // spoken for before a resource's are handed out.
+            for (WitFunction function : iface.functions()) {
+                taken.add(Names.member(function.name()));
+            }
             for (WitResource resource : iface.resources()) {
                 for (WitFunction function : resourceFunctions(resource)) {
                     String base = Names.qualifiedMember(resource.name(), function.name());
