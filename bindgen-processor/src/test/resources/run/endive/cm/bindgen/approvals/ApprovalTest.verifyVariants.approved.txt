@@ -1,0 +1,381 @@
+// endive.testing.VariantTypes
+
+package endive.testing;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.ComponentLinker;
+import run.endive.cm.runtime.ComponentStore;
+import run.endive.cm.runtime.HostInstance;
+import run.endive.cm.types.Case;
+import run.endive.cm.types.FuncType;
+import run.endive.cm.types.LabelValType;
+import run.endive.cm.types.PrimValType;
+import run.endive.cm.types.Type;
+import run.endive.cm.types.ValType;
+import run.endive.cm.types.VariantType;
+import run.endive.cm.types.WasmComponent;
+
+/**
+ * Bindings for the WIT world {@code example:variant-types/variant-types}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class VariantTypes {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:variant-types/commands}.
+         */
+        endive.testing.example.varianttypes.commands.Host commands();
+    }
+
+    private final ComponentInstance instance;
+
+    private final endive.testing.exports.example.varianttypes.replies.Guest replies;
+
+    private VariantTypes(ComponentInstance instance) {
+        this.instance = instance;
+        this.replies = new endive.testing.exports.example.varianttypes.replies.Guest(instance.exportedInstance("example:variant-types/replies"));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static VariantTypes instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        endive.testing.example.varianttypes.commands.Host commands = imports.commands();
+        HostInstance.Builder commandsBuilder = HostInstance.builder(store);
+        ValType commandsCommand = commandsBuilder.declareType(Type.of(VariantType.builder().addCase(Case.builder().withLabel("stop").build()).addCase(Case.builder().withLabel("jump").withValType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()).addCase(Case.builder().withLabel("speak").withValType(ValType.builder().withPrimValType(PrimValType.STRING).build()).build()).build()));
+        commandsBuilder.addFunction("handle", FuncType.builder().addParam(LabelValType.builder().withLabel("cmd").withValType(commandsCommand).build()).withResult(commandsCommand).build(), args -> new Object[] { commands.handle(endive.testing.example.varianttypes.commands.Command.fromComponent(args[0])).toComponent() });
+        values.put("example:variant-types/commands", commandsBuilder.build());
+        return new VariantTypes(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    /**
+     * The exported interface {@code example:variant-types/replies}.
+     */
+    public endive.testing.exports.example.varianttypes.replies.Guest replies() {
+        return replies;
+    }
+}
+
+// endive.testing.example.varianttypes.commands.Command
+
+package endive.testing.example.varianttypes.commands;
+
+import java.util.Objects;
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.VariantValue;
+
+/**
+ * The WIT variant {@code command}, declared by {@code example:variant-types/commands}. A value is one of the nested case classes, told apart with {@code instanceof}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public abstract class Command {
+
+    private Command() {
+    }
+
+    /**
+     * This case as the ABI carries it.
+     */
+    public abstract VariantValue toComponent();
+
+    /**
+     * The case a lifted value names.
+     */
+    public static Command fromComponent(Object value) {
+        VariantValue variant = (VariantValue) value;
+        switch(variant.label()) {
+            case "stop":
+                return new Stop();
+            case "jump":
+                return new Jump((Long) variant.value());
+            case "speak":
+                return new Speak((String) variant.value());
+            default:
+                throw new IllegalArgumentException("unknown command: " + variant.label());
+        }
+    }
+
+    /**
+     * The case {@code stop}.
+     */
+    public static final class Stop extends Command {
+
+        @Override
+        public VariantValue toComponent() {
+            return VariantValue.of("stop", null);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Stop;
+        }
+
+        @Override
+        public int hashCode() {
+            return "stop".hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "stop";
+        }
+    }
+
+    /**
+     * The case {@code jump}.
+     */
+    public static final class Jump extends Command {
+
+        private final Long value;
+
+        public Jump(Long value) {
+            this.value = value;
+        }
+
+        /**
+         * The payload this case carries.
+         */
+        public Long value() {
+            return value;
+        }
+
+        @Override
+        public VariantValue toComponent() {
+            return VariantValue.of("jump", value);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof Jump)) {
+                return false;
+            }
+            return Objects.equals(value, ((Jump) o).value);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(value);
+        }
+
+        @Override
+        public String toString() {
+            return "jump(" + value + ")";
+        }
+    }
+
+    /**
+     * The case {@code speak}.
+     */
+    public static final class Speak extends Command {
+
+        private final String value;
+
+        public Speak(String value) {
+            this.value = value;
+        }
+
+        /**
+         * The payload this case carries.
+         */
+        public String value() {
+            return value;
+        }
+
+        @Override
+        public VariantValue toComponent() {
+            return VariantValue.of("speak", value);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof Speak)) {
+                return false;
+            }
+            return Objects.equals(value, ((Speak) o).value);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(value);
+        }
+
+        @Override
+        public String toString() {
+            return "speak(" + value + ")";
+        }
+    }
+}
+
+// endive.testing.example.varianttypes.commands.Host
+
+package endive.testing.example.varianttypes.commands;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:variant-types/commands}, which the embedder implements.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public interface Host {
+
+    Command handle(Command cmd);
+}
+
+// endive.testing.exports.example.varianttypes.replies.Guest
+
+package endive.testing.exports.example.varianttypes.replies;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.VariantHostTypeDescriptor;
+import run.endive.cm.runtime.VoidHostTypeDescriptor;
+
+/**
+ * The WIT interface {@code example:variant-types/replies}, as the component exports it.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Guest {
+
+    private final ComponentFunction echo;
+
+    private final ComponentFunction run;
+
+    /**
+     * Built by the world's bindings. Public only because they are another package.
+     */
+    public Guest(ComponentInstance instance) {
+        this.echo = instance.export("echo").typed(VariantHostTypeDescriptor.instance(), VariantHostTypeDescriptor.instance());
+        this.run = instance.export("run").typed(VoidHostTypeDescriptor.instance());
+    }
+
+    public Reply echo(Reply r) {
+        return Reply.fromComponent(this.echo.apply(r.toComponent())[0]);
+    }
+
+    public void run() {
+        this.run.apply();
+    }
+}
+
+// endive.testing.exports.example.varianttypes.replies.Reply
+
+package endive.testing.exports.example.varianttypes.replies;
+
+import java.util.Objects;
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.VariantValue;
+
+/**
+ * The WIT variant {@code reply}, declared by {@code example:variant-types/replies}. A value is one of the nested case classes, told apart with {@code instanceof}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public abstract class Reply {
+
+    private Reply() {
+    }
+
+    /**
+     * This case as the ABI carries it.
+     */
+    public abstract VariantValue toComponent();
+
+    /**
+     * The case a lifted value names.
+     */
+    public static Reply fromComponent(Object value) {
+        VariantValue variant = (VariantValue) value;
+        switch(variant.label()) {
+            case "silence":
+                return new Silence();
+            case "text":
+                return new Text((String) variant.value());
+            default:
+                throw new IllegalArgumentException("unknown reply: " + variant.label());
+        }
+    }
+
+    /**
+     * The case {@code silence}.
+     */
+    public static final class Silence extends Reply {
+
+        @Override
+        public VariantValue toComponent() {
+            return VariantValue.of("silence", null);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Silence;
+        }
+
+        @Override
+        public int hashCode() {
+            return "silence".hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "silence";
+        }
+    }
+
+    /**
+     * The case {@code text}.
+     */
+    public static final class Text extends Reply {
+
+        private final String value;
+
+        public Text(String value) {
+            this.value = value;
+        }
+
+        /**
+         * The payload this case carries.
+         */
+        public String value() {
+            return value;
+        }
+
+        @Override
+        public VariantValue toComponent() {
+            return VariantValue.of("text", value);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof Text)) {
+                return false;
+            }
+            return Objects.equals(value, ((Text) o).value);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(value);
+        }
+
+        @Override
+        public String toString() {
+            return "text(" + value + ")";
+        }
+    }
+}

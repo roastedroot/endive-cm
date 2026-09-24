@@ -281,7 +281,7 @@ final class Calculator_Types {
 }
 ```
 
-Everything stays visible to the golden-file tests and nothing is read from the classpath at runtime. The holder also
+Everything stays visible to the approved files and nothing is read from the classpath at runtime. The holder also
 carries the generated descriptor constants. This is verbose for something the size of WASI, which is a code-size concern
 to revisit rather than a correctness one.
 
@@ -625,7 +625,7 @@ leaving an index nothing to resolve.
 ## Fidelity to the bindgen! examples
 
 The WIT under `src/test/resources/wit` in `bindgen-processor` is the bindgen! example world for that stage, verbatim.
-That is what the golden files are generated from, so a difference from the example is visible rather than assumed.
+That is what the approved files are generated from, so a difference from the example is visible rather than assumed.
 
 All seven of the non-async example worlds are present. A world covering a WIT feature no example declares is written
 for the purpose and named after it, which is where `record-types`, `variant-types` and `static-functions` come from,
@@ -645,11 +645,11 @@ thing to avoid. A WIT type that is not supported belongs in the unsupported list
 
 ## Module Layout
 
-- `bindgen-processor` holds the processor and its golden-file tests, following `HostModuleProcessorTest`. Sources are
-  built as JavaParser AST nodes, written through the `Filer`, and compared against checked-in expected sources with
-  `compile-testing`. WIT for those tests lives in `src/test/resources/wit/` and reaches the processor through
-  `withClasspath`. `hasSourceEquivalentTo` compares parse trees, so a formatting change does not fail a test, which is
-  why `regenerate-goldens.sh` and its diff are the real review of a generator change.
+- `bindgen-processor` holds the processor and its tests. Sources are built as JavaParser AST nodes and written
+  through the `Filer`. WIT for those tests lives in `src/test/resources/wit/` and reaches the processor through
+  `withClasspath`. `ApprovalTest` approves everything one world generates as a single file, in the style the Endive
+  compiler uses for bytecode, while `BindgenProcessorTest` holds the focused assertions and the refusals, which is
+  where a rule about conversion or naming belongs rather than buried in a whole generated file.
 - `bindgen-processor-tests` holds the end-to-end tests. A `.wat` fixture and a `.wit` file are turned into a component
   by `ComponentEmbed` and `ComponentNew`, and the same WIT generates the bindings that call it, so nothing is written
   by hand twice.
@@ -767,9 +767,14 @@ The last unwrapped wasm-tools component command, tracked in `docs/phases/02-wasm
 `bindgen-processor` for generation and `bindgen-processor-tests` for the end-to-end path, and the runtime's sync ABI
 spec suite for anything touching the facade.
 
-**Changing the generator changes the checked-in expected sources.** Run `bindgen-processor/regenerate-goldens.sh` from
-the repository root and read the diff. A golden file is the API an embedder writes against, so that diff is the review.
-It also regenerates the file each golden test asserts the full set of, which is what pins the package layout.
+**Changing the generator changes the approved files.** Re-run the suite with
+`APPROVAL_TESTS_USE_REPORTER=org.approvaltests.reporters.AutoApproveReporter` and read the diff. An approved file is
+the API an embedder writes against, so that diff is the review, and because it carries every source a world generates
+under its qualified name, the package layout is part of what is approved.
+
+An approved file shows that a change happened, not that it is right. A rule the generator has to keep, such as an
+`option` member lowering to its own variant or two nested conversions not sharing a lambda parameter, belongs in a
+focused test in `BindgenProcessorTest`, because a whole generated file is where such a rule goes unnoticed.
 
 Two traps are worth knowing before losing an hour to either.
 
@@ -777,7 +782,6 @@ Two traps are worth knowing before losing an hour to either.
   treat as a dependency edge. A `provided` dependency is declared alongside it for that reason. Without it,
   `-pl ... -am` runs whatever processor was last installed and the tests pass against a stale one.
 - Driving the processor by hand with `javac` needs `mvn -pl bindgen-processor install` first, for the same reason.
-  `regenerate-goldens.sh` does it.
 
 An end-to-end fixture is a `.wat` implementing the world, turned into a component by `ComponentEmbed` and
 `ComponentNew`. Three things about writing one are easy to get wrong.

@@ -1,0 +1,234 @@
+// endive.testing.StaticFunctions
+
+package endive.testing;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.ResourceValue;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.ComponentLinker;
+import run.endive.cm.runtime.ComponentStore;
+import run.endive.cm.runtime.HostInstance;
+import run.endive.cm.runtime.HostResource;
+import run.endive.cm.runtime.HostResourceTable;
+import run.endive.cm.runtime.PrimitiveHostTypeDescriptor;
+import run.endive.cm.types.FuncType;
+import run.endive.cm.types.LabelValType;
+import run.endive.cm.types.PrimValType;
+import run.endive.cm.types.ValType;
+import run.endive.cm.types.WasmComponent;
+
+/**
+ * Bindings for the WIT world {@code example:static-functions/static-functions}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class StaticFunctions {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:static-functions/host-counters}.
+         */
+        endive.testing.example.staticfunctions.hostcounters.Host hostCounters();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction run;
+
+    private final endive.testing.exports.example.staticfunctions.guestcounters.Guest guestCounters;
+
+    private StaticFunctions(ComponentInstance instance) {
+        this.instance = instance;
+        this.run = instance.export("run").typed(PrimitiveHostTypeDescriptor.forClass(Long.class));
+        this.guestCounters = new endive.testing.exports.example.staticfunctions.guestcounters.Guest(instance.exportedInstance("example:static-functions/guest-counters"));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static StaticFunctions instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        endive.testing.example.staticfunctions.hostcounters.Host hostCounters = imports.hostCounters();
+        HostInstance.Builder hostCountersBuilder = HostInstance.builder(store);
+        HostResourceTable<endive.testing.example.staticfunctions.hostcounters.Counter> hostCountersCounterTable = new HostResourceTable<>();
+        HostResource hostCountersCounter = hostCountersBuilder.declareResource(rep -> hostCountersCounterTable.drop(rep, endive.testing.example.staticfunctions.hostcounters.Counter::drop));
+        hostCountersBuilder.addResource("counter", hostCountersCounter);
+        hostCountersBuilder.addFunction("[constructor]counter", FuncType.builder().addParam(LabelValType.builder().withLabel("start").withValType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()).withResult(hostCountersCounter.own()).build(), args -> new Object[] { ResourceValue.owned(hostCountersCounter.type(), hostCountersCounterTable.add(hostCounters.counter((Long) args[0]))) });
+        hostCountersBuilder.addFunction("[static]counter.open", FuncType.builder().addParam(LabelValType.builder().withLabel("start").withValType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()).withResult(hostCountersCounter.own()).build(), args -> new Object[] { ResourceValue.owned(hostCountersCounter.type(), hostCountersCounterTable.add(hostCounters.counterOpen((Long) args[0]))) });
+        hostCountersBuilder.addFunction("[static]counter.made", FuncType.builder().withResult(ValType.builder().withPrimValType(PrimValType.U32).build()).build(), args -> new Object[] { hostCounters.counterMade() });
+        hostCountersBuilder.addFunction("[method]counter.get", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(hostCountersCounter.borrow()).build()).withResult(ValType.builder().withPrimValType(PrimValType.U32).build()).build(), args -> new Object[] { hostCountersCounterTable.get((ResourceValue) args[0]).get() });
+        values.put("example:static-functions/host-counters", hostCountersBuilder.build());
+        return new StaticFunctions(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public Long run() {
+        return (Long) this.run.apply()[0];
+    }
+
+    /**
+     * The exported interface {@code example:static-functions/guest-counters}.
+     */
+    public endive.testing.exports.example.staticfunctions.guestcounters.Guest guestCounters() {
+        return guestCounters;
+    }
+}
+
+// endive.testing.example.staticfunctions.hostcounters.Counter
+
+package endive.testing.example.staticfunctions.hostcounters;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code counter}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public interface Counter {
+
+    Long get();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}
+
+// endive.testing.example.staticfunctions.hostcounters.Host
+
+package endive.testing.example.staticfunctions.hostcounters;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:static-functions/host-counters}, which the embedder implements.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public interface Host {
+
+    /**
+     * Makes a {@code counter}.
+     */
+    Counter counter(Long start);
+
+    /**
+     * The static {@code counter.open}.
+     */
+    Counter counterOpen(Long start);
+
+    /**
+     * The static {@code counter.made}.
+     */
+    Long counterMade();
+}
+
+// endive.testing.exports.example.staticfunctions.guestcounters.Guest
+
+package endive.testing.exports.example.staticfunctions.guestcounters;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.ResourceValue;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.PrimitiveHostTypeDescriptor;
+import run.endive.cm.runtime.ResourceHostTypeDescriptor;
+
+/**
+ * The WIT interface {@code example:static-functions/guest-counters}, as the component exports it.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Guest {
+
+    final ComponentFunction tallyTally;
+
+    final ComponentFunction tallyGet;
+
+    final ComponentFunction tallyOpen;
+
+    final ComponentFunction tallyMade;
+
+    /**
+     * Built by the world's bindings. Public only because they are another package.
+     */
+    public Guest(ComponentInstance instance) {
+        this.tallyTally = instance.export("[constructor]tally").typed(ResourceHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Long.class));
+        this.tallyGet = instance.export("[method]tally.get").typed(PrimitiveHostTypeDescriptor.forClass(Long.class), ResourceHostTypeDescriptor.instance());
+        this.tallyOpen = instance.export("[static]tally.open").typed(ResourceHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Long.class));
+        this.tallyMade = instance.export("[static]tally.made").typed(PrimitiveHostTypeDescriptor.forClass(Long.class));
+    }
+
+    /**
+     * Makes a {@code tally} inside the component.
+     */
+    public Tally tally(Long start) {
+        return new Tally(this, (ResourceValue) this.tallyTally.apply(start)[0]);
+    }
+
+    /**
+     * The static {@code tally.open}.
+     */
+    public Tally tallyOpen(Long start) {
+        return new Tally(this, (ResourceValue) this.tallyOpen.apply(start)[0]);
+    }
+
+    /**
+     * The static {@code tally.made}.
+     */
+    public Long tallyMade() {
+        return (Long) this.tallyMade.apply()[0];
+    }
+}
+
+// endive.testing.exports.example.staticfunctions.guestcounters.Tally
+
+package endive.testing.exports.example.staticfunctions.guestcounters;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.ResourceValue;
+import run.endive.cm.runtime.GuestResource;
+
+/**
+ * The WIT resource {@code tally}, which {@code example:static-functions/guest-counters} implements. Nothing destroys it on the embedder's behalf, so closing one is what runs the guest's destructor.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Tally implements AutoCloseable {
+
+    private final Guest owner;
+
+    private final ResourceValue handle;
+
+    private boolean dropped;
+
+    Tally(Guest owner, ResourceValue handle) {
+        this.owner = owner;
+        this.handle = handle;
+    }
+
+    public Long get() {
+        return (Long) owner.tallyGet.apply(handle)[0];
+    }
+
+    /**
+     * Runs the guest's destructor. Doing so more than once does nothing.
+     */
+    @Override
+    public void close() {
+        if (!dropped) {
+            dropped = true;
+            GuestResource.drop(handle);
+        }
+    }
+}

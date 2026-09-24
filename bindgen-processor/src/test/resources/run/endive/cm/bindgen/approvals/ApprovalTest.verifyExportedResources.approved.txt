@@ -1,0 +1,191 @@
+// endive.testing.ExportSomeResources
+
+package endive.testing;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.ComponentLinker;
+import run.endive.cm.runtime.ComponentStore;
+import run.endive.cm.types.WasmComponent;
+
+/**
+ * Bindings for the WIT world {@code example:exported-resources/export-some-resources}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class ExportSomeResources {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+    }
+
+    private final ComponentInstance instance;
+
+    private final endive.testing.exports.example.exportedresources.logging.Guest logging;
+
+    private ExportSomeResources(ComponentInstance instance) {
+        this.instance = instance;
+        this.logging = new endive.testing.exports.example.exportedresources.logging.Guest(instance.exportedInstance("example:exported-resources/logging"));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static ExportSomeResources instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        return new ExportSomeResources(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    /**
+     * The exported interface {@code example:exported-resources/logging}.
+     */
+    public endive.testing.exports.example.exportedresources.logging.Guest logging() {
+        return logging;
+    }
+}
+
+// endive.testing.exports.example.exportedresources.logging.Guest
+
+package endive.testing.exports.example.exportedresources.logging;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.ResourceValue;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.PrimitiveHostTypeDescriptor;
+import run.endive.cm.runtime.ResourceHostTypeDescriptor;
+import run.endive.cm.runtime.VariantHostTypeDescriptor;
+import run.endive.cm.runtime.VoidHostTypeDescriptor;
+
+/**
+ * The WIT interface {@code example:exported-resources/logging}, as the component exports it.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Guest {
+
+    final ComponentFunction loggerLogger;
+
+    final ComponentFunction loggerGetMaxLevel;
+
+    final ComponentFunction loggerSetMaxLevel;
+
+    final ComponentFunction loggerLog;
+
+    /**
+     * Built by the world's bindings. Public only because they are another package.
+     */
+    public Guest(ComponentInstance instance) {
+        this.loggerLogger = instance.export("[constructor]logger").typed(ResourceHostTypeDescriptor.instance(), VariantHostTypeDescriptor.instance());
+        this.loggerGetMaxLevel = instance.export("[method]logger.get-max-level").typed(VariantHostTypeDescriptor.instance(), ResourceHostTypeDescriptor.instance());
+        this.loggerSetMaxLevel = instance.export("[method]logger.set-max-level").typed(VoidHostTypeDescriptor.instance(), ResourceHostTypeDescriptor.instance(), VariantHostTypeDescriptor.instance());
+        this.loggerLog = instance.export("[method]logger.log").typed(VoidHostTypeDescriptor.instance(), ResourceHostTypeDescriptor.instance(), VariantHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(String.class));
+    }
+
+    /**
+     * Makes a {@code logger} inside the component.
+     */
+    public Logger logger(Level maxLevel) {
+        return new Logger(this, (ResourceValue) this.loggerLogger.apply(maxLevel.toComponent())[0]);
+    }
+}
+
+// endive.testing.exports.example.exportedresources.logging.Level
+
+package endive.testing.exports.example.exportedresources.logging;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.VariantValue;
+
+/**
+ * The WIT enum {@code level}, declared by {@code example:exported-resources/logging}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public enum Level {
+
+    DEBUG("debug"), INFO("info"), WARN("warn"), ERROR("error");
+
+    private final String label;
+
+    Level(String label) {
+        this.label = label;
+    }
+
+    /**
+     * This case as the ABI carries it, which is a variant with no payload.
+     */
+    public VariantValue toComponent() {
+        return VariantValue.of(label, null);
+    }
+
+    /**
+     * The case a lifted value names.
+     */
+    public static Level fromComponent(Object value) {
+        String label = ((VariantValue) value).label();
+        for (Level candidate : values()) {
+            if (candidate.label.equals(label)) {
+                return candidate;
+            }
+        }
+        throw new IllegalArgumentException("unknown level: " + label);
+    }
+}
+
+// endive.testing.exports.example.exportedresources.logging.Logger
+
+package endive.testing.exports.example.exportedresources.logging;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.ResourceValue;
+import run.endive.cm.runtime.GuestResource;
+
+/**
+ * The WIT resource {@code logger}, which {@code example:exported-resources/logging} implements. Nothing destroys it on the embedder's behalf, so closing one is what runs the guest's destructor.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Logger implements AutoCloseable {
+
+    private final Guest owner;
+
+    private final ResourceValue handle;
+
+    private boolean dropped;
+
+    Logger(Guest owner, ResourceValue handle) {
+        this.owner = owner;
+        this.handle = handle;
+    }
+
+    public Level getMaxLevel() {
+        return Level.fromComponent(owner.loggerGetMaxLevel.apply(handle)[0]);
+    }
+
+    public void setMaxLevel(Level level) {
+        owner.loggerSetMaxLevel.apply(handle, level.toComponent());
+    }
+
+    public void log(Level level, String msg) {
+        owner.loggerLog.apply(handle, level.toComponent(), msg);
+    }
+
+    /**
+     * Runs the guest's destructor. Doing so more than once does nothing.
+     */
+    @Override
+    public void close() {
+        if (!dropped) {
+            dropped = true;
+            GuestResource.drop(handle);
+        }
+    }
+}

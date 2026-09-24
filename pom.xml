@@ -53,6 +53,7 @@
     <assertj.version>3.27.7</assertj.version>
     <junit.version>5.14.4</junit.version>
     <google-compile-testing.version>0.23.0</google-compile-testing.version>
+    <approvaltests.version>31.0.0</approvaltests.version>
   </properties>
 
   <dependencyManagement>
@@ -160,6 +161,12 @@
         <artifactId>maven-plugin-annotations</artifactId>
         <version>${maven-plugin-annotations.version}</version>
         <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.approvaltests</groupId>
+        <artifactId>approvaltests</artifactId>
+        <version>${approvaltests.version}</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>com.google.testing.compile</groupId>

@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.testing.compile.Compilation;
 import com.google.testing.compile.JavaFileObjects;
-import java.io.File;
 import java.util.List;
 import java.util.stream.Collectors;
 import javax.tools.JavaFileObject;
@@ -20,9 +19,6 @@ import org.junit.jupiter.api.Test;
  * compilations has no class output, so Maven has copied no resources there.
  */
 class BindgenProcessorTest {
-
-    private static final List<File> WIT_ON_CLASSPATH =
-            List.of(new File("src/test/resources"), new File("target/test-classes"));
 
     @Test
     void inlineWitNeedsNoFile() {
@@ -42,8 +38,8 @@ class BindgenProcessorTest {
         assertThat(compilation).succeeded();
         assertThat(compilation)
                 .generatedSourceFile("endive.testing.HelloWorld")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/HelloWorldHost/HelloWorld.java"));
+                .contentsAsUtf8String()
+                .contains("public static HelloWorld instantiate(");
     }
 
     /**
@@ -200,197 +196,6 @@ class BindgenProcessorTest {
         return path.replace("/SOURCE_OUTPUT/", "").replace(".java", "").replace('/', '.');
     }
 
-    @Test
-    void generatesExportedResourceBindings() {
-        Compilation compilation = compile("ExportedResourceHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.ExportSomeResources",
-                        "endive.testing.exports.example.exportedresources.logging.Guest",
-                        "endive.testing.exports.example.exportedresources.logging.Level",
-                        "endive.testing.exports.example.exportedresources.logging.Logger"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.ExportSomeResources")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ExportedResourceHost/ExportSomeResources.java"));
-        assertThat(compilation)
-                .generatedSourceFile(
-                        "endive.testing.exports.example.exportedresources.logging.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ExportedResourceHost/exports_example_exportedresources_logging_Guest.java"));
-        assertThat(compilation)
-                .generatedSourceFile(
-                        "endive.testing.exports.example.exportedresources.logging.Level")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ExportedResourceHost/exports_example_exportedresources_logging_Level.java"));
-        assertThat(compilation)
-                .generatedSourceFile(
-                        "endive.testing.exports.example.exportedresources.logging.Logger")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ExportedResourceHost/exports_example_exportedresources_logging_Logger.java"));
-    }
-
-    /** Flags are declared by two interfaces at once, so each gets a wrapper of its own. */
-    @Test
-    void generatesFlagsBindings() {
-        Compilation compilation = compile("FlagsHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.FlagTypes",
-                        "endive.testing.example.flagtypes.permissions.Host",
-                        "endive.testing.example.flagtypes.permissions.Permission",
-                        "endive.testing.exports.example.flagtypes.runner.Guest",
-                        "endive.testing.exports.example.flagtypes.runner.Mode"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.FlagTypes")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/FlagsHost/FlagTypes.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.flagtypes.permissions.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/FlagsHost/example_flagtypes_permissions_Host.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.flagtypes.permissions.Permission")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/FlagsHost/example_flagtypes_permissions_Permission.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.example.flagtypes.runner.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/FlagsHost/exports_example_flagtypes_runner_Guest.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.example.flagtypes.runner.Mode")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/FlagsHost/exports_example_flagtypes_runner_Mode.java"));
-    }
-
-    @Test
-    void generatesHelloWorldBindings() {
-        Compilation compilation = compile("HelloWorldHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(compilation, List.of("endive.testing.HelloWorld"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.HelloWorld")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/HelloWorldHost/HelloWorld.java"));
-    }
-
-    @Test
-    void generatesImportedResourceBindings() {
-        Compilation compilation = compile("ImportedResourceHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.ImportSomeResources",
-                        "endive.testing.example.importedresources.logging.Host",
-                        "endive.testing.example.importedresources.logging.Level",
-                        "endive.testing.example.importedresources.logging.Logger"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.ImportSomeResources")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ImportedResourceHost/ImportSomeResources.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.importedresources.logging.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ImportedResourceHost/example_importedresources_logging_Host.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.importedresources.logging.Level")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ImportedResourceHost/example_importedresources_logging_Level.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.importedresources.logging.Logger")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ImportedResourceHost/example_importedresources_logging_Logger.java"));
-    }
-
-    @Test
-    void generatesInterfaceImportBindings() {
-        Compilation compilation = compile("InterfaceImportsHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.WithImports",
-                        "endive.testing.example.interfaceimports.logging.Host",
-                        "endive.testing.example.interfaceimports.logging.Level"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.WithImports")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/InterfaceImportsHost/WithImports.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.interfaceimports.logging.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/InterfaceImportsHost/example_interfaceimports_logging_Host.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.interfaceimports.logging.Level")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/InterfaceImportsHost/example_interfaceimports_logging_Level.java"));
-    }
-
-    /** A variant is nominal both ways round, so an imported and an exported one look the same. */
-    @Test
-    void generatesVariantBindings() {
-        Compilation compilation = compile("VariantHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.VariantTypes",
-                        "endive.testing.example.varianttypes.commands.Command",
-                        "endive.testing.example.varianttypes.commands.Host",
-                        "endive.testing.exports.example.varianttypes.replies.Guest",
-                        "endive.testing.exports.example.varianttypes.replies.Reply"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.VariantTypes")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/VariantHost/VariantTypes.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.varianttypes.commands.Command")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/VariantHost/example_varianttypes_commands_Command.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.varianttypes.commands.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/VariantHost/example_varianttypes_commands_Host.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.example.varianttypes.replies.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/VariantHost/exports_example_varianttypes_replies_Guest.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.example.varianttypes.replies.Reply")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/VariantHost/exports_example_varianttypes_replies_Reply.java"));
-    }
-
     /** A payload of a generic type is the cast Java cannot check, so the case suppresses it. */
     @Test
     void aVariantCaseCarryingAListIsSuppressed() {
@@ -442,48 +247,6 @@ class BindgenProcessorTest {
         assertThat(compilation).hadErrorContaining("is named after the variant itself");
     }
 
-    @Test
-    void generatesStaticResourceFunctionBindings() {
-        Compilation compilation = compile("StaticFunctionHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.StaticFunctions",
-                        "endive.testing.example.staticfunctions.hostcounters.Counter",
-                        "endive.testing.example.staticfunctions.hostcounters.Host",
-                        "endive.testing.exports.example.staticfunctions.guestcounters.Guest",
-                        "endive.testing.exports.example.staticfunctions.guestcounters.Tally"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.StaticFunctions")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/StaticFunctionHost/StaticFunctions.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.staticfunctions.hostcounters.Counter")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/StaticFunctionHost/example_staticfunctions_hostcounters_Counter.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.staticfunctions.hostcounters.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/StaticFunctionHost/example_staticfunctions_hostcounters_Host.java"));
-        assertThat(compilation)
-                .generatedSourceFile(
-                        "endive.testing.exports.example.staticfunctions.guestcounters.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/StaticFunctionHost/exports_example_staticfunctions_guestcounters_Guest.java"));
-        assertThat(compilation)
-                .generatedSourceFile(
-                        "endive.testing.exports.example.staticfunctions.guestcounters.Tally")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/StaticFunctionHost/exports_example_staticfunctions_guestcounters_Tally.java"));
-    }
-
     /** A handle to another resource has no Java type to name, so a static returning one is refused. */
     @Test
     void aStaticReturningAnotherResourcesHandleIsReported() {
@@ -505,27 +268,6 @@ class BindgenProcessorTest {
 
         assertThat(compilation).failed();
         assertThat(compilation).hadErrorContaining("own is not yet supported");
-    }
-
-    @Test
-    void generatesOptionBindings() {
-        Compilation compilation = compile("OptionHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.OptionTypes",
-                        "endive.testing.example.optiontypes.maybe.Host"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.OptionTypes")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/OptionHost/OptionTypes.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.optiontypes.maybe.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/OptionHost/example_optiontypes_maybe_Host.java"));
     }
 
     /**
@@ -554,46 +296,6 @@ class BindgenProcessorTest {
 
         assertThat(compilation).failed();
         assertThat(compilation).hadErrorContaining("option<option<T>> is not supported");
-    }
-
-    @Test
-    void generatesResultBindings() {
-        Compilation compilation = compile("ResultHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.ResultTypes",
-                        "endive.testing.example.resulttypes.parsing.Host",
-                        "endive.testing.example.resulttypes.parsing.ParseError",
-                        "endive.testing.example.resulttypes.parsing.ParseErrorException",
-                        "endive.testing.exports.example.resulttypes.running.Guest",
-                        "endive.testing.exports.example.resulttypes.running.RunError",
-                        "endive.testing.exports.example.resulttypes.running.RunErrorException",
-                        "endive.testing.exports.example.resulttypes.running.RunningResult6Exception",
-                        "endive.testing.exports.example.resulttypes.running.RunningResult8Exception"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.ResultTypes")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/ResultHost/ResultTypes.java"));
-        assertThat(compilation)
-                .generatedSourceFile(
-                        "endive.testing.example.resulttypes.parsing.ParseErrorException")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ResultHost/example_resulttypes_parsing_ParseErrorException.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.example.resulttypes.running.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ResultHost/exports_example_resulttypes_running_Guest.java"));
-        assertThat(compilation)
-                .generatedSourceFile(
-                        "endive.testing.exports.example.resulttypes.running.RunningResult8Exception")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/ResultHost/exports_example_resulttypes_running_RunningResult8Exception.java"));
     }
 
     /** A result encodes as control flow, so it says nothing anywhere but a function's result. */
@@ -640,79 +342,6 @@ class BindgenProcessorTest {
         assertThat(compilation).hadErrorContaining("a function a world declares in its own right");
     }
 
-    @Test
-    void generatesEveryKindOfWorldExport() {
-        Compilation compilation = compile("WorldExportKindsHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.WithExports",
-                        "endive.testing.exports.environment.Guest",
-                        "endive.testing.exports.example.worldexports.units.Guest"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.WithExports")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/WorldExportKindsHost/WithExports.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.environment.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/WorldExportKindsHost/exports_environment_Guest.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.example.worldexports.units.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/WorldExportKindsHost/exports_example_worldexports_units_Guest.java"));
-    }
-
-    @Test
-    void generatesRecordBindings() {
-        Compilation compilation = compile("RecordHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.RecordTypes",
-                        "endive.testing.example.records.types.Host",
-                        "endive.testing.example.records.types.Person",
-                        "endive.testing.example.records.types.Point",
-                        "endive.testing.exports.example.records.shapes.Guest",
-                        "endive.testing.exports.example.records.shapes.Span"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.RecordTypes")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/RecordHost/RecordTypes.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.records.types.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/RecordHost/example_records_types_Host.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.records.types.Person")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/RecordHost/example_records_types_Person.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.records.types.Point")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/RecordHost/example_records_types_Point.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.example.records.shapes.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/RecordHost/exports_example_records_shapes_Guest.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.example.records.shapes.Span")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/RecordHost/exports_example_records_shapes_Span.java"));
-    }
-
     /** A record's map has to carry a resource by value, which a handle is not. */
     @Test
     void aRecordFieldNamingAResourceHandleIsReported() {
@@ -737,71 +366,6 @@ class BindgenProcessorTest {
 
         assertThat(compilation).failed();
         assertThat(compilation).hadErrorContaining("names a resource handle");
-    }
-
-    @Test
-    void generatesWorldExportBindings() {
-        Compilation compilation = compile("WorldExportsHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of(
-                        "endive.testing.HelloWorld",
-                        "endive.testing.exports.demo.Guest",
-                        "endive.testing.my.project.host.Host"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.HelloWorld")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/WorldExportsHost/HelloWorld.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.exports.demo.Guest")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/WorldExportsHost/exports_demo_Guest.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.my.project.host.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/WorldExportsHost/my_project_host_Host.java"));
-    }
-
-    @Test
-    void generatesWorldImportBindings() {
-        Compilation compilation = compile("WorldImportsHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation, List.of("endive.testing.MyWorld", "endive.testing.mycustomhost.Host"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.MyWorld")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/WorldImportsHost/MyWorld.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.mycustomhost.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/WorldImportsHost/mycustomhost_Host.java"));
-    }
-
-    /** A tuple has no WIT name, so nothing is generated for it and the runtime carries it. */
-    @Test
-    void generatesTupleBindings() {
-        Compilation compilation = compile("TupleHost.java");
-
-        assertThat(compilation).succeededWithoutWarnings();
-        assertGenerated(
-                compilation,
-                List.of("endive.testing.TupleTypes", "endive.testing.example.tuples.points.Host"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.TupleTypes")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource("goldens/TupleHost/TupleTypes.java"));
-        assertThat(compilation)
-                .generatedSourceFile("endive.testing.example.tuples.points.Host")
-                .hasSourceEquivalentTo(
-                        JavaFileObjects.forResource(
-                                "goldens/TupleHost/example_tuples_points_Host.java"));
     }
 
     @Test

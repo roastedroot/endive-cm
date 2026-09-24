@@ -1,0 +1,63 @@
+// endive.testing.HelloWorld
+
+package endive.testing;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.ComponentLinker;
+import run.endive.cm.runtime.ComponentStore;
+import run.endive.cm.runtime.HostFunction;
+import run.endive.cm.runtime.VoidHostTypeDescriptor;
+import run.endive.cm.types.FuncType;
+import run.endive.cm.types.PrimValType;
+import run.endive.cm.types.ValType;
+import run.endive.cm.types.WasmComponent;
+
+/**
+ * Bindings for the WIT world {@code my:project/hello-world}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class HelloWorld {
+
+    private static final FuncType NAME_FUNC = FuncType.builder().withResult(ValType.builder().withPrimValType(PrimValType.STRING).build()).build();
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        String name();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction greet;
+
+    private HelloWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.greet = instance.export("greet").typed(VoidHostTypeDescriptor.instance());
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static HelloWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("name", HostFunction.of(store, NAME_FUNC, args -> new Object[] { imports.name() }));
+        return new HelloWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public void greet() {
+        this.greet.apply();
+    }
+}
