@@ -49,7 +49,7 @@
 
     <endive.version>999-SNAPSHOT</endive.version>
     <zerofs.version>0.1.0</zerofs.version>
-    <jackson.version>2.22.2</jackson.version>
+    <jackson.version>2.22.3</jackson.version>
     <assertj.version>3.27.7</assertj.version>
     <junit.version>5.14.4</junit.version>
     <google-compile-testing.version>0.23.0</google-compile-testing.version>
