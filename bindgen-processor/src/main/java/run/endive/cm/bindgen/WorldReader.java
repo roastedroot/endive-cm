@@ -247,8 +247,8 @@ final class WorldReader {
             ExternDesc desc) {
         TypeBound bound = desc.typeBound();
         if (bound == null || bound.kind() != TypeBound.Kind.EQ) {
-            scope.add(null);
-            resources.computeIfAbsent(exportName, ResourceFunctions::new);
+            int index = scope.add(null);
+            resources.computeIfAbsent(exportName, name -> new ResourceFunctions(name, index));
             return;
         }
         Type named = scope.at((int) bound.typeIdx());
@@ -290,11 +290,14 @@ final class WorldReader {
     private static final class ResourceFunctions {
 
         private final String name;
+        private final int typeIndex;
         private WitFunction constructor;
         private final List<WitFunction> methods = new ArrayList<>();
+        private final List<WitFunction> statics = new ArrayList<>();
 
-        ResourceFunctions(String name) {
+        ResourceFunctions(String name, int typeIndex) {
             this.name = name;
+            this.typeIndex = typeIndex;
         }
 
         void add(String exportName, WitFunction function) {
@@ -303,11 +306,15 @@ final class WorldReader {
             } else if (exportName.startsWith("[method]")) {
                 methods.add(
                         new WitFunction(memberName(exportName), function.type(), function.scope()));
+            } else if (exportName.startsWith("[static]")) {
+                statics.add(
+                        new WitFunction(memberName(exportName), function.type(), function.scope()));
             } else {
                 throw new BindgenException(
                         "\""
                                 + exportName
-                                + "\" is a static resource function, which is not yet supported");
+                                + "\" is neither a constructor, a method nor a static function,"
+                                + " which is not yet supported");
             }
         }
 
@@ -317,7 +324,7 @@ final class WorldReader {
         }
 
         WitResource toResource() {
-            return new WitResource(name, constructor, methods);
+            return new WitResource(name, typeIndex, constructor, methods, statics);
         }
     }
 

@@ -88,6 +88,11 @@ final class GeneratedUnit {
         return generated(unit.addClass(name).setPublic(true).setFinal(true));
     }
 
+    /** A base class the generated cases extend, which is why it is neither final nor sealed. */
+    ClassOrInterfaceDeclaration addAbstractClass(String name) {
+        return generated(unit.addClass(name).setPublic(true).setAbstract(true));
+    }
+
     ClassOrInterfaceDeclaration addInterface(String name) {
         return generated(unit.addInterface(name).setPublic(true));
     }

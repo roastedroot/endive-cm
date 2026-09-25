@@ -1,0 +1,27 @@
+package example:variant-types;
+
+interface commands {
+    variant command {
+        stop,
+        jump(u32),
+        speak(string),
+    }
+
+    handle: func(cmd: command) -> command;
+}
+
+interface replies {
+    variant reply {
+        silence,
+        text(string),
+    }
+
+    echo: func(r: reply) -> reply;
+    run: func();
+}
+
+world variant-types {
+    import commands;
+
+    export replies;
+}

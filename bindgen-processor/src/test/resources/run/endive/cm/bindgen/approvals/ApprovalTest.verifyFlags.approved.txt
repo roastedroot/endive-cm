@@ -1,0 +1,319 @@
+// endive.testing.FlagTypes
+
+package endive.testing;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.ComponentLinker;
+import run.endive.cm.runtime.ComponentStore;
+import run.endive.cm.runtime.HostInstance;
+import run.endive.cm.types.FlagsType;
+import run.endive.cm.types.FuncType;
+import run.endive.cm.types.LabelValType;
+import run.endive.cm.types.Type;
+import run.endive.cm.types.ValType;
+import run.endive.cm.types.WasmComponent;
+
+/**
+ * Bindings for the WIT world {@code example:flag-types/flag-types}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class FlagTypes {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:flag-types/permissions}.
+         */
+        endive.testing.example.flagtypes.permissions.Host permissions();
+    }
+
+    private final ComponentInstance instance;
+
+    private final endive.testing.exports.example.flagtypes.runner.Guest runner;
+
+    private FlagTypes(ComponentInstance instance) {
+        this.instance = instance;
+        this.runner = new endive.testing.exports.example.flagtypes.runner.Guest(instance.exportedInstance("example:flag-types/runner"));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static FlagTypes instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        endive.testing.example.flagtypes.permissions.Host permissions = imports.permissions();
+        HostInstance.Builder permissionsBuilder = HostInstance.builder(store);
+        ValType permissionsPermission = permissionsBuilder.declareType(Type.of(FlagsType.builder().addLabel("read").addLabel("write").addLabel("exec").build()));
+        permissionsBuilder.addFunction("grant", FuncType.builder().addParam(LabelValType.builder().withLabel("requested").withValType(permissionsPermission).build()).withResult(permissionsPermission).build(), args -> new Object[] { permissions.grant(endive.testing.example.flagtypes.permissions.Permission.fromComponent(args[0])).toComponent() });
+        values.put("example:flag-types/permissions", permissionsBuilder.build());
+        return new FlagTypes(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    /**
+     * The exported interface {@code example:flag-types/runner}.
+     */
+    public endive.testing.exports.example.flagtypes.runner.Guest runner() {
+        return runner;
+    }
+}
+
+// endive.testing.example.flagtypes.permissions.Host
+
+package endive.testing.example.flagtypes.permissions;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:flag-types/permissions}, which the embedder implements.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public interface Host {
+
+    Permission grant(Permission requested);
+}
+
+// endive.testing.example.flagtypes.permissions.Permission
+
+package endive.testing.example.flagtypes.permissions;
+
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT flags {@code permission}, declared by {@code example:flag-types/permissions}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Permission {
+
+    /**
+     * One flag of {@code permission}.
+     */
+    public enum Flag {
+
+        READ("read"), WRITE("write"), EXEC("exec");
+
+        private final String label;
+
+        Flag(String label) {
+            this.label = label;
+        }
+    }
+
+    private final EnumSet<Flag> flags;
+
+    private Permission(EnumSet<Flag> flags) {
+        this.flags = flags;
+    }
+
+    /**
+     * The value with exactly {@code flags} set.
+     */
+    public static Permission of(Flag... flags) {
+        EnumSet<Flag> set = EnumSet.noneOf(Flag.class);
+        for (Flag flag : flags) {
+            set.add(flag);
+        }
+        return new Permission(set);
+    }
+
+    /**
+     * Whether {@code flag} is set.
+     */
+    public boolean has(Flag flag) {
+        return flags.contains(flag);
+    }
+
+    /**
+     * The flags that are set.
+     */
+    public Set<Flag> flags() {
+        return EnumSet.copyOf(flags);
+    }
+
+    /**
+     * These flags as the ABI carries them, which is a map per label.
+     */
+    public Map<String, Boolean> toComponent() {
+        Map<String, Boolean> value = new LinkedHashMap<>();
+        for (Flag flag : Flag.values()) {
+            value.put(flag.label, flags.contains(flag));
+        }
+        return value;
+    }
+
+    /**
+     * The flags a lifted value sets.
+     */
+    public static Permission fromComponent(Object value) {
+        Map<?, ?> carried = (Map<?, ?>) value;
+        EnumSet<Flag> set = EnumSet.noneOf(Flag.class);
+        for (Flag flag : Flag.values()) {
+            if (Boolean.TRUE.equals(carried.get(flag.label))) {
+                set.add(flag);
+            }
+        }
+        return new Permission(set);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof Permission && flags.equals(((Permission) other).flags);
+    }
+
+    @Override
+    public int hashCode() {
+        return flags.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "Permission" + flags;
+    }
+}
+
+// endive.testing.exports.example.flagtypes.runner.Guest
+
+package endive.testing.exports.example.flagtypes.runner;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.RecordHostTypeDescriptor;
+
+/**
+ * The WIT interface {@code example:flag-types/runner}, as the component exports it.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Guest {
+
+    private final ComponentFunction run;
+
+    /**
+     * Built by the world's bindings. Public only because they are another package.
+     */
+    public Guest(ComponentInstance instance) {
+        this.run = instance.export("run").typed(RecordHostTypeDescriptor.instance(), RecordHostTypeDescriptor.instance());
+    }
+
+    public Mode run(Mode requested) {
+        return Mode.fromComponent(this.run.apply(requested.toComponent())[0]);
+    }
+}
+
+// endive.testing.exports.example.flagtypes.runner.Mode
+
+package endive.testing.exports.example.flagtypes.runner;
+
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT flags {@code mode}, declared by {@code example:flag-types/runner}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Mode {
+
+    /**
+     * One flag of {@code mode}.
+     */
+    public enum Flag {
+
+        READ("read"), WRITE("write"), EXEC("exec");
+
+        private final String label;
+
+        Flag(String label) {
+            this.label = label;
+        }
+    }
+
+    private final EnumSet<Flag> flags;
+
+    private Mode(EnumSet<Flag> flags) {
+        this.flags = flags;
+    }
+
+    /**
+     * The value with exactly {@code flags} set.
+     */
+    public static Mode of(Flag... flags) {
+        EnumSet<Flag> set = EnumSet.noneOf(Flag.class);
+        for (Flag flag : flags) {
+            set.add(flag);
+        }
+        return new Mode(set);
+    }
+
+    /**
+     * Whether {@code flag} is set.
+     */
+    public boolean has(Flag flag) {
+        return flags.contains(flag);
+    }
+
+    /**
+     * The flags that are set.
+     */
+    public Set<Flag> flags() {
+        return EnumSet.copyOf(flags);
+    }
+
+    /**
+     * These flags as the ABI carries them, which is a map per label.
+     */
+    public Map<String, Boolean> toComponent() {
+        Map<String, Boolean> value = new LinkedHashMap<>();
+        for (Flag flag : Flag.values()) {
+            value.put(flag.label, flags.contains(flag));
+        }
+        return value;
+    }
+
+    /**
+     * The flags a lifted value sets.
+     */
+    public static Mode fromComponent(Object value) {
+        Map<?, ?> carried = (Map<?, ?>) value;
+        EnumSet<Flag> set = EnumSet.noneOf(Flag.class);
+        for (Flag flag : Flag.values()) {
+            if (Boolean.TRUE.equals(carried.get(flag.label))) {
+                set.add(flag);
+            }
+        }
+        return new Mode(set);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof Mode && flags.equals(((Mode) other).flags);
+    }
+
+    @Override
+    public int hashCode() {
+        return flags.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "Mode" + flags;
+    }
+}

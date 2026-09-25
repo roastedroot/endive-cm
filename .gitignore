@@ -13,3 +13,6 @@ target/
 
 .claude
 /component-model-testsuite/
+
+# Approval test output awaiting review
+*.received.txt

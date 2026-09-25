@@ -1,0 +1,32 @@
+package example:result-types;
+
+/// Implemented by the embedder.
+interface parsing {
+    enum parse-error {
+        empty,
+        overflow,
+    }
+
+    parse: func(text: string) -> result<u32, parse-error>;
+}
+
+/// Implemented by the guest, covering all four shapes a result takes.
+interface running {
+    enum run-error {
+        refused,
+    }
+
+    run: func(text: string) -> result<u32, run-error>;
+
+    check: func(value: u32) -> result<_, run-error>;
+
+    count: func(fail: bool) -> result<u32>;
+
+    ping: func(fail: bool) -> result;
+}
+
+world result-types {
+    import parsing;
+
+    export running;
+}

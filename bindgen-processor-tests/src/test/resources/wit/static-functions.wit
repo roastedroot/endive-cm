@@ -1,0 +1,30 @@
+package example:static-functions;
+
+interface host-counters {
+    resource counter {
+        constructor(start: u32);
+
+        get: func() -> u32;
+
+        open: static func(start: u32) -> counter;
+        made: static func() -> u32;
+    }
+}
+
+interface guest-counters {
+    resource tally {
+        constructor(start: u32);
+
+        get: func() -> u32;
+
+        open: static func(start: u32) -> tally;
+        made: static func() -> u32;
+    }
+}
+
+world static-functions {
+    import host-counters;
+    export guest-counters;
+
+    export run: func() -> u32;
+}

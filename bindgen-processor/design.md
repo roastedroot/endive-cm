@@ -257,9 +257,10 @@ free of `throws`. A world's bindings catch only that exception when lowering an 
 
 An exception is named after the error payload's type when that type has a name, so `parse-error` gives
 `ParseErrorException`. An anonymous result type is shared by every function with the same signature, so it cannot be
-named after a function, and it falls back to the interface and the type's index in the scope. A `variant` becomes case
-subclasses rather than a visitor because an `instanceof` test allocates nothing, and because the same generated classes
-become `sealed` once the Java baseline allows it.
+named after a function, and it falls back to the interface and the type's index in the scope, giving
+`RunningResult6Exception`. Two results sharing an error payload share the exception named after it, since the exception
+carries the payload and nothing else. A `variant` becomes case subclasses rather than a visitor because an `instanceof`
+test allocates nothing, and because the same generated classes become `sealed` once the Java baseline allows it.
 
 ### Type metadata is generated as builder code
 
@@ -280,7 +281,7 @@ final class Calculator_Types {
 }
 ```
 
-Everything stays visible to the golden-file tests and nothing is read from the classpath at runtime. The holder also
+Everything stays visible to the approved files and nothing is read from the classpath at runtime. The holder also
 carries the generated descriptor constants. This is verbose for something the size of WASI, which is a code-size concern
 to revisit rather than a correctness one.
 
@@ -518,32 +519,120 @@ integer rather than an object, so the bindings keep a `HostResourceTable` per re
 and the generated destructor hands the object to `drop` before forgetting it. `drop` is a default method, so observing
 a drop is optional rather than forced on every embedder.
 
+A resource may also carry `static` functions, which reach it without a receiver, so there is no borrowed first
+parameter to drop. What a static hands back is what decides its shape, and that is read off its declared result rather
+than off a flag. One returning an `own` handle to its own resource mints a resource exactly as a constructor does, and
+one returning an ordinary value is wired like any other function.
+
+```java
+// <base>.example.resources.types.Host
+public interface Host {
+    File file(String name);
+
+    File fileOpen(String name);
+    Long fileCount();
+}
+```
+
+A static has no handle to hold, so on the export side it sits on the `Guest` rather than on the resource wrapper. It is
+not a Java `static` either, since the `Host` side has to be overridable and the `Guest` side reads the narrowed function
+off the instance. Both sides name it after the resource owning it, so two resources may each declare an `open`.
+
+The `Guest` field holding a narrowed resource function is named the same way, which is why a constructor yields
+`fileFile`. Two functions that would otherwise share one field name are numbered apart, since `[constructor]file` and
+`[static]file.file` both want the first spelling.
+
 An interface declaring a resource is built through a local rather than in one chained expression, because a resource
 has to be declared before anything names it. That is also why its constructor and method types are built inside
 `instantiate` rather than held as constants. `own` and `borrow` name the resource by index, and the index is only known
 once `declareResource` has run.
 
-An interface may also declare a `list` or an `enum`. A list is carried by `java.util.List` of whatever carries its
-element, so `list<u8>` arrives as `List<Short>`. An enum becomes a Java enum carrying the label the ABI knows it by,
-and converts at the boundary, because the ABI despecializes an enum to a variant and lifts it as a `VariantValue`
-rather than as anything nominal.
+An interface may also declare a `list`, an `enum` or a `flags`. A list is carried by `java.util.List` of whatever
+carries its element, so `list<u8>` arrives as `List<Short>`. An enum becomes a Java enum carrying the label the ABI
+knows it by, and converts at the boundary, because the ABI despecializes an enum to a variant and lifts it as a
+`VariantValue` rather than as anything nominal.
+
+A `flags` becomes a final class holding an `EnumSet` of a nested `Flag` enum, one constant per label, and is described
+to the runtime by `RecordHostTypeDescriptor`, since the ABI carries it as a label to boolean map. `toComponent` writes
+every label, because `CanonicalAbi.packFlagsIntoInt` reads each one by name, and `fromComponent` reads each back with
+`Boolean.TRUE.equals`, so a label the map leaves out is false rather than a bug the way a missing record field is. A
+flags type whose Java name would be `Flag` is refused, because a nested type may not be named after the class holding
+it. More than 32 flags never reaches the generator, since wasm-tools rejects it while encoding the WIT.
+
+An `option<T>` is a nullable `T`, so it generates no Java type of its own. It is structural rather than nominal and
+has no WIT name, so it is reached only through the `WitScope` and never looked up by name. It converts at the boundary in both directions, lowering to
+`VariantValue.of("some", payload)` or `VariantValue.of("none", null)` and lifting a `none` back to Java `null`.
+Lowering never yields a bare `null`, both because `ComponentFunctionInstance` reads `arg.getClass()` without a null
+guard and because a `none` nested in another type would otherwise be indistinguishable from a case carrying no payload
+at all. `option<option<T>>` is refused, by resolving the payload through the scope rather than reading the WIT text, so
+that one reached through a named alias is refused as well.
+
+Conversion is written as an expression transform that evaluates its input exactly once and recurses into whatever a
+compound type holds, which is what lets `option` nest. A container is therefore responsible for routing its own
+payloads through `WitTypes.toComponent` and `WitTypes.fromComponent` rather than passing them through. A list does so
+element by element, so `list<option<u32>>` arrives as a `List<Long>` whose entries may be null.
 
 Both have to be declared into the host instance before a function type can name them, the same as a resource, which is
 why every imported interface is built through a local rather than in one chained expression. A `WitScope` carries an
 interface's type index space together with the names its exports give those types, since only the export says what a
 type is called and a Java type has to be called something.
 
-Records, variants, flags, a resource's static functions, a world's `use`, an interface that uses types from elsewhere,
-and a compound type on a world's bare function import are each rejected with a message naming what is unsupported. The
-last of those is a limit of `HostFunction`, which builds an instance with no type space, leaving an index nothing
-to resolve.
+A `tuple` is structural rather than nominal, so it has no WIT name and generates no source of its own. It arrives as
+one of the runtime's `Tuple2` through `Tuple8` classes and converts at the boundary, because the ABI despecializes a
+tuple to a record whose fields are labelled by position and carries it as a `java.util.Map`. Lifting one names each
+element by its class, as `Tuple2.fromComponent(value, String.class, Long.class)`, which is what gives the conversion
+the tuple type a caller expects without an unchecked cast. An element the conversion cannot name that way is refused,
+which covers an element that converts on its own such as an `enum`, and one carrying a type argument such as a `list`.
+A tuple wider than the runtime carries is refused too.
+
+A `variant` becomes an abstract base class with one nested final class per case, as
+[The Java shape of each WIT type](#the-java-shape-of-each-wit-type) settled. A case carrying a payload holds it in a
+field reached through `value()`, since a WIT case payload is anonymous, and one carrying none has no field at all.
+Which case a value is comes from its Java class rather than from whether a payload is present, so a case carrying
+`none` stays distinct from a case carrying nothing. `fromComponent` switches on the label and refuses an unknown one
+the way an enum's does.
+
+Two limits follow from generating a nested class per case. A case named after the variant it belongs to is refused,
+because Java forbids a nested class sharing the simple name of a class enclosing it. A payload of a kind the generator
+cannot map is refused where the variant is declared rather than where a function names it, since the case class needs
+a Java type for its field either way.
+
+An interface may also declare a `record`, which becomes a final class with final fields, a constructor taking them in
+declaration order, accessors named after the fields, and `equals`, `hashCode` and `toString`. The ABI carries a record
+as a map keyed by field label, so it converts at the boundary and `toComponent` writes every field, because
+`CanonicalAbi.storeRecord` reads each by label and a label the map leaves out is stored as a null field rather than
+reported. A field naming another record converts through that record's own pair, since the encoding orders a
+definition before whatever uses it. Three things a record cannot yet carry are refused by name: a resource handle,
+whose type is declared into the instance only after its value types, and any field of a kind the generator does not yet read.
+
+An interface may also declare a `result`, which becomes control flow rather than a value. The ok payload is the Java
+return value and the error case is a generated unchecked exception carrying the error payload, so `parse: func(text:
+string) -> result<u32, parse-error>` binds as `Long parse(String text)` throwing `ParseErrorException`. All four shapes
+are bound, and two of them, `result` and `result<_, E>`, return nothing at all even though `FuncType.hasResult()` holds
+for every one of them.
+
+Which way the call runs decides where the exception is built and where it is caught. Calling into the component reads
+the label off the `VariantValue` that comes back and either returns the ok payload or throws. Satisfying an import wraps
+the embedder's call in a `try` that catches only the generated exception and turns it back into the `error` case.
+Catching every `RuntimeException` there would deliver a genuine bug in embedder code to the guest as a well formed
+error, which is why the catch is narrow.
+
+A world's `use`, an interface that uses types from elsewhere, a compound type on a world's bare function import, and
+a `result` reached as anything but a function's own result are each rejected with a message naming what is
+unsupported. The bare function import is a limit of `HostFunction`, which builds an instance with no type space,
+leaving an index nothing to resolve.
 
 ## Fidelity to the bindgen! examples
 
 The WIT under `src/test/resources/wit` in `bindgen-processor` is the bindgen! example world for that stage, verbatim.
-That is what the golden files are generated from, so a difference from the example is visible rather than assumed.
+That is what the approved files are generated from, so a difference from the example is visible rather than assumed.
 
-All seven of the non-async example worlds are present.
+All seven of the non-async example worlds are present. A world covering a WIT feature no example declares is written
+for the purpose and named after it, which is where `record-types`, `variant-types` and `static-functions` come from,
+and each such fixture says so at the top.
+
+All seven of the non-async example worlds are present. `result-types` is not one of them, because no bindgen! example
+uses a `result`, so that world is written for these tests and its fixtures say so at the top.
 
 The end-to-end fixtures use the same WIT, with one exception that has to be stated wherever it appears. A world that
 imports without exporting cannot be driven, since nothing enters the guest, so `with-imports`,
@@ -556,11 +645,11 @@ thing to avoid. A WIT type that is not supported belongs in the unsupported list
 
 ## Module Layout
 
-- `bindgen-processor` holds the processor and its golden-file tests, following `HostModuleProcessorTest`. Sources are
-  built as JavaParser AST nodes, written through the `Filer`, and compared against checked-in expected sources with
-  `compile-testing`. WIT for those tests lives in `src/test/resources/wit/` and reaches the processor through
-  `withClasspath`. `hasSourceEquivalentTo` compares parse trees, so a formatting change does not fail a test, which is
-  why `regenerate-goldens.sh` and its diff are the real review of a generator change.
+- `bindgen-processor` holds the processor and its tests. Sources are built as JavaParser AST nodes and written
+  through the `Filer`. WIT for those tests lives in `src/test/resources/wit/` and reaches the processor through
+  `withClasspath`. `ApprovalTest` approves everything one world generates as a single file, in the style the Endive
+  compiler uses for bytecode, while `BindgenProcessorTest` holds the focused assertions and the refusals, which is
+  where a rule about conversion or naming belongs rather than buried in a whole generated file.
 - `bindgen-processor-tests` holds the end-to-end tests. A `.wat` fixture and a `.wit` file are turned into a component
   by `ComponentEmbed` and `ComponentNew`, and the same WIT generates the bindings that call it, so nothing is written
   by hand twice.
@@ -626,8 +715,11 @@ way today, which means adding one is a matter of finding its rejection and repla
 - **`record`, `tuple`, `flags`.** The largest gap. A record despecializes to something the ABI carries as a
   `java.util.Map`, so a generated class needs conversion at the boundary the way an enum already does. This is the
   remaining half of [Generated types are nominal](#generated-types-are-nominal-and-cross-the-boundary-through-descriptors).
-- **`variant`, `option`, `result`.** All carried as `VariantValue`, so they follow the enum pattern, but a variant case
-  has a payload and `option`/`result` want idiomatic Java shapes rather than a literal case class.
+- **`variant`, `option`.** Both carried as `VariantValue`, so they follow the enum pattern, but a variant case has a
+  payload and `option` wants an idiomatic Java shape rather than a literal case class.
+- **A `result` on a function a world declares in its own right.** The exception generated for one lives in the Java
+  package of the interface declaring the result, and a world declares no such package. Moving a result into an
+  interface is enough, and the refusal says so.
 - **A resource's `static` functions.** `[static]file.open` is recognised and rejected in
   `WorldReader.ResourceFunctions.add`. It maps to a static Java method, so the wiring is simpler than a method's.
 - **A world's `use`, and an interface using types from elsewhere.** Both are aliases that grow the type index space,
@@ -659,6 +751,15 @@ unchecked warnings for everything else in that file as well. Narrowing it to the
 enclosing member threaded through expression construction, since a cast is built deep inside `WitTypes` while the
 member is built by the caller.
 
+### A variant case may still shadow an imported type
+
+Generated code introduces names of its own, and a WIT name is free to be any of them. A record's locals, a
+conversion's lambda parameters and a resource function's field all give way to the WIT names already in scope, and a
+variant case is refused when it is named after its own variant or after a type the interface declares. What is not
+checked is a case named after a type the generated file imports, such as `objects`, whose nested class would shadow
+`java.util.Objects` inside the variant. It surfaces as a javac error rather than a bindgen one, and closing it means
+knowing what the unit will import before the case is written.
+
 ### A Maven plugin
 
 `docs/phases/04-wit-bindgen.md` calls for a `bindgen-maven-plugin` running at `generate-sources`. The annotation
@@ -675,9 +776,14 @@ The last unwrapped wasm-tools component command, tracked in `docs/phases/02-wasm
 `bindgen-processor` for generation and `bindgen-processor-tests` for the end-to-end path, and the runtime's sync ABI
 spec suite for anything touching the facade.
 
-**Changing the generator changes the checked-in expected sources.** Run `bindgen-processor/regenerate-goldens.sh` from
-the repository root and read the diff. A golden file is the API an embedder writes against, so that diff is the review.
-It also regenerates the file each golden test asserts the full set of, which is what pins the package layout.
+**Changing the generator changes the approved files.** Re-run the suite with
+`APPROVAL_TESTS_USE_REPORTER=org.approvaltests.reporters.AutoApproveReporter` and read the diff. An approved file is
+the API an embedder writes against, so that diff is the review, and because it carries every source a world generates
+under its qualified name, the package layout is part of what is approved.
+
+An approved file shows that a change happened, not that it is right. A rule the generator has to keep, such as an
+`option` member lowering to its own variant or two nested conversions not sharing a lambda parameter, belongs in a
+focused test in `BindgenProcessorTest`, because a whole generated file is where such a rule goes unnoticed.
 
 Two traps are worth knowing before losing an hour to either.
 
@@ -685,7 +791,6 @@ Two traps are worth knowing before losing an hour to either.
   treat as a dependency edge. A `provided` dependency is declared alongside it for that reason. Without it,
   `-pl ... -am` runs whatever processor was last installed and the tests pass against a stale one.
 - Driving the processor by hand with `javac` needs `mvn -pl bindgen-processor install` first, for the same reason.
-  `regenerate-goldens.sh` does it.
 
 An end-to-end fixture is a `.wat` implementing the world, turned into a component by `ComponentEmbed` and
 `ComponentNew`. Three things about writing one are easy to get wrong.

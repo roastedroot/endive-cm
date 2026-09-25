@@ -1,0 +1,342 @@
+// endive.testing.ResultTypes
+
+package endive.testing;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.VariantValue;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.ComponentLinker;
+import run.endive.cm.runtime.ComponentStore;
+import run.endive.cm.runtime.HostInstance;
+import run.endive.cm.types.EnumType;
+import run.endive.cm.types.FuncType;
+import run.endive.cm.types.LabelValType;
+import run.endive.cm.types.PrimValType;
+import run.endive.cm.types.ResultType;
+import run.endive.cm.types.Type;
+import run.endive.cm.types.ValType;
+import run.endive.cm.types.WasmComponent;
+
+/**
+ * Bindings for the WIT world {@code example:result-types/result-types}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class ResultTypes {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:result-types/parsing}.
+         */
+        endive.testing.example.resulttypes.parsing.Host parsing();
+    }
+
+    private final ComponentInstance instance;
+
+    private final endive.testing.exports.example.resulttypes.running.Guest running;
+
+    private ResultTypes(ComponentInstance instance) {
+        this.instance = instance;
+        this.running = new endive.testing.exports.example.resulttypes.running.Guest(instance.exportedInstance("example:result-types/running"));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static ResultTypes instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        endive.testing.example.resulttypes.parsing.Host parsing = imports.parsing();
+        HostInstance.Builder parsingBuilder = HostInstance.builder(store);
+        ValType parsingParseError = parsingBuilder.declareType(Type.of(EnumType.builder().addLabel("empty").addLabel("overflow").build()));
+        ValType parsingType2 = parsingBuilder.declareType(Type.of(ResultType.builder().withOk(ValType.builder().withPrimValType(PrimValType.U32).build()).withError(parsingParseError).build()));
+        parsingBuilder.addFunction("parse", FuncType.builder().addParam(LabelValType.builder().withLabel("text").withValType(ValType.builder().withPrimValType(PrimValType.STRING).build()).build()).withResult(parsingType2).build(), args -> {
+            try {
+                return new Object[] { VariantValue.of("ok", parsing.parse((String) args[0])) };
+            } catch (endive.testing.example.resulttypes.parsing.ParseErrorException caught) {
+                return new Object[] { VariantValue.of("error", caught.error().toComponent()) };
+            }
+        });
+        values.put("example:result-types/parsing", parsingBuilder.build());
+        return new ResultTypes(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    /**
+     * The exported interface {@code example:result-types/running}.
+     */
+    public endive.testing.exports.example.resulttypes.running.Guest running() {
+        return running;
+    }
+}
+
+// endive.testing.example.resulttypes.parsing.Host
+
+package endive.testing.example.resulttypes.parsing;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:result-types/parsing}, which the embedder implements.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public interface Host {
+
+    Long parse(String text);
+}
+
+// endive.testing.example.resulttypes.parsing.ParseError
+
+package endive.testing.example.resulttypes.parsing;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.VariantValue;
+
+/**
+ * The WIT enum {@code parse-error}, declared by {@code example:result-types/parsing}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public enum ParseError {
+
+    EMPTY("empty"), OVERFLOW("overflow");
+
+    private final String label;
+
+    ParseError(String label) {
+        this.label = label;
+    }
+
+    /**
+     * This case as the ABI carries it, which is a variant with no payload.
+     */
+    public VariantValue toComponent() {
+        return VariantValue.of(label, null);
+    }
+
+    /**
+     * The case a lifted value names.
+     */
+    public static ParseError fromComponent(Object value) {
+        String label = ((VariantValue) value).label();
+        for (ParseError candidate : values()) {
+            if (candidate.label.equals(label)) {
+                return candidate;
+            }
+        }
+        throw new IllegalArgumentException("unknown parse-error: " + label);
+    }
+}
+
+// endive.testing.example.resulttypes.parsing.ParseErrorException
+
+package endive.testing.example.resulttypes.parsing;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The error case of a WIT result declared by {@code example:result-types/parsing}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class ParseErrorException extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    private final ParseError error;
+
+    public ParseErrorException(ParseError error) {
+        super(String.valueOf(error));
+        this.error = error;
+    }
+
+    /**
+     * The error payload the failing side supplied.
+     */
+    public ParseError error() {
+        return error;
+    }
+}
+
+// endive.testing.exports.example.resulttypes.running.Guest
+
+package endive.testing.exports.example.resulttypes.running;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.VariantValue;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.PrimitiveHostTypeDescriptor;
+import run.endive.cm.runtime.VariantHostTypeDescriptor;
+
+/**
+ * The WIT interface {@code example:result-types/running}, as the component exports it.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Guest {
+
+    private final ComponentFunction run;
+
+    private final ComponentFunction check;
+
+    private final ComponentFunction count;
+
+    private final ComponentFunction ping;
+
+    /**
+     * Built by the world's bindings. Public only because they are another package.
+     */
+    public Guest(ComponentInstance instance) {
+        this.run = instance.export("run").typed(VariantHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(String.class));
+        this.check = instance.export("check").typed(VariantHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Long.class));
+        this.count = instance.export("count").typed(VariantHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Boolean.class));
+        this.ping = instance.export("ping").typed(VariantHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Boolean.class));
+    }
+
+    public Long run(String text) {
+        VariantValue outcome = (VariantValue) this.run.apply(text)[0];
+        if (!"ok".equals(outcome.label())) {
+            throw new RunErrorException(RunError.fromComponent(outcome.value()));
+        }
+        return (Long) outcome.value();
+    }
+
+    public void check(Long value) {
+        VariantValue outcome = (VariantValue) this.check.apply(value)[0];
+        if (!"ok".equals(outcome.label())) {
+            throw new RunErrorException(RunError.fromComponent(outcome.value()));
+        }
+    }
+
+    public Long count(Boolean fail) {
+        VariantValue outcome = (VariantValue) this.count.apply(fail)[0];
+        if (!"ok".equals(outcome.label())) {
+            throw new RunningResult6Exception();
+        }
+        return (Long) outcome.value();
+    }
+
+    public void ping(Boolean fail) {
+        VariantValue outcome = (VariantValue) this.ping.apply(fail)[0];
+        if (!"ok".equals(outcome.label())) {
+            throw new RunningResult8Exception();
+        }
+    }
+}
+
+// endive.testing.exports.example.resulttypes.running.RunError
+
+package endive.testing.exports.example.resulttypes.running;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.VariantValue;
+
+/**
+ * The WIT enum {@code run-error}, declared by {@code example:result-types/running}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public enum RunError {
+
+    REFUSED("refused");
+
+    private final String label;
+
+    RunError(String label) {
+        this.label = label;
+    }
+
+    /**
+     * This case as the ABI carries it, which is a variant with no payload.
+     */
+    public VariantValue toComponent() {
+        return VariantValue.of(label, null);
+    }
+
+    /**
+     * The case a lifted value names.
+     */
+    public static RunError fromComponent(Object value) {
+        String label = ((VariantValue) value).label();
+        for (RunError candidate : values()) {
+            if (candidate.label.equals(label)) {
+                return candidate;
+            }
+        }
+        throw new IllegalArgumentException("unknown run-error: " + label);
+    }
+}
+
+// endive.testing.exports.example.resulttypes.running.RunErrorException
+
+package endive.testing.exports.example.resulttypes.running;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The error case of a WIT result declared by {@code example:result-types/running}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class RunErrorException extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    private final RunError error;
+
+    public RunErrorException(RunError error) {
+        super(String.valueOf(error));
+        this.error = error;
+    }
+
+    /**
+     * The error payload the failing side supplied.
+     */
+    public RunError error() {
+        return error;
+    }
+}
+
+// endive.testing.exports.example.resulttypes.running.RunningResult6Exception
+
+package endive.testing.exports.example.resulttypes.running;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The error case of a WIT result declared by {@code example:result-types/running}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class RunningResult6Exception extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    public RunningResult6Exception() {
+        super("example:result-types/running returned an error");
+    }
+}
+
+// endive.testing.exports.example.resulttypes.running.RunningResult8Exception
+
+package endive.testing.exports.example.resulttypes.running;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The error case of a WIT result declared by {@code example:result-types/running}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class RunningResult8Exception extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    public RunningResult8Exception() {
+        super("example:result-types/running returned an error");
+    }
+}

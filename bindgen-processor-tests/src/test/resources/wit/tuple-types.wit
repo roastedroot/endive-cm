@@ -1,0 +1,13 @@
+package example:tuples;
+
+interface points {
+    /// A tuple arrives as a parameter and is handed back as a result, so both
+    /// directions of the host side are covered by one function.
+    describe: func(point: tuple<string, u32>) -> tuple<u32, u32>;
+}
+
+world tuple-types {
+    import points;
+
+    export shift: func(point: tuple<u32, u32>, by: u32) -> tuple<string, u32>;
+}

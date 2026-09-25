@@ -158,6 +158,9 @@ final class HostWiring {
         if (resource.constructor() != null) {
             addConstructor(body, resource, locals);
         }
+        for (WitFunction function : resource.statics()) {
+            addStatic(body, resource, function, locals);
+        }
         for (WitFunction method : resource.methods()) {
             Expression receiver =
                     AstBuilders.call(
@@ -181,18 +184,6 @@ final class HostWiring {
 
     private void addConstructor(BlockStmt body, WitResource resource, Locals locals) {
         WitFunction constructor = resource.constructor();
-        String handle = locals.handle(resource);
-        Expression made =
-                AstBuilders.call(
-                        new NameExpr(locals.host),
-                        Names.member(resource.name()),
-                        bindings.lambdaArguments(constructor, 0));
-        Expression owned =
-                AstBuilders.call(
-                        unit.useName(QualifiedTypes.RESOURCE_VALUE),
-                        "owned",
-                        AstBuilders.call(new NameExpr(handle), "type"),
-                        AstBuilders.call(new NameExpr(locals.table(resource)), "add", made));
         body.addStatement(
                 AstBuilders.call(
                         locals.builder(),
@@ -201,9 +192,48 @@ final class HostWiring {
                         bindings.funcType(
                                 constructor,
                                 0,
-                                AstBuilders.call(new NameExpr(handle), "own"),
+                                AstBuilders.call(new NameExpr(locals.handle(resource)), "own"),
                                 locals.declared),
-                        bindings.lambda(AstBuilders.objects(List.of(owned)))));
+                        minting(resource, constructor, Names.member(resource.name()), locals)));
+    }
+
+    /**
+     * A static function takes no receiver, so what it hands back is what decides its shape. One
+     * returning an {@code own} handle to its own resource mints it the way a constructor does, and
+     * one returning an ordinary value is wired like any other imported function.
+     */
+    private void addStatic(
+            BlockStmt body, WitResource resource, WitFunction function, Locals locals) {
+        String javaName = Names.qualifiedMember(resource.name(), function.name());
+        boolean owns = resource.returnsOwnHandle(function);
+        Expression result =
+                owns ? AstBuilders.call(new NameExpr(locals.handle(resource)), "own") : null;
+        Expression implementation =
+                owns
+                        ? minting(resource, function, javaName, locals)
+                        : bindings.importLambda(new NameExpr(locals.host), javaName, function, 0);
+        body.addStatement(
+                AstBuilders.call(
+                        locals.builder(),
+                        "addFunction",
+                        AstBuilders.text("[static]" + resource.name() + "." + function.name()),
+                        bindings.funcType(function, 0, result, locals.declared),
+                        implementation));
+    }
+
+    /** The lambda putting what the embedder made into the table and handing back a handle to it. */
+    private Expression minting(
+            WitResource resource, WitFunction function, String javaName, Locals locals) {
+        Expression made =
+                AstBuilders.call(
+                        new NameExpr(locals.host), javaName, bindings.lambdaArguments(function, 0));
+        Expression owned =
+                AstBuilders.call(
+                        unit.useName(QualifiedTypes.RESOURCE_VALUE),
+                        "owned",
+                        AstBuilders.call(new NameExpr(locals.handle(resource)), "type"),
+                        AstBuilders.call(new NameExpr(locals.table(resource)), "add", made));
+        return bindings.lambda(AstBuilders.objects(List.of(owned)));
     }
 
     private static boolean isCompound(Type type) {
