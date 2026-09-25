@@ -1032,6 +1032,7 @@ final class InterfaceGenerator {
         ClassOrInterfaceDeclaration type = unit.addInterface("Host");
         type.setJavadocComment(
                 "The WIT interface {@code " + iface.name() + "}, which the embedder implements.");
+        Map<WitFunction, String> methods = ResourceFields.methodNames(iface);
         for (WitFunction function : iface.functions()) {
             type.addMember(bindings.signature(function, 0));
         }
@@ -1042,17 +1043,13 @@ final class InterfaceGenerator {
                                 bindings,
                                 resource,
                                 resource.constructor(),
-                                Names.member(resource.name()));
+                                methods.get(resource.constructor()));
                 factory.setJavadocComment("Makes a {@code " + resource.name() + "}.");
                 type.addMember(factory);
             }
             for (WitFunction function : resource.statics()) {
                 MethodDeclaration method =
-                        hostSignature(
-                                bindings,
-                                resource,
-                                function,
-                                Names.qualifiedMember(resource.name(), function.name()));
+                        hostSignature(bindings, resource, function, methods.get(function));
                 method.setJavadocComment(
                         "The static {@code " + resource.name() + "." + function.name() + "}.");
                 type.addMember(method);
@@ -1117,6 +1114,7 @@ final class InterfaceGenerator {
                     Modifier.Keyword.FINAL);
         }
         ResourceFields fields = new ResourceFields(iface);
+        Map<WitFunction, String> methods = ResourceFields.methodNames(iface);
         for (WitResource resource : iface.resources()) {
             for (WitFunction function : resourceFunctions(resource)) {
                 // Read by the resource wrapper, which is a class of its own in this package.
@@ -1161,13 +1159,13 @@ final class InterfaceGenerator {
                                 resource,
                                 maker,
                                 fields.of(maker),
-                                Names.member(resource.name()));
+                                methods.get(maker));
                 factory.setJavadocComment(
                         "Makes a {@code " + resource.name() + "} inside the component.");
                 type.addMember(factory);
             }
             for (WitFunction function : resource.statics()) {
-                type.addMember(guestStatic(unit, bindings, fields, resource, function));
+                type.addMember(guestStatic(unit, bindings, fields, resource, function, methods));
             }
         }
         return unit;
@@ -1183,8 +1181,9 @@ final class InterfaceGenerator {
             FunctionBindings bindings,
             ResourceFields fields,
             WitResource resource,
-            WitFunction function) {
-        String name = Names.qualifiedMember(resource.name(), function.name());
+            WitFunction function,
+            Map<WitFunction, String> methods) {
+        String name = methods.get(function);
         MethodDeclaration method =
                 resource.returnsOwnHandle(function)
                         ? guestFactory(
@@ -1379,6 +1378,41 @@ final class InterfaceGenerator {
     private static final class ResourceFields {
 
         private final Map<WitFunction, String> names = new IdentityHashMap<>();
+
+        /** The Java method a resource's constructor or static function is reached through. */
+        static Map<WitFunction, String> methodNames(WitInterface iface) {
+            Set<String> taken = new HashSet<>();
+            for (WitFunction function : iface.functions()) {
+                taken.add(Names.member(function.name()));
+            }
+            Map<WitFunction, String> names = new IdentityHashMap<>();
+            for (WitResource resource : iface.resources()) {
+                for (WitFunction function : namedOnTheInterface(resource)) {
+                    String base =
+                            function == resource.constructor()
+                                    ? Names.member(resource.name())
+                                    : Names.qualifiedMember(resource.name(), function.name());
+                    String name = base;
+                    int next = 2;
+                    while (!taken.add(name)) {
+                        name = base + next;
+                        next++;
+                    }
+                    names.put(function, name);
+                }
+            }
+            return names;
+        }
+
+        /** A constructor and a static are reached on the interface; a method is not. */
+        private static List<WitFunction> namedOnTheInterface(WitResource resource) {
+            List<WitFunction> named = new ArrayList<>();
+            if (resource.constructor() != null) {
+                named.add(resource.constructor());
+            }
+            named.addAll(resource.statics());
+            return named;
+        }
 
         ResourceFields(WitInterface iface) {
             Set<String> taken = new HashSet<>();

@@ -214,14 +214,14 @@ final class WitTypes {
      */
     Expression toComponent(Expression value, ValType valType, WitScope scope, Set<String> taken) {
         this.taken = taken;
-        return toComponent(value, valType, scope, 0);
+        return lower(value, valType, scope, 0);
     }
 
     /**
      * @param depth how many conversion lambdas enclose this one, which is what keeps their
      *     parameters from shadowing each other when a container holds another
      */
-    private Expression toComponent(Expression value, ValType valType, WitScope scope, int depth) {
+    private Expression lower(Expression value, ValType valType, WitScope scope, int depth) {
         if (!needsConversion(valType, scope)) {
             return value;
         }
@@ -232,7 +232,7 @@ final class WitTypes {
             case LIST:
                 return mapElements(
                         value,
-                        toComponent(
+                        lower(
                                 new NameExpr(elementName(depth)),
                                 ((ListType) defined).elementType(),
                                 scope,
@@ -253,13 +253,13 @@ final class WitTypes {
      */
     Expression fromComponent(Expression value, ValType valType, WitScope scope, Set<String> taken) {
         this.taken = taken;
-        return fromComponent(value, valType, scope, 0);
+        return lift(value, valType, scope, 0);
     }
 
     /**
      * @param depth how many conversion lambdas enclose this one
      */
-    private Expression fromComponent(Expression value, ValType valType, WitScope scope, int depth) {
+    private Expression lift(Expression value, ValType valType, WitScope scope, int depth) {
         if (needsConversion(valType, scope)) {
             DefValType defined = definedAt(scope, valType.typeIdx());
             switch (defined.kind()) {
@@ -332,11 +332,7 @@ final class WitTypes {
                         unit.useName(QualifiedTypes.VARIANT_VALUE),
                         "of",
                         AstBuilders.text("some"),
-                        toComponent(
-                                new NameExpr(bound),
-                                optionPayload(option, scope),
-                                scope,
-                                depth + 1));
+                        lower(new NameExpr(bound), optionPayload(option, scope), scope, depth + 1));
         Expression none =
                 AstBuilders.call(
                         unit.useName(QualifiedTypes.VARIANT_VALUE),
@@ -356,7 +352,7 @@ final class WitTypes {
                 AstBuilders.call(
                         AstBuilders.cast(unit.use(QualifiedTypes.VARIANT_VALUE), value), "value");
         if (!needsConversion(payload, scope)) {
-            return fromComponent(carried, payload, scope, depth);
+            return lift(carried, payload, scope, depth);
         }
         String bound = someName(depth);
         Expression present =
@@ -366,8 +362,7 @@ final class WitTypes {
                         present,
                         "map",
                         AstBuilders.lambda(
-                                bound,
-                                fromComponent(new NameExpr(bound), payload, scope, depth + 1)));
+                                bound, lift(new NameExpr(bound), payload, scope, depth + 1)));
         return AstBuilders.call(mapped, "orElse", new NullLiteralExpr());
     }
 
@@ -380,9 +375,7 @@ final class WitTypes {
                                 unit.use(QualifiedTypes.LIST), AstBuilders.type("Object")),
                         value);
         return mapElements(
-                carried,
-                fromComponent(new NameExpr(elementName(depth)), element, scope, depth + 1),
-                depth);
+                carried, lift(new NameExpr(elementName(depth)), element, scope, depth + 1), depth);
     }
 
     /**

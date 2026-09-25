@@ -225,6 +225,33 @@ class BindgenProcessorTest {
                 .contains("element_ ->");
     }
 
+    /** A resource contributes methods to the interface it belongs to, so their names compete. */
+    @Test
+    void resourceMethodNamesAreKeptApart() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.ClashHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"clash\", inline ="
+                                        + " \"package example:clash;\\n"
+                                        + "interface counters {\\n"
+                                        + "  resource counter { open: static func() -> u32; }\\n"
+                                        + "  resource counter-open { constructor(); }\\n"
+                                        + "}\\n"
+                                        + "world clash {\\n"
+                                        + "  export counters;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class ClashHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.example.clash.counters.Guest")
+                .contentsAsUtf8String()
+                .contains("counterOpen2(");
+    }
+
     /** Every world generates a package tree mirroring the WIT ids, which is what this pins. */
     private static void assertGenerated(Compilation compilation, List<String> expected) {
         List<String> actual =
