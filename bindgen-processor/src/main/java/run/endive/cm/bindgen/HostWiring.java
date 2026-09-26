@@ -262,7 +262,7 @@ final class HostWiring {
         private final Map<Integer, String> declared = new LinkedHashMap<>();
 
         Locals(WitInterface imported) {
-            this.host = Names.member(imported.simpleName());
+            this.host = Names.member(imported.javaName());
             this.builder = host + "Builder";
         }
 

@@ -1,0 +1,13 @@
+package example:versioned-imports@0.2.0;
+
+interface streams {
+  ping: func();
+}
+
+world versioned-imports {
+  import streams;
+}
+
+world versioned-exports {
+  export streams;
+}
