@@ -61,6 +61,11 @@ final class WitInterface {
         return slash < 0 ? name : name.substring(slash + 1);
     }
 
+    /** The Java member name, including the version when the interface has one. */
+    String javaName() {
+        return Names.versionedMember(simpleName());
+    }
+
     /**
      * The Java package this interface's types are generated into, mirroring the WIT id.
      *

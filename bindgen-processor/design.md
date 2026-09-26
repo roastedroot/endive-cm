@@ -306,9 +306,14 @@ split, and it is what lets a world import and export one name at once.
 The point of it is the use site. A type reached as `ImportSomeResources.Logging.Level` cannot be imported and has to be
 written whole every time. As `Level` in a package of its own it is imported once.
 
-Package segments are lowercase with the words run together, since Google's Java style allows no underscores, which is
-why `imported-resources` becomes `importedresources`. Real WASI ids are mostly single words, so the run-together
-spelling rarely shows.
+Unversioned package segments are lowercase with the words run together, since Google's Java style allows no
+underscores, which is why `imported-resources` becomes `importedresources`. Real WASI ids are mostly single words, so
+the run-together spelling rarely shows.
+
+Versioned interface ids add `_v` and the lowercase hexadecimal UTF-8 bytes of the version to their Java package
+segment and member name. For example, `streams@0.2.0` becomes `streams_v302e322e30`. Encoding the entire version keeps
+`1.2.3-a.b` distinct from `1.2.3-a-b`, and `1.2.3-a-b` distinct from `1.2.3-ab`. Unversioned interfaces keep their
+existing names. Component Model imports and exports still use the original WIT id.
 
 Two things follow from generating more than one file.
 
@@ -728,8 +733,6 @@ way today, which means adding one is a matter of finding its rejection and repla
 - **A compound type on a world's bare function import.** `HostFunction` builds an instance with no type space,
   leaving an index nothing to resolve. Either `HostFunction` grows type declarations or such an import is built
   through `HostInstance` like an interface.
-- **Versioned interface ids.** `wasi:io/streams@0.2.0` has no package spelling yet. Nothing decides what to do with the
-  version, and WASI will hit it immediately.
 
 ### Multi-file WIT packages
 

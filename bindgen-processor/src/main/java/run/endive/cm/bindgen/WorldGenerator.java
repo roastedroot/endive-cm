@@ -94,7 +94,7 @@ final class WorldGenerator {
         for (WitInterface exported : world.exportedInterfaces()) {
             type.addField(
                     AstBuilders.type(guestType(exported)),
-                    fieldName(exported.simpleName()),
+                    fieldName(exported.javaName()),
                     Modifier.Keyword.PRIVATE,
                     Modifier.Keyword.FINAL);
         }
@@ -118,9 +118,9 @@ final class WorldGenerator {
         }
         for (WitInterface exported : world.exportedInterfaces()) {
             MethodDeclaration reader =
-                    type.addMethod(Names.member(exported.simpleName()), Modifier.Keyword.PUBLIC)
+                    type.addMethod(Names.member(exported.javaName()), Modifier.Keyword.PUBLIC)
                             .setType(AstBuilders.type(guestType(exported)));
-            reader.setBody(returning(new NameExpr(fieldName(exported.simpleName()))));
+            reader.setBody(returning(new NameExpr(fieldName(exported.javaName()))));
             reader.setJavadocComment("The exported interface {@code " + exported.name() + "}.");
         }
         return unit;
@@ -136,7 +136,7 @@ final class WorldGenerator {
         }
         for (WitInterface imported : world.importedInterfaces()) {
             MethodDeclaration reader = new MethodDeclaration();
-            reader.setName(Names.member(imported.simpleName()));
+            reader.setName(Names.member(imported.javaName()));
             reader.setType(AstBuilders.type(hostType(imported)));
             reader.removeBody();
             reader.setJavadocComment("The imported interface {@code " + imported.name() + "}.");
@@ -171,7 +171,7 @@ final class WorldGenerator {
                             AstBuilders.text(exported.name()));
             body.addStatement(
                     AstBuilders.assign(
-                            AstBuilders.thisField(fieldName(exported.simpleName())),
+                            AstBuilders.thisField(fieldName(exported.javaName())),
                             AstBuilders.construct(
                                     AstBuilders.type(guestType(exported)), instance)));
         }

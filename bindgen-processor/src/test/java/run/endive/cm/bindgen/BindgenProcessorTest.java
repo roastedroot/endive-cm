@@ -3,6 +3,7 @@ package run.endive.cm.bindgen;
 import static com.google.testing.compile.CompilationSubject.assertThat;
 import static com.google.testing.compile.Compiler.javac;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import com.google.testing.compile.Compilation;
 import com.google.testing.compile.JavaFileObjects;
@@ -574,6 +575,58 @@ class BindgenProcessorTest {
 
         assertThat(compilation).failed();
         assertThat(compilation).hadErrorContaining("only one of inline and path");
+    }
+
+    @Test
+    void versionedInterfaceGeneratesValidJavaNames() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.VersionedHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"versioned-imports\", path ="
+                                        + " \"wit/versioned-imports.wit\")\n"
+                                        + "public class VersionedHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.VersionedImports",
+                        "endive.testing.example.versionedimports.streams_v302e322e30.Host"));
+    }
+
+    @Test
+    void versionedExportGeneratesValidJavaNames() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.VersionedExportHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"versioned-exports\", path ="
+                                        + " \"wit/versioned-imports.wit\")\n"
+                                        + "public class VersionedExportHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.VersionedExports",
+                        "endive.testing.exports.example.versionedimports.streams_v302e322e30.Guest"));
+    }
+
+    @Test
+    void versionedNamesDoNotCollideOnPunctuation() {
+        String dotted = "streams@1.2.3-a.b";
+        String dashed = "streams@1.2.3-a-b";
+        String compressed = "streams@1.2.3-ab";
+
+        assertNotEquals(Names.versionedMember(dotted), Names.versionedMember(dashed));
+        assertNotEquals(Names.packageSegment(dashed), Names.packageSegment(compressed));
     }
 
     private static Compilation compile(String resource) {
