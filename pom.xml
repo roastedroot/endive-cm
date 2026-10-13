@@ -52,7 +52,7 @@
     <jackson.version>2.22.3</jackson.version>
     <assertj.version>3.27.7</assertj.version>
     <junit.version>5.14.4</junit.version>
-    <google-compile-testing.version>0.23.0</google-compile-testing.version>
+    <google-compile-testing.version>0.24.0</google-compile-testing.version>
     <approvaltests.version>31.0.0</approvaltests.version>
   </properties>
 
