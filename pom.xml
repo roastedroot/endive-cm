@@ -26,6 +26,7 @@
     <module>parser</module>
     <module>runtime</module>
     <module>types</module>
+    <module>wasi-p2</module>
     <module>wasm-tools</module>
   </modules>
 
@@ -50,6 +51,7 @@
     <endive.version>999-SNAPSHOT</endive.version>
     <zerofs.version>0.1.0</zerofs.version>
     <jackson.version>2.22.3</jackson.version>
+    <netty.version>4.2.18.Final</netty.version>
     <assertj.version>3.27.7</assertj.version>
     <junit.version>5.14.4</junit.version>
     <google-compile-testing.version>0.24.0</google-compile-testing.version>
@@ -58,6 +60,13 @@
 
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-bom</artifactId>
+        <version>${netty.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
@@ -131,6 +140,11 @@
       <dependency>
         <groupId>run.endive.cm</groupId>
         <artifactId>types</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive.cm</groupId>
+        <artifactId>wasi-p2</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
