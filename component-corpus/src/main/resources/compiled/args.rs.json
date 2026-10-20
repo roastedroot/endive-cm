@@ -1,0 +1,6 @@
+{
+  "args": ["first", "second argument", "ünïcödé"],
+  "exit_code": 0,
+  "stdout": "first\nsecond argument\nünïcödé\n",
+  "stderr": ""
+}

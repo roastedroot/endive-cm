@@ -1,0 +1,6 @@
+{
+  "root": "root",
+  "exit_code": 0,
+  "stdout": "Hello from the fixture directory!\n",
+  "stderr": ""
+}

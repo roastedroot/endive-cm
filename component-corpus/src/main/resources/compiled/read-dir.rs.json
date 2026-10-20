@@ -1,0 +1,6 @@
+{
+  "root": "root",
+  "exit_code": 0,
+  "stdout": "alpha.txt\nbeta.txt\nnested/\n",
+  "stderr": ""
+}

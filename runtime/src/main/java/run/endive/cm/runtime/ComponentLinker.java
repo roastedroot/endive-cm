@@ -285,26 +285,50 @@ public final class ComponentLinker {
 
     private void processImportSection(ComponentInstance.Builder builder, ImportSection section) {
         for (Import imp : section.imports()) {
-            switch (imp.externDesc().kind()) {
-                case TYPE:
-                    processTypeImport(builder, imp);
-                    break;
-                case CORE_MODULE:
-                    processCoreModuleImport(builder, imp);
-                    break;
-                case INSTANCE:
-                    processInstanceImport(builder, imp);
-                    break;
-                case COMPONENT:
-                    processComponentImport(builder, imp);
-                    break;
-                case FUNC:
-                    processFunctionImport(builder, imp);
-                    break;
-                default:
-                    throw new LinkageException(
-                            "Import type " + imp.externDesc().kind() + " not supported yet");
+            Map.Entry<String, Object> resolved = builder.instance().resolveImport(imp.name());
+            try {
+                processImport(builder, imp, resolved);
+            } catch (LinkageException e) {
+                if (resolved == null || resolved.getKey().equals(imp.name())) {
+                    throw e;
+                }
+                throw new LinkageException(
+                        "Import \""
+                                + imp.name()
+                                + "\" resolved to compatible \""
+                                + resolved.getKey()
+                                + "\" - "
+                                + e.getMessage(),
+                        e);
             }
+        }
+    }
+
+    /**
+     * @param resolved what satisfies {@code imp}, keyed by the name it was supplied under, or
+     *     {@code null} when nothing was supplied
+     */
+    private void processImport(
+            ComponentInstance.Builder builder, Import imp, Map.Entry<String, Object> resolved) {
+        switch (imp.externDesc().kind()) {
+            case TYPE:
+                processTypeImport(builder, imp, resolved);
+                break;
+            case CORE_MODULE:
+                processCoreModuleImport(builder, imp, resolved);
+                break;
+            case INSTANCE:
+                processInstanceImport(builder, imp, resolved);
+                break;
+            case COMPONENT:
+                processComponentImport(builder, imp, resolved);
+                break;
+            case FUNC:
+                processFunctionImport(builder, imp, resolved);
+                break;
+            default:
+                throw new LinkageException(
+                        "Import type " + imp.externDesc().kind() + " not supported yet");
         }
     }
 
@@ -697,18 +721,19 @@ public final class ComponentLinker {
         }
     }
 
-    private void processTypeImport(ComponentInstance.Builder builder, Import imp) {
+    private void processTypeImport(
+            ComponentInstance.Builder builder, Import imp, Map.Entry<String, Object> resolved) {
         TypeBound typeBound = imp.externDesc().typeBound();
         if (typeBound.kind() == TypeBound.Kind.EQ) {
             Type bound = builder.instance().getType((int) typeBound.typeIdx());
-            if (!builder.instance().hasImport(imp.name())) {
+            if (resolved == null) {
                 // An `eq` bound says which type this is, so there is nothing left for anyone
                 // to decide and nothing to supply. The import resolves to the bound itself.
                 builder.addType(builder.instance().slotAt((int) typeBound.typeIdx()));
                 return;
             }
             // Supplying one anyway is allowed, but then it has to agree.
-            Object suppliedValue = builder.instance().getImport(imp.name());
+            Object suppliedValue = resolved.getValue();
             Type supplied = typeOf(suppliedValue);
             if (supplied == null) {
                 throw new LinkageException(
@@ -742,7 +767,7 @@ public final class ComponentLinker {
                 builder.addType(supplied, resourceOf(suppliedValue));
             }
         } else if (typeBound.kind() == TypeBound.Kind.SUB_RESOURCE) {
-            var importValue = builder.instance().getImport(imp.name());
+            var importValue = requireSupplied(imp, resolved);
             ResourceTypeInstance resourceType = resourceOf(importValue);
             if (resourceType == null) {
                 throw new LinkageException(
@@ -758,7 +783,8 @@ public final class ComponentLinker {
         }
     }
 
-    private void processCoreModuleImport(ComponentInstance.Builder builder, Import imp) {
+    private void processCoreModuleImport(
+            ComponentInstance.Builder builder, Import imp, Map.Entry<String, Object> resolved) {
         var coreType = builder.instance().getCoreType((int) imp.externDesc().typeIdx());
         if (coreType.moduleType() == null) {
             throw new LinkageException(
@@ -769,8 +795,7 @@ public final class ComponentLinker {
                             + "'");
         }
         var moduleImport =
-                requireImportSort(
-                        imp, builder.instance().getImport(imp.name()), WasmModule.class, "module");
+                requireImportSort(imp, requireSupplied(imp, resolved), WasmModule.class, "module");
         if (atHostBoundary(builder)) {
             // The module came from the embedder, so the declared type is the only statement of
             // what it has to be.
@@ -779,7 +804,8 @@ public final class ComponentLinker {
         builder.addCoreModule(moduleImport);
     }
 
-    private void processInstanceImport(ComponentInstance.Builder builder, Import imp) {
+    private void processInstanceImport(
+            ComponentInstance.Builder builder, Import imp, Map.Entry<String, Object> resolved) {
         var type = builder.instance().getType((int) imp.externDesc().typeIdx());
         if (type.instanceType() == null) {
             throw new LinkageException(
@@ -791,13 +817,10 @@ public final class ComponentLinker {
         }
 
         ComponentInstance instanceImport;
-        if (builder.instance().hasImport(imp.name())) {
+        if (resolved != null) {
             instanceImport =
                     requireImportSort(
-                            imp,
-                            builder.instance().getImport(imp.name()),
-                            ComponentInstance.class,
-                            "instance");
+                            imp, resolved.getValue(), ComponentInstance.class, "instance");
         } else if (demandsNothing(type.instanceType())) {
             instanceImport = synthesizeEmptyInstance(builder.instance(), type.instanceType());
         } else {
@@ -815,7 +838,8 @@ public final class ComponentLinker {
         builder.addChildInstance(instanceImport);
     }
 
-    private void processComponentImport(ComponentInstance.Builder builder, Import imp) {
+    private void processComponentImport(
+            ComponentInstance.Builder builder, Import imp, Map.Entry<String, Object> resolved) {
         var type = builder.instance().getType((int) imp.externDesc().typeIdx());
         if (type.componentType() == null) {
             throw new LinkageException(
@@ -825,8 +849,8 @@ public final class ComponentLinker {
                             + imp.name()
                             + "'");
         }
-        if (builder.instance().hasImport(imp.name())) {
-            Object componentImport = builder.instance().getImport(imp.name());
+        if (resolved != null) {
+            Object componentImport = resolved.getValue();
             if (componentImport instanceof WasmComponent) {
                 // Supplied by the host, so it encloses nothing and closes over nothing.
                 componentImport = new ComponentClosure((WasmComponent) componentImport, null);
@@ -850,7 +874,8 @@ public final class ComponentLinker {
         }
     }
 
-    private void processFunctionImport(ComponentInstance.Builder builder, Import imp) {
+    private void processFunctionImport(
+            ComponentInstance.Builder builder, Import imp, Map.Entry<String, Object> resolved) {
         var type = builder.instance().getType((int) imp.externDesc().typeIdx());
         if (type.funcType() == null) {
             throw new LinkageException(
@@ -861,13 +886,10 @@ public final class ComponentLinker {
                             + "'");
         }
 
-        if (builder.instance().hasImport(imp.name())) {
+        if (resolved != null) {
             var functionImport =
                     requireImportSort(
-                            imp,
-                            builder.instance().getImport(imp.name()),
-                            ComponentFunction.class,
-                            "function");
+                            imp, resolved.getValue(), ComponentFunction.class, "function");
             if (atHostBoundary(builder)) {
                 // An embedder-supplied function has no parameter names of its own to compare.
                 var slot = builder.instance().slotAt((int) imp.externDesc().typeIdx());
@@ -1306,6 +1328,14 @@ public final class ComponentLinker {
         return value instanceof ComponentInstance.TypeSlot
                 ? (ComponentInstance.TypeSlot) value
                 : null;
+    }
+
+    /** The value supplied for an import that cannot be linked without one. */
+    private static Object requireSupplied(Import imp, Map.Entry<String, Object> resolved) {
+        if (resolved == null) {
+            throw new LinkageException("Import \"" + imp.name() + "\" was not found");
+        }
+        return resolved.getValue();
     }
 
     /** Narrows a supplied import to the sort its declaration calls for. */

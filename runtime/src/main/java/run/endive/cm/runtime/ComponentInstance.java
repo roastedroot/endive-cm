@@ -1,5 +1,6 @@
 package run.endive.cm.runtime;
 
+import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
@@ -356,15 +357,24 @@ public final class ComponentInstance implements TypeResolver {
         return exports.containsKey(name);
     }
 
-    Object getImport(String name) {
-        if (!imports.containsKey(name)) {
-            throw new LinkageException("Import \"" + name + "\" was not found");
+    /**
+     * What was supplied for the import named {@code name}, keyed by the name it was supplied under,
+     * or {@code null} when nothing was. The host may supply an interface under a compatible version
+     * of the name, so at the top of a store the name is matched by {@link
+     * InterfaceVersions#resolve}. Everywhere else it is matched exactly.
+     *
+     * @throws LinkageException when the compatible versions supplied are ambiguous
+     */
+    Map.Entry<String, Object> resolveImport(String name) {
+        String supplied;
+        if (parent == null) {
+            supplied = InterfaceVersions.resolve(name, imports.keySet());
+        } else {
+            supplied = imports.containsKey(name) ? name : null;
         }
-        return imports.get(name);
-    }
-
-    boolean hasImport(String name) {
-        return imports.containsKey(name);
+        return supplied == null
+                ? null
+                : new AbstractMap.SimpleImmutableEntry<>(supplied, imports.get(supplied));
     }
 
     private void seal() {

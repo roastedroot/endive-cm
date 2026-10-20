@@ -1,0 +1,13 @@
+[package]
+name = "random-bytes"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wasip2 = { version = "=1.0.4", default-features = false, features = ["std"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1

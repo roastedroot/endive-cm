@@ -23,6 +23,7 @@
     <module>canonical-abi</module>
     <module>cm-test-gen-lib</module>
     <module>cm-test-gen-plugin</module>
+    <module>component-corpus</module>
     <module>parser</module>
     <module>runtime</module>
     <module>types</module>
@@ -118,6 +119,11 @@
       <dependency>
         <groupId>run.endive.cm</groupId>
         <artifactId>cm-test-gen-lib</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>run.endive.cm</groupId>
+        <artifactId>component-corpus</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

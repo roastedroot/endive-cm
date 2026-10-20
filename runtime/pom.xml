@@ -46,6 +46,11 @@
     </dependency>
     <dependency>
       <groupId>run.endive.cm</groupId>
+      <artifactId>component-corpus</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>run.endive.cm</groupId>
       <artifactId>parser</artifactId>
       <scope>test</scope>
     </dependency>

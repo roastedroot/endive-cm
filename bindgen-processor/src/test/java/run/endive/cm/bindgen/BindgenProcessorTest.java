@@ -866,9 +866,13 @@ class BindgenProcessorTest {
         assertThat(compilation).hadErrorContaining("option<option<T>> is not supported");
     }
 
-    /** A result encodes as control flow, so it says nothing anywhere but a function's result. */
+    /**
+     * A result reached as a value crosses as a {@code Result}, which {@code wasi:cli}'s {@code
+     * exit} needs. Only a function's own result is control flow, so a parameter generates no
+     * exception.
+     */
     @Test
-    void aResultReachedAsAValueIsRefused() {
+    void aResultParameterBindsAsAResult() {
         Compilation compilation =
                 compile(
                         JavaFileObjects.forSourceString(
@@ -879,15 +883,113 @@ class BindgenProcessorTest {
                                         + " \"package my:project;\\n"
                                         + "interface calc {\\n"
                                         + "  report: func(outcome: result<u32, string>);\\n"
+                                        + "  exit: func(status: result);\\n"
                                         + "}\\n"
                                         + "world result-param {\\n"
                                         + "  import calc;\\n"
-                                        + "  export go: func();\\n"
+                                        + "  export go: func(status: result<_, string>);\\n"
                                         + "}\\n\")\n"
                                         + "public class ResultParamHost {}\n"));
 
-        assertThat(compilation).failed();
-        assertThat(compilation).hadErrorContaining("only meaningful as a function's own result");
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of("endive.testing.ResultParamWorld", "endive.testing.my.project.calc.Host"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.my.project.calc.Host")
+                .contentsAsUtf8String()
+                .contains("void report(Result<Long, String> outcome);");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.my.project.calc.Host")
+                .contentsAsUtf8String()
+                .contains("void exit(Result<Void, Void> status);");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.ResultParamWorld")
+                .contentsAsUtf8String()
+                .contains("calc.report(Result.fromComponent(args[0], Long.class, String.class));");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.ResultParamWorld")
+                .contentsAsUtf8String()
+                .contains("calc.exit(Result.fromComponent(args[0], Void.class, Void.class));");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.ResultParamWorld")
+                .contentsAsUtf8String()
+                .contains("this.go.apply(status.toComponent());");
+    }
+
+    /**
+     * A result inside another type converts each payload that needs it on its own, in both
+     * directions, the way a tuple converts its elements.
+     */
+    @Test
+    void aNestedResultConvertsEachPayloadThatNeedsIt() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.NestedResultHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"nested-result\", inline ="
+                                        + " \"package t:r;\\n"
+                                        + "interface types {\\n"
+                                        + "  enum level { low, high }\\n"
+                                        + "  record outcome { name: string, status: result<_,"
+                                        + " level> }\\n"
+                                        + "  variant event { quiet, done(result<u32>) }\\n"
+                                        + "  tally: func(statuses: list<result<u32, level>>)"
+                                        + " -> option<result<level, string>>;\\n"
+                                        + "  describe: func(o: outcome) -> event;\\n"
+                                        + "}\\n"
+                                        + "world nested-result {\\n"
+                                        + "  import types;\\n"
+                                        + "  export go: func();\\n"
+                                        + "}\\n\")\n"
+                                        + "public class NestedResultHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.NestedResultWorld",
+                        "endive.testing.t.r.types.Event",
+                        "endive.testing.t.r.types.Host",
+                        "endive.testing.t.r.types.Level",
+                        "endive.testing.t.r.types.Outcome"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.NestedResultWorld")
+                .contentsAsUtf8String()
+                .contains(
+                        ".map(element -> Result.fromComponent(element, element1 -> (Long)"
+                                + " element1, element1 ->"
+                                + " endive.testing.t.r.types.Level.fromComponent(element1)))");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.NestedResultWorld")
+                .contentsAsUtf8String()
+                .contains(
+                        "VariantValue.of(\"some\", some.toComponent(element1 ->"
+                                + " element1.toComponent(), element1 -> element1))");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.t.r.types.Outcome")
+                .contentsAsUtf8String()
+                .contains(
+                        "fields.put(\"status\", status.toComponent(element -> element, element"
+                                + " -> element.toComponent()));");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.t.r.types.Outcome")
+                .contentsAsUtf8String()
+                .contains(
+                        "Result.fromComponent(fields.get(\"status\"), element -> (Void) element,"
+                                + " element -> Level.fromComponent(element))");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.t.r.types.Event")
+                .contentsAsUtf8String()
+                .contains(
+                        "return new Done(Result.fromComponent(variant.value(), Long.class,"
+                                + " Void.class));");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.t.r.types.Event")
+                .contentsAsUtf8String()
+                .contains("return VariantValue.of(\"done\", value.toComponent());");
     }
 
     /** A world declares no Java package for the generated exception to belong to. */

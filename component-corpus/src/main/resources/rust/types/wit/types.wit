@@ -1,0 +1,50 @@
+package endive:corpus;
+
+interface types {
+    record point {
+        x: s32,
+        y: s32,
+    }
+
+    variant shape {
+        square(u32),
+        rectangle(point),
+        dot,
+    }
+
+    enum color {
+        red,
+        green,
+        blue,
+    }
+
+    flags permissions {
+        read,
+        write,
+        execute,
+    }
+
+    resource counter {
+        constructor(initial: u32);
+        increment: func(by: u32) -> u32;
+    }
+
+    /// The number of counters constructed and not yet dropped.
+    live-counters: func() -> u32;
+
+    translate: func(p: point, dx: s32, dy: s32) -> point;
+    area: func(s: shape) -> u64;
+    largest: func(shapes: list<shape>) -> option<shape>;
+    next-color: func(c: color) -> color;
+    toggle: func(current: permissions, mask: permissions) -> permissions;
+    first-word: func(text: string) -> option<string>;
+    checked-divide: func(dividend: s32, divisor: s32) -> result<s32, string>;
+    sum: func(values: list<s64>) -> s64;
+    reverse: func(words: list<string>) -> list<string>;
+    greet: func(name: string) -> string;
+    swap: func(pair: tuple<string, u32>) -> tuple<u32, string>;
+}
+
+world library {
+    export types;
+}
