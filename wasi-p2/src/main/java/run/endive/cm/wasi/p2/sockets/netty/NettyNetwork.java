@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
 import run.endive.cm.wasi.p2.sockets.HostSockets;
 import run.endive.cm.wasi.p2.sockets.NameResolver;
+import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
 import run.endive.cm.wasi.p2.sockets.ipnamelookup.HostIpNameLookup;
 import run.endive.cm.wasi.p2.sockets.tcpcreatesocket.HostTcpCreateSocket;
 import run.endive.cm.wasi.p2.sockets.udpcreatesocket.HostUdpCreateSocket;
@@ -34,6 +35,7 @@ public final class NettyNetwork implements HostSockets {
 
     private NettyNetwork(
             HostPoll poll,
+            NetworkPolicy policy,
             IoEventLoopGroup group,
             boolean ownsGroup,
             NameResolver nameResolver,
@@ -48,20 +50,30 @@ public final class NettyNetwork implements HostSockets {
                         nameResolver == null
                                 ? new NettyNameResolver(defaultNameResolver)
                                 : nameResolver);
-        this.tcpCreateSocket = new HostTcpCreateSocket();
+        this.tcpCreateSocket =
+                new HostTcpCreateSocket(
+                        poll,
+                        policy,
+                        family -> {
+                            throw new UnsupportedOperationException("TCP is not supported yet");
+                        });
         this.udpCreateSocket = new HostUdpCreateSocket();
     }
 
     /**
      * @param poll the poll everything this creates subscribes through
+     * @param policy what the guest may do on the network
      * @param scheduler the host's scheduler, which the caller shuts down, or {@code null} for none
      * @param nameResolver what resolves the names the guest looks up, or {@code null} for Netty's
      * @throws IllegalArgumentException if {@code scheduler} is a Netty event loop group whose
      *     transport is not one Netty ships
      */
     public static NettyNetwork start(
-            HostPoll poll, ScheduledExecutorService scheduler, NameResolver nameResolver) {
-        return start(poll, scheduler, nameResolver, null);
+            HostPoll poll,
+            NetworkPolicy policy,
+            ScheduledExecutorService scheduler,
+            NameResolver nameResolver) {
+        return start(poll, policy, scheduler, nameResolver, null);
     }
 
     /**
@@ -69,6 +81,7 @@ public final class NettyNetwork implements HostSockets {
      */
     static NettyNetwork start(
             HostPoll poll,
+            NetworkPolicy policy,
             ScheduledExecutorService scheduler,
             NameResolver nameResolver,
             NettyChannels channels) {
@@ -76,6 +89,7 @@ public final class NettyNetwork implements HostSockets {
             IoEventLoopGroup group = (IoEventLoopGroup) scheduler;
             return new NettyNetwork(
                     poll,
+                    policy,
                     group,
                     false,
                     nameResolver,
@@ -89,6 +103,7 @@ public final class NettyNetwork implements HostSockets {
         try {
             return new NettyNetwork(
                     poll,
+                    policy,
                     group,
                     true,
                     nameResolver,

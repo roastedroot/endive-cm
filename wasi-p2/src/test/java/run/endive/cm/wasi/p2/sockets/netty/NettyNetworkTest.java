@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
+import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
 
 class NettyNetworkTest {
 
@@ -27,7 +28,8 @@ class NettyNetworkTest {
     void theNetworkRunsOnTheSchedulersGroupAndLeavesItRunning() {
         EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
         try {
-            NettyNetwork network = NettyNetwork.start(new HostPoll(), group, null);
+            NettyNetwork network =
+                    NettyNetwork.start(new HostPoll(), NetworkPolicy.allowAll(), group, null);
 
             assertSame(group, network.eventLoopGroup());
             network.close();
@@ -41,7 +43,8 @@ class NettyNetworkTest {
     void aSchedulerOutsideNettyLeavesTheNetworkAGroupOfItsOwn() {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         try {
-            NettyNetwork network = NettyNetwork.start(new HostPoll(), scheduler, null);
+            NettyNetwork network =
+                    NettyNetwork.start(new HostPoll(), NetworkPolicy.allowAll(), scheduler, null);
             IoEventLoopGroup group = (IoEventLoopGroup) network.eventLoopGroup();
 
             assertNotSame(scheduler, group);
@@ -56,7 +59,8 @@ class NettyNetworkTest {
 
     @Test
     void noSchedulerLeavesTheNetworkAGroupOfItsOwn() {
-        NettyNetwork network = NettyNetwork.start(new HostPoll(), null, null);
+        NettyNetwork network =
+                NettyNetwork.start(new HostPoll(), NetworkPolicy.allowAll(), null, null);
         IoEventLoopGroup group = (IoEventLoopGroup) network.eventLoopGroup();
 
         network.close();
@@ -71,7 +75,9 @@ class NettyNetworkTest {
             IllegalArgumentException e =
                     assertThrows(
                             IllegalArgumentException.class,
-                            () -> NettyNetwork.start(new HostPoll(), group, null));
+                            () ->
+                                    NettyNetwork.start(
+                                            new HostPoll(), NetworkPolicy.allowAll(), group, null));
 
             assertTrue(e.getMessage().contains("io_uring"), e.getMessage());
         } finally {
@@ -92,7 +98,8 @@ class NettyNetworkTest {
                         });
         EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
         try {
-            NettyNetwork.start(new HostPoll(), group, null, channels).close();
+            NettyNetwork.start(new HostPoll(), NetworkPolicy.allowAll(), group, null, channels)
+                    .close();
 
             assertTrue(datagrams.get() > 0, "datagram channels " + datagrams.get());
         } finally {
