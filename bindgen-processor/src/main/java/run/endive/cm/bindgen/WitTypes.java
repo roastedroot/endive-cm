@@ -8,6 +8,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,6 +50,9 @@ final class WitTypes {
 
     /** The name bound to a list element while it is converted. */
     private static final String ELEMENT = "element";
+
+    /** The Java type of a result case that carries no payload. */
+    private static final String VOID = "Void";
 
     private final GeneratedUnit unit;
 
@@ -110,10 +114,19 @@ final class WitTypes {
             case BORROW:
                 return AstBuilders.type(resourceJavaType(defined, inner));
             case RESULT:
-                throw resultOutOfPlace();
+                ResultType result = (ResultType) defined;
+                return AstBuilders.generic(
+                        unit.use(QualifiedTypes.RESULT),
+                        caseJavaType(result.ok(), inner),
+                        caseJavaType(result.error(), inner));
             default:
                 throw unsupported(defined.kind().name());
         }
+    }
+
+    /** The Java type carrying a result case's payload, which is {@code Void} when there is none. */
+    private Type caseJavaType(ValType payload, WitScope scope) {
+        return payload == null ? AstBuilders.type(VOID) : javaType(payload, scope);
     }
 
     /**
@@ -136,8 +149,8 @@ final class WitTypes {
     /**
      * The {@code result} {@code valType} names, or {@code null} when it names anything else.
      *
-     * <p>A result is control flow rather than a value, so a caller resolves one here instead of
-     * asking for a Java type for it.
+     * <p>A function's own result is control flow rather than a value, so a caller resolves one here
+     * instead of asking for a Java type for it.
      */
     ResultType resultType(ValType valType, WitScope scope) {
         if (valType == null || valType.primValType() != null) {
@@ -273,6 +286,7 @@ final class WitTypes {
             case TUPLE:
             case VARIANT:
             case OPTION:
+            case RESULT:
             case RECORD:
             case OWN:
             case BORROW:
@@ -293,9 +307,6 @@ final class WitTypes {
             return false;
         }
         DefValType defined = definedAt(scope, valType.typeIdx());
-        if (defined.kind() == DefValType.Kind.RESULT) {
-            throw resultOutOfPlace();
-        }
         if (defined.kind() == DefValType.Kind.LIST) {
             ListType list = (ListType) defined;
             WitScope inner = scope.declaringScope(valType.typeIdx());
@@ -438,6 +449,8 @@ final class WitTypes {
                         : AstBuilders.call(value, "toComponent", recordHandles);
             case TUPLE:
                 return lowerTuple(value, (TupleType) defined, inner, depth);
+            case RESULT:
+                return lowerResult(value, (ResultType) defined, inner, depth);
             case OWN:
                 return AstBuilders.call(
                         handlesOf(defined, inner),
@@ -478,6 +491,8 @@ final class WitTypes {
                     return liftTuple(value, (TupleType) defined, inner, depth);
                 case OPTION:
                     return liftOption(value, (OptionType) defined, inner, depth);
+                case RESULT:
+                    return liftResult(value, (ResultType) defined, inner, depth);
                 case LIST:
                     return liftElements(value, ((ListType) defined).elementType(), inner, depth);
                 case BORROW:
@@ -558,6 +573,51 @@ final class WitTypes {
             throw unsupported("a tuple of " + size + " elements");
         }
         return QualifiedTypes.TUPLE + size;
+    }
+
+    /**
+     * A result reached as a value, lifted the way a tuple is. Each payload is named by its class
+     * when both can be, and lifted by a conversion of its own otherwise. A case without a payload
+     * lifts as a {@code Void}.
+     *
+     * @see <a href="https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#despecialization">Canonical ABI despecialization</a>
+     */
+    private Expression liftResult(Expression value, ResultType result, WitScope scope, int depth) {
+        List<ValType> payloads = Arrays.asList(result.ok(), result.error());
+        List<Expression> arguments = new ArrayList<>();
+        arguments.add(value);
+        if (payloads.stream()
+                .allMatch(payload -> payload == null || namedByClass(payload, scope))) {
+            for (ValType payload : payloads) {
+                arguments.add(AstBuilders.classLiteral(caseJavaType(payload, scope)));
+            }
+        } else {
+            for (ValType payload : payloads) {
+                NameExpr bound = new NameExpr(elementName(depth));
+                Expression lifted =
+                        payload == null
+                                ? AstBuilders.cast(AstBuilders.type(VOID), bound)
+                                : lift(bound, payload, scope, depth + 1);
+                arguments.add(AstBuilders.lambda(elementName(depth), lifted));
+            }
+        }
+        return AstBuilders.call(unit.useName(QualifiedTypes.RESULT), "fromComponent", arguments);
+    }
+
+    /**
+     * A result as the variant the ABI carries. Each payload is lowered by a conversion of its own
+     * once either needs one.
+     */
+    private Expression lowerResult(Expression value, ResultType result, WitScope scope, int depth) {
+        List<Expression> converters = new ArrayList<>();
+        boolean converts = false;
+        for (ValType payload : Arrays.asList(result.ok(), result.error())) {
+            NameExpr bound = new NameExpr(elementName(depth));
+            Expression lowered = payload == null ? bound : lower(bound, payload, scope, depth + 1);
+            converts |= lowered != bound;
+            converters.add(AstBuilders.lambda(elementName(depth), lowered));
+        }
+        return AstBuilders.call(value, "toComponent", converts ? converters : List.of());
     }
 
     /**
@@ -1035,16 +1095,6 @@ final class WitTypes {
             return unsupported("a type that was never declared");
         }
         return unsupported(type.defValType().kind().name());
-    }
-
-    /**
-     * A result is encoded as control flow, which only a function's own result can carry, so one
-     * reached as a value has nowhere to go.
-     */
-    private static BindgenException resultOutOfPlace() {
-        return new BindgenException(
-                "a result is only meaningful as a function's own result, so one reached as a"
-                        + " parameter or inside another type is not supported");
     }
 
     private static BindgenException unsupported(String described) {

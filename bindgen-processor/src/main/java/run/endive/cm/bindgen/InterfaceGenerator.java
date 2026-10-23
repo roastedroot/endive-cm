@@ -36,6 +36,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.type.WildcardType;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -48,6 +49,7 @@ import run.endive.cm.types.FlagsType;
 import run.endive.cm.types.LabelValType;
 import run.endive.cm.types.RecordType;
 import run.endive.cm.types.ResultType;
+import run.endive.cm.types.ValType;
 import run.endive.cm.types.VariantType;
 
 /**
@@ -118,8 +120,9 @@ final class InterfaceGenerator {
     }
 
     /**
-     * One exception per {@code result} the interface declares, since a result is encoded as
-     * control flow rather than as a value.
+     * One exception per {@code result} a function of the interface returns, since a function's own
+     * result is encoded as control flow rather than as a value. A result reached any other way is
+     * a value and needs none.
      *
      * <p>A result is written anonymously, so the scope is walked rather than the named types. Two
      * results sharing an error payload share the exception named after it, generated once in the
@@ -127,12 +130,14 @@ final class InterfaceGenerator {
      */
     private List<GeneratedUnit> exceptionSources(WitInterface iface) {
         List<GeneratedUnit> sources = new ArrayList<>();
+        Set<run.endive.cm.types.Type> returned = returnedTypes(iface);
         WitScope scope = iface.scope();
         for (int i = 0; i < scope.size(); i++) {
             run.endive.cm.types.Type declared = scope.at(i);
             if (declared == null
                     || declared.defValType() == null
-                    || declared.defValType().kind() != DefValType.Kind.RESULT) {
+                    || declared.defValType().kind() != DefValType.Kind.RESULT
+                    || !returned.contains(declared)) {
                 continue;
             }
             String className = WitTypes.exceptionName(scope, i);
@@ -144,6 +149,25 @@ final class InterfaceGenerator {
             }
         }
         return sources;
+    }
+
+    /**
+     * What the interface's functions return, by identity, since a named type sits at more than one
+     * index.
+     */
+    private static Set<run.endive.cm.types.Type> returnedTypes(WitInterface iface) {
+        List<WitFunction> functions = new ArrayList<>(iface.functions());
+        for (WitResource resource : iface.resources()) {
+            functions.addAll(resourceFunctions(resource));
+        }
+        Set<run.endive.cm.types.Type> returned = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (WitFunction function : functions) {
+            ValType result = function.type().hasResult() ? function.type().result() : null;
+            if (result != null && result.primValType() == null) {
+                returned.add(function.scope().at(result.typeIdx()));
+            }
+        }
+        return returned;
     }
 
     /**

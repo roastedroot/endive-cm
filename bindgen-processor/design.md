@@ -267,7 +267,7 @@ Canonical ABI carries. These are the shapes the generator targets.
 | `variant` | an abstract base class with a nested final class per case | `VariantValue` |
 | `enum` | a Java enum | `VariantValue` |
 | `option<T>` | a nullable `T` | `VariantValue` |
-| `result<T, E>` | an unchecked exception carrying the error payload | `VariantValue` |
+| `result<T, E>` | as a function's own result, the ok payload and an unchecked exception carrying the error payload, and anywhere else `Result<T, E>`, which the runtime module provides | `VariantValue` |
 | `type instant = u64` | the primitive's own Java type, here `BigInteger` | the primitive |
 
 Three of those need a reason recorded.
@@ -277,9 +277,9 @@ A nullable `option` reads as Java rather than as a translation of WIT, at the co
 always lowers to its own `VariantValue.of("none", null)`, never to a bare Java null, or a variant case carrying `none`
 would be indistinguishable from a case carrying nothing.
 
-A `result` becomes control flow rather than a value, so it is meaningful only as a function's direct result. One in a
-record field, a list element or a variant case is refused. The generated exception is unchecked, so a signature stays
-free of `throws`. A world's bindings catch only that exception when lowering an import, because catching
+A function's own `result` becomes control flow rather than a value. One anywhere else, such as a parameter, a record
+field, a list element or a variant case, is a value and arrives as a `Result`, with `Void` standing for a case that
+carries nothing. The generated exception is unchecked, so a signature stays free of `throws`. A world's bindings catch only that exception when lowering an import, because catching
 `RuntimeException` would deliver a genuine bug in embedder code to the guest as a well formed error.
 
 An exception is named after the error payload's type when that type has a name, so `parse-error` gives
@@ -697,6 +697,13 @@ string) -> result<u32, parse-error>` binds as `Long parse(String text)` throwing
 are bound, and two of them, `result` and `result<_, E>`, return nothing at all even though `FuncType.hasResult()` holds
 for every one of them.
 
+A result reached any other way is a value, as in `wasi:cli`'s `exit: func(status: result)`. It arrives as the runtime's
+`Result<T, E>`, whose `ok` and `err` build one and whose `isOk`, `value` and `error` read it, and a case without a
+payload is a `Void` holding null. It converts at the boundary the way a tuple does. Lifting names each payload by its
+class when both can be, as `Result.fromComponent(value, Long.class, String.class)`, and converts each through a lambda
+of its own otherwise. Lowering through `toComponent` takes a lambda per payload only when one of them converts. Only a
+result some function returns generates an exception, so `exit` generates none.
+
 Which way the call runs decides where the exception is built and where it is caught. Calling into the component reads
 the label off the `VariantValue` that comes back and either returns the ok payload or throws. Satisfying an import wraps
 the embedder's call in a `try` that catches only the generated exception and turns it back into the `error` case.
@@ -742,9 +749,8 @@ throwing it are generated elsewhere. `use` on an exported interface
 is refused, because only the host side resolves a used type to its declaring package. A type a world declares in its
 own right has no package to be generated into, so it is refused as well.
 
-A compound type on a world's bare function import and a `result` reached as anything but a function's own result are
-each rejected with a message naming what is unsupported. The bare function import is a limit of `HostFunction`, which
-builds an instance with no type space, leaving an index nothing to resolve.
+A compound type on a world's bare function import is rejected with a message naming what is unsupported. That is a
+limit of `HostFunction`, which builds an instance with no type space, leaving an index nothing to resolve.
 
 ## Fidelity to the bindgen! examples
 
@@ -857,8 +863,7 @@ way today, which means adding one is a matter of finding its rejection and repla
   through `HostInstance` like an interface.
 
 A few refusals are limits of the chosen Java shapes rather than missing work, and
-[What Is Built](#what-is-built) gives the reason for each. They are `option<option<T>>`, a `result` reached as a value
-rather than as a function's own result, a tuple wider than `Tuple8`, a variant case named after its variant or after a type its interface declares, and a flags type whose Java name
+[What Is Built](#what-is-built) gives the reason for each. They are `option<option<T>>`, a tuple wider than `Tuple8`, a variant case named after its variant or after a type its interface declares, and a flags type whose Java name
 would be `Flag`.
 
 ### The interface sharing policy is untested

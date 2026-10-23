@@ -1,13 +1,21 @@
 package run.endive.cm.wasi.p2;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.roastedroot.zerofs.Configuration;
 import io.roastedroot.zerofs.ZeroFs;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
 import java.math.BigInteger;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -23,6 +31,8 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import run.endive.cm.runtime.Tuple2;
 import run.endive.cm.wasi.p2.bindings.wasi.clocks.wallclock.Datetime;
+import run.endive.cm.wasi.p2.bindings.wasi.io.streams.StreamError;
+import run.endive.cm.wasi.p2.bindings.wasi.io.streams.StreamErrorException;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.ErrorCode;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.ErrorCodeException;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.IpAddressFamily;
@@ -128,5 +138,111 @@ class WasiPreview2Test {
             assertEquals(ErrorCode.ACCESS_DENIED, tcp.error());
             assertEquals(ErrorCode.ACCESS_DENIED, udp.error());
         }
+    }
+
+    /** By default there are no arguments, no variables, no terminals and nothing to read. */
+    @Test
+    void theCommandLineIsEmptyByDefault() {
+        try (var wasi = WasiPreview2.builder().build()) {
+            assertEquals(List.of(), wasi.environment().getArguments());
+            assertEquals(List.of(), wasi.environment().getEnvironment());
+            assertNull(wasi.terminalStdin().getTerminalStdin());
+            assertNull(wasi.terminalStdout().getTerminalStdout());
+            assertNull(wasi.terminalStderr().getTerminalStderr());
+            StreamErrorException e =
+                    assertThrows(
+                            StreamErrorException.class,
+                            () -> wasi.stdin().getStdin().read(BigInteger.ONE));
+            assertInstanceOf(StreamError.Closed.class, e.error());
+        }
+    }
+
+    /** Stdout and stderr take whatever the guest writes and discard it. */
+    @Test
+    void outputIsDiscardedByDefault() {
+        try (var wasi = WasiPreview2.builder().build()) {
+            wasi.stdout().getStdout().blockingWriteAndFlush("out".getBytes(UTF_8));
+            wasi.stderr().getStderr().blockingWriteAndFlush("err".getBytes(UTF_8));
+        }
+    }
+
+    @Test
+    void aVariableAddedAgainKeepsItsPlaceAndTakesTheLastValue() {
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withEnvironment("A", "1")
+                        .withEnvironment("B", "2")
+                        .withEnvironment("A", "3")
+                        .build()) {
+            assertEquals(
+                    List.of(Tuple2.of("A", "3"), Tuple2.of("B", "2")),
+                    wasi.environment().getEnvironment());
+        }
+    }
+
+    /** A stream given without a terminal flag is not a terminal, whatever was given before it. */
+    @Test
+    void aStreamGivenAloneIsNotATerminal() {
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withStdout(new ByteArrayOutputStream(), true)
+                        .withStdout(new ByteArrayOutputStream())
+                        .build()) {
+            assertNull(wasi.terminalStdout().getTerminalStdout());
+        }
+    }
+
+    @Test
+    void theSystemStreamsCanBeInherited() {
+        InputStream in = System.in;
+        PrintStream out = System.out;
+        PrintStream err = System.err;
+        ByteArrayOutputStream written = new ByteArrayOutputStream();
+        try {
+            System.setIn(new ByteArrayInputStream("typed".getBytes(UTF_8)));
+            System.setOut(new PrintStream(written, true, UTF_8));
+            System.setErr(new PrintStream(written, true, UTF_8));
+
+            try (var wasi = WasiPreview2.builder().inheritSystemStreams().build()) {
+                assertArrayEquals(
+                        "typed".getBytes(UTF_8),
+                        wasi.stdin().getStdin().blockingRead(BigInteger.TEN));
+                wasi.stdout().getStdout().blockingWriteAndFlush("out ".getBytes(UTF_8));
+                wasi.stderr().getStderr().blockingWriteAndFlush("err".getBytes(UTF_8));
+                boolean console = System.console() != null;
+                assertEquals(console, wasi.terminalStdin().getTerminalStdin() != null);
+                assertEquals(console, wasi.terminalStdout().getTerminalStdout() != null);
+                assertEquals(console, wasi.terminalStderr().getTerminalStderr() != null);
+            }
+        } finally {
+            System.setIn(in);
+            System.setOut(out);
+            System.setErr(err);
+        }
+        assertEquals("out err", written.toString(UTF_8));
+    }
+
+    /** A command runs through any compatible 0.2 release of wasi:cli/run, as imports link. */
+    @Test
+    void theRunExportedIsTheOneCompatibleWithWasiCliRun() {
+        assertEquals(
+                "wasi:cli/run@0.2.12",
+                WasiPreview2.cliRun(List.of("wasi:cli/environment@0.2.12", "wasi:cli/run@0.2.12")));
+        assertEquals("wasi:cli/run@0.2.0", WasiPreview2.cliRun(List.of("wasi:cli/run@0.2.0")));
+    }
+
+    @Test
+    void anIncompatibleOrRepeatedRunIsRefused() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> WasiPreview2.cliRun(List.of("wasi:cli/run@0.2.0-rc.1")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> WasiPreview2.cliRun(List.of("wasi:cli/run@0.3.0")));
+        assertThrows(
+                IllegalArgumentException.class, () -> WasiPreview2.cliRun(List.of("wasi:cli/run")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> WasiPreview2.cliRun(List.of("wasi:cli/run@0.2.6", "wasi:cli/run@0.2.12")));
     }
 }
