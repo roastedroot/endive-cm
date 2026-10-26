@@ -62,6 +62,12 @@ public interface TcpChannel {
     /** The address the channel is connected to, or {@code null} while it is not connected. */
     InetSocketAddress remoteAddress();
 
+    /**
+     * A future that completes once a connection has ended, because it failed, the peer reset it,
+     * or both of its directions were shut down.
+     */
+    CompletableFuture<?> terminated();
+
     /** The stream of what the peer sends a connected channel, the same one each time. */
     HostInputStream input();
 

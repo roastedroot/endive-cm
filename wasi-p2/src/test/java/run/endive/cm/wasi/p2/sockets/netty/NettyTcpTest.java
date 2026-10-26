@@ -16,6 +16,7 @@ import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -121,6 +122,39 @@ class NettyTcpTest {
 
         assertEquals("bye", new String(readExactly(connection.serverIn, 3), UTF_8));
         assertClosed(connection.serverIn);
+    }
+
+    /** Neither socket closes while the peer may still send, since TCP allows half closure. */
+    @Test
+    void bothSocketsCloseOnceEachHasStoppedSending() {
+        Connection connection = connect();
+
+        connection.client.shutdown(ShutdownType.SEND);
+        assertClosed(connection.serverIn);
+        assertEquals(connection.client.localAddress(), connection.server.remoteAddress());
+
+        connection.server.shutdown(ShutdownType.SEND);
+        assertClosed(connection.clientIn);
+
+        awaitClosed(connection.client);
+        awaitClosed(connection.server);
+    }
+
+    @Test
+    void aSocketClosesWhenThePeerResetsTheConnection() throws IOException {
+        try (ServerSocket server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) {
+            TcpSocket client = create();
+            client.startConnect(
+                    NETWORK, address((InetSocketAddress) server.getLocalSocketAddress()));
+            Tuple2<InputStream, OutputStream> streams = finish(client, client::finishConnect);
+
+            try (Socket accepted = server.accept()) {
+                accepted.setSoLinger(true, 0);
+            }
+
+            assertThrows(StreamErrorException.class, () -> readExactly(streams.f0(), 1));
+            awaitClosed(client);
+        }
     }
 
     @Test
@@ -270,6 +304,24 @@ class NettyTcpTest {
                     finish.run();
                     return null;
                 });
+    }
+
+    /** Waits for the connection to end, which closes the socket without the guest asking. */
+    private static void awaitClosed(TcpSocket socket) {
+        while (true) {
+            try {
+                socket.remoteAddress();
+            } catch (ErrorCodeException e) {
+                assertEquals(ErrorCode.INVALID_STATE, e.error());
+                return;
+            }
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(e);
+            }
+        }
     }
 
     private static byte[] readExactly(InputStream in, int length) {

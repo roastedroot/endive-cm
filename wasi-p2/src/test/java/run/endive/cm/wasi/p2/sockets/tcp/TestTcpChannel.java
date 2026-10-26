@@ -27,6 +27,7 @@ final class TestTcpChannel implements TcpChannel {
     final CompletableFuture<Void> bound = new CompletableFuture<>();
     final CompletableFuture<Void> connected = new CompletableFuture<>();
     final CompletableFuture<Void> listening = new CompletableFuture<>();
+    final CompletableFuture<Void> terminated = new CompletableFuture<>();
     final Queue<TestTcpChannel> waiting = new ArrayDeque<>();
     final List<String> calls = new ArrayList<>();
     final Map<SocketOption<?>, Object> options = new HashMap<>();
@@ -101,6 +102,11 @@ final class TestTcpChannel implements TcpChannel {
     @Override
     public InetSocketAddress remoteAddress() {
         return remote;
+    }
+
+    @Override
+    public CompletableFuture<?> terminated() {
+        return terminated;
     }
 
     @Override

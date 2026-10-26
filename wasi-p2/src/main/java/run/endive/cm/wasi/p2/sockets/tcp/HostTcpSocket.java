@@ -242,7 +242,7 @@ public class HostTcpSocket implements TcpSocket {
 
     @Override
     public Boolean isListening() {
-        return state == State.LISTENING;
+        return state() == State.LISTENING;
     }
 
     @Override
@@ -377,7 +377,8 @@ public class HostTcpSocket implements TcpSocket {
     }
 
     /**
-     * Closes the connection's streams in the directions given. The socket stays connected.
+     * Closes the connection's streams in the directions given. The socket closes once both
+     * directions are shut down and the peer has finished sending.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp.wit">wasi:sockets/tcp, shutdown</a>
      */
@@ -401,14 +402,14 @@ public class HostTcpSocket implements TcpSocket {
 
     /** Ready once the operation in progress completes, or a connection waits to be accepted. */
     private CompletableFuture<?> readiness() {
-        return state == State.LISTENING ? channel.acceptReadiness() : pending;
+        return state() == State.LISTENING ? channel.acceptReadiness() : pending;
     }
 
     /**
      * The failure of the operation {@code inProgress} started, or {@code null} once it succeeded.
      */
     private Throwable outcome(State inProgress) {
-        if (state != inProgress) {
+        if (state() != inProgress) {
             throw ErrorCodes.error(ErrorCode.NOT_IN_PROGRESS);
         }
         if (!pending.isDone()) {
@@ -424,14 +425,26 @@ public class HostTcpSocket implements TcpSocket {
         }
     }
 
+    /**
+     * The socket's state, which moves from connected to closed once the connection ends.
+     *
+     * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/TcpSocketOperationalSemantics.md#transitions">Transitions</a>
+     */
+    private State state() {
+        if (state == State.CONNECTED && channel.terminated().isDone()) {
+            state = State.CLOSED;
+        }
+        return state;
+    }
+
     private void requireState(State... allowed) {
-        if (!Arrays.asList(allowed).contains(state)) {
+        if (!Arrays.asList(allowed).contains(state())) {
             throw ErrorCodes.error(ErrorCode.INVALID_STATE);
         }
     }
 
     private void requireOpen() {
-        if (state == State.CLOSED) {
+        if (state() == State.CLOSED) {
             throw ErrorCodes.error(ErrorCode.INVALID_STATE);
         }
     }

@@ -353,6 +353,32 @@ class HostTcpSocketTest {
     }
 
     @Test
+    void aSocketClosesOnceItsConnectionEnds() {
+        connect();
+        Pollable ready = socket.subscribe();
+        assertEquals(REMOTE, socket.remoteAddress());
+
+        channel.terminated.complete(null);
+
+        assertEquals(ErrorCode.INVALID_STATE, errorOf(socket::remoteAddress));
+        assertEquals(ErrorCode.INVALID_STATE, errorOf(socket::localAddress));
+        assertEquals(ErrorCode.INVALID_STATE, errorOf(() -> socket.shutdown(ShutdownType.BOTH)));
+        assertEquals(ErrorCode.INVALID_STATE, errorOf(socket::keepAliveEnabled));
+        assertTrue(ready.ready());
+    }
+
+    /** Only a connection ends. A channel closed for listening leaves its socket listening. */
+    @Test
+    void aSocketThatIsNotConnectedIgnoresTheChannelEnding() {
+        listen();
+
+        channel.terminated.complete(null);
+
+        assertTrue(socket.isListening());
+        assertEquals(LOCAL, socket.localAddress());
+    }
+
+    @Test
     void aSocketWithNothingInProgressIsReady() {
         assertTrue(socket.subscribe().ready());
 

@@ -47,7 +47,8 @@ import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
  * <p>A connection reads into its input stream until the stream holds {@value #STREAM_CAPACITY}
  * bytes, and resumes once the guest has read half of them. What the guest writes is handed to
  * Netty on the event loop, and counts as delivered once Netty has written it to the socket.
- * Closing the socket delivers what the guest wrote first.
+ * Closing the socket delivers what the guest wrote first. A connection closes itself once both of
+ * its directions are shut down.
  */
 final class NettyTcpChannel implements TcpChannel {
 
@@ -71,6 +72,7 @@ final class NettyTcpChannel implements TcpChannel {
     private final IpAddressFamily family;
     private final SocketChannel socket;
     private final CompletableFuture<Void> registered;
+    private final CompletableFuture<Void> terminated;
     private final BufferedHostInputStream input;
     private final BufferedHostOutputStream output;
 
@@ -97,6 +99,7 @@ final class NettyTcpChannel implements TcpChannel {
         socket.config().setOption(ChannelOption.ALLOW_HALF_CLOSURE, true);
         socket.config().setOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 0);
         socket.pipeline().addLast(new Connection());
+        this.terminated = completable(socket.closeFuture());
         this.registered = completable(tcp.group().register(socket));
         tcp.track(this);
     }
@@ -206,6 +209,11 @@ final class NettyTcpChannel implements TcpChannel {
     }
 
     @Override
+    public CompletableFuture<?> terminated() {
+        return terminated;
+    }
+
+    @Override
     public HostInputStream input() {
         return input;
     }
@@ -268,7 +276,7 @@ final class NettyTcpChannel implements TcpChannel {
         if (receive && !receiveShut) {
             receiveShut = true;
             input.drop();
-            socket.shutdownInput();
+            socket.shutdownInput().addListener(done -> closeIfShutDown());
         }
         if (send && !sendShut) {
             sendShut = true;
@@ -277,7 +285,10 @@ final class NettyTcpChannel implements TcpChannel {
                     () -> {
                         deliver();
                         socket.writeAndFlush(Unpooled.EMPTY_BUFFER)
-                                .addListener(written -> socket.shutdownOutput());
+                                .addListener(
+                                        written ->
+                                                socket.shutdownOutput()
+                                                        .addListener(done -> closeIfShutDown()));
                     });
         }
     }
@@ -357,6 +368,16 @@ final class NettyTcpChannel implements TcpChannel {
                             }
                         });
         return bound;
+    }
+
+    /**
+     * Closes a connection whose directions are both shut down, which Netty leaves open while it
+     * allows half closure.
+     */
+    private void closeIfShutDown() {
+        if (socket.isShutdown()) {
+            socket.close();
+        }
     }
 
     /** Makes {@link #acceptReadiness} pending, unless a connection or failure is waiting. */
@@ -484,6 +505,7 @@ final class NettyTcpChannel implements TcpChannel {
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
             if (evt == ChannelInputShutdownEvent.INSTANCE) {
                 input.close();
+                closeIfShutDown();
             }
             ctx.fireUserEventTriggered(evt);
         }
