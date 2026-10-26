@@ -14,6 +14,16 @@
 
   <dependencies>
     <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-resolver-dns</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-transport</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>io.roastedroot</groupId>
       <artifactId>zerofs</artifactId>
       <scope>test</scope>
