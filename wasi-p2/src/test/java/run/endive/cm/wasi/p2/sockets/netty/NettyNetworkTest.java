@@ -90,8 +90,8 @@ class NettyNetworkTest {
         AtomicInteger datagrams = new AtomicInteger();
         NettyChannels channels =
                 NettyChannels.of(
-                        NioSocketChannel::new,
-                        NioServerSocketChannel::new,
+                        family -> new NioSocketChannel(),
+                        family -> new NioServerSocketChannel(),
                         () -> {
                             datagrams.incrementAndGet();
                             return new NioDatagramChannel();

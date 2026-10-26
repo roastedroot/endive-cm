@@ -29,6 +29,7 @@ public final class NettyNetwork implements HostSockets {
     private final IoEventLoopGroup group;
     private final boolean ownsGroup;
     private final DnsNameResolver defaultNameResolver;
+    private final NettyTcp tcp;
     private final HostIpNameLookup ipNameLookup;
     private final HostTcpCreateSocket tcpCreateSocket;
     private final HostUdpCreateSocket udpCreateSocket;
@@ -50,13 +51,8 @@ public final class NettyNetwork implements HostSockets {
                         nameResolver == null
                                 ? new NettyNameResolver(defaultNameResolver)
                                 : nameResolver);
-        this.tcpCreateSocket =
-                new HostTcpCreateSocket(
-                        poll,
-                        policy,
-                        family -> {
-                            throw new UnsupportedOperationException("TCP is not supported yet");
-                        });
+        this.tcp = new NettyTcp(poll, group, channels);
+        this.tcpCreateSocket = new HostTcpCreateSocket(poll, policy, tcp);
         this.udpCreateSocket = new HostUdpCreateSocket();
     }
 
@@ -119,6 +115,11 @@ public final class NettyNetwork implements HostSockets {
         return group;
     }
 
+    /** Opens the network's TCP sockets, for a test reaching past the guest's interface. */
+    NettyTcp tcp() {
+        return tcp;
+    }
+
     @Override
     public run.endive.cm.wasi.p2.bindings.wasi.sockets.ipnamelookup.Host ipNameLookup() {
         return ipNameLookup;
@@ -134,9 +135,13 @@ public final class NettyNetwork implements HostSockets {
         return udpCreateSocket;
     }
 
-    /** Closes the resolver and shuts down the group, unless the embedder gave them. */
+    /**
+     * Closes every socket the guest left open, then the resolver, and shuts down the group, unless
+     * the embedder gave them.
+     */
     @Override
     public void close() {
+        tcp.close();
         if (defaultNameResolver != null) {
             defaultNameResolver.close();
         }

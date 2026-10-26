@@ -100,6 +100,31 @@ public final class IpAddresses {
         }
     }
 
+    /**
+     * {@code address} as an address of {@code family}, for a socket whose channel takes both
+     * families. An IPv4-mapped address is unmapped for IPv4, and an IPv4 address is mapped for
+     * IPv6.
+     */
+    public static InetSocketAddress inFamily(InetSocketAddress address, IpAddressFamily family) {
+        InetAddress ip = address.getAddress();
+        if (family == IpAddressFamily.IPV4 && isIpv4Mapped(ip)) {
+            return new InetSocketAddress(unmapped(ip), address.getPort());
+        }
+        if (family == IpAddressFamily.IPV6 && ip instanceof Inet4Address) {
+            byte[] bytes = new byte[16];
+            bytes[10] = (byte) 0xff;
+            bytes[11] = (byte) 0xff;
+            System.arraycopy(ip.getAddress(), 0, bytes, 12, 4);
+            try {
+                return new InetSocketAddress(
+                        Inet6Address.getByAddress(null, bytes, -1), address.getPort());
+            } catch (UnknownHostException e) {
+                throw new IllegalStateException("16 bytes are always an IPv6 address", e);
+            }
+        }
+        return address;
+    }
+
     private static InetAddress ipv4Address(Tuple4<Short, Short, Short, Short> address) {
         byte[] bytes = {
             address.f0().byteValue(),
