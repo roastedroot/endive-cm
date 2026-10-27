@@ -1,0 +1,7 @@
+package endive:wasi-test;
+
+world cli {
+  include endive:wasi/imports@0.2.12;
+
+  export wasi:cli/run@0.2.12;
+}

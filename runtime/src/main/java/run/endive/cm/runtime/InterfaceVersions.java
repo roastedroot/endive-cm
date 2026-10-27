@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
  *
  * @see <a href="https://github.com/WebAssembly/component-model/blob/706074c96bc14cfc58469e1bdc452bb4d91921c7/design/mvp/Explainer.md#-canonical-interface-name">Explainer.md, canonical interface name</a>
  */
-final class InterfaceVersions {
+public final class InterfaceVersions {
 
     private static final String IDENTIFIERS = "[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*";
 
@@ -66,7 +66,7 @@ final class InterfaceVersions {
      * @return the key, or {@code null} when {@code name} has no version, a pre-release, a version
      *     below 0.1.0, or a version that is not valid
      */
-    static String compatibleKey(String name) {
+    public static String compatibleKey(String name) {
         Version version = Version.parse(name);
         return version == null ? null : version.key;
     }

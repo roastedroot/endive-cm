@@ -1,0 +1,40 @@
+package example:result-values;
+
+/// Implemented by the embedder, which the guest hands results as values.
+interface reporting {
+    enum level {
+        low,
+        high,
+    }
+
+    /// A record carrying a result whose error payload converts at the boundary.
+    record outcome {
+        name: string,
+        status: result<_, level>,
+    }
+
+    /// A result with a payload in each case.
+    report: func(status: result<u32, string>);
+
+    /// A result with no payload in either case, the shape wasi:cli's exit takes.
+    exit: func(status: result);
+
+    /// A result nested in a record, crossing in both directions.
+    reverse: func(outcome: outcome) -> outcome;
+}
+
+/// Implemented by the guest, which the embedder hands results as values.
+interface checking {
+    /// The ok payload, or a thousand plus the length of the error payload.
+    check: func(status: result<u32, string>) -> u32;
+
+    /// Zero for ok and one for error.
+    check-bare: func(status: result) -> u32;
+}
+
+world result-values {
+    import reporting;
+
+    export checking;
+    export run: func();
+}

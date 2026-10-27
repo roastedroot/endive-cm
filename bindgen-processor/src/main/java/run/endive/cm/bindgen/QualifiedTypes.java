@@ -30,6 +30,7 @@ final class QualifiedTypes {
     static final String HOST_INSTANCE = "run.endive.cm.runtime.HostInstance";
     static final String HOST_RESOURCE = "run.endive.cm.runtime.HostResource";
     static final String HOST_RESOURCE_TABLE = "run.endive.cm.runtime.HostResourceTable";
+    static final String RESULT = "run.endive.cm.runtime.Result";
 
     /** The runtime names a tuple class by its arity, so an element count completes this. */
     static final String TUPLE = "run.endive.cm.runtime.Tuple";
