@@ -28,11 +28,6 @@ jobs:
         distribution: 'temurin'
         java-version: '${{ matrix.java-version }}'
         cache: maven
-    - name: Build Endive
-      run: |
-        git clone --depth 1 https://github.com/bytecodealliance/endive.git /tmp/endive
-        cd /tmp/endive
-        mvn -B -Dquickly install
     - name: Build and test
       run: mvn -B install
     - name: Publish Test Report
@@ -57,11 +52,6 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
           cache: maven
-      - name: Build Endive
-        run: |
-          git clone --depth 1 https://github.com/bytecodealliance/endive.git /tmp/endive
-          cd /tmp/endive
-          mvn -B -Dquickly install
       - name: Build and test
         run: mvn -B install
       - name: Publish Test Results
