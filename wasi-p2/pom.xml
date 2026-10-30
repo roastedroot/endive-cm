@@ -74,6 +74,11 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <!-- The native libraries of each transport for the platforms CI and developers run on.
            Netty loads the one matching the machine, and a test skips where none does. -->
       <groupId>io.netty</groupId>
@@ -119,6 +124,16 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>run.endive.cm</groupId>
+      <artifactId>component-corpus</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
