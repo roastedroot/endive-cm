@@ -56,22 +56,10 @@ Updating the wasm-tools version automatically updates the parser.
 
 - Java 11+
 - Maven 3.6+
-- Endive installed locally (see below)
 
 ### Building
 
-Since this project depends on Endive at `999-SNAPSHOT`, you need to build and install Endive first:
-
 ```sh
-git clone https://github.com/bytecodealliance/endive.git
-cd endive
-mvn -Dquickly
-```
-
-Then build endive-cm:
-
-```sh
-cd endive-cm
 mvn clean install
 ```
 
