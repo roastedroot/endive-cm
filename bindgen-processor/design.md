@@ -540,8 +540,9 @@ export was a function.
 
 Whether an interface is written inline in the world or named by its package makes no structural difference. Both arrive
 as an instance, differing only in whether the name carries a package qualification, and the Java name comes from the
-last segment either way unless another interface shares it. That holds on the export side too, so a world exporting a function of its own, an interface
-written inline, and an interface named by its id needs nothing beyond what one exported interface already needed.
+last segment either way unless another interface shares it. That holds on the export side too, so a world exporting a
+function of its own, an interface written inline, and an interface named by its id needs nothing beyond what one
+exported interface already needed.
 
 An imported and an exported interface of one name no longer collide, since exports sit under `exports`. Two worlds of
 the same name in one Java package still would, because both want the same world class. Two of the bindgen! examples do
