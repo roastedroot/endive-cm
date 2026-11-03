@@ -62,10 +62,11 @@ final class HostWiring {
      * Appends the statements building a host instance for {@code imported} and registering it
      * under the name the linker matches.
      *
+     * @param name the name by which the world's members reach {@code imported}
      * @param values the local collecting what satisfies each import
      */
-    void addTo(BlockStmt body, WitInterface imported, String values) {
-        Locals locals = new Locals(imported);
+    void addTo(BlockStmt body, WitInterface imported, String name, String values) {
+        Locals locals = new Locals(imported, name);
 
         if (imported.needsHost()) {
             body.addStatement(
@@ -415,8 +416,8 @@ final class HostWiring {
         /** One local per type, however many indices name it. */
         private final Map<Type, String> byType = new IdentityHashMap<>();
 
-        Locals(WitInterface imported) {
-            this.accessor = Names.member(imported.simpleName());
+        Locals(WitInterface imported, String name) {
+            this.accessor = Names.member(name);
             this.host = Names.free(accessor, TAKEN);
             this.builder = host + "Builder";
             this.scope = imported.scope();

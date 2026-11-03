@@ -350,6 +350,13 @@ and accessor. Changing the WIT version does not by itself rename Java types or m
 which WIT version it implements through its own artifact version. A world importing both versions cannot generate
 both into one Java package, so bindgen reports the conflicting WIT ids.
 
+Two interfaces a world imports may also share a name, as `wasi:filesystem/types` and `wasi:http/types` do. Their
+packages differ, but the accessor on `Imports` and the locals in `instantiate` would not. So an interface keeps its bare
+name only while no other import shares it. Each one sharing it gains its package, giving `filesystemTypes()` and
+`httpTypes()`, and then its namespace if that is still not enough. Exports are named the same way among themselves,
+apart from imports, since the two never meet on one Java type. An inline interface has no id to add, so one that still
+reads like another's qualified name is refused.
+
 Two things follow from generating more than one file.
 
 A world's interfaces are shared rather than copied. The first world to need an interface id generates it and a later
@@ -533,7 +540,7 @@ export was a function.
 
 Whether an interface is written inline in the world or named by its package makes no structural difference. Both arrive
 as an instance, differing only in whether the name carries a package qualification, and the Java name comes from the
-last segment either way. That holds on the export side too, so a world exporting a function of its own, an interface
+last segment either way unless another interface shares it. That holds on the export side too, so a world exporting a function of its own, an interface
 written inline, and an interface named by its id needs nothing beyond what one exported interface already needed.
 
 An imported and an exported interface of one name no longer collide, since exports sit under `exports`. Two worlds of

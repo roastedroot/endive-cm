@@ -30,11 +30,16 @@ final class WorldGenerator {
     private final WitWorld world;
     private final String base;
     private final String generatedBy;
+    private final Map<WitInterface, String> importNames;
+    private final Map<WitInterface, String> exportNames;
 
     private WorldGenerator(WitWorld world, String base, String generatedBy) {
         this.world = world;
         this.base = base;
         this.generatedBy = generatedBy;
+        checkInterfacePackages();
+        this.importNames = WitInterface.memberNames(world.importedInterfaces());
+        this.exportNames = WitInterface.memberNames(world.exportedInterfaces());
     }
 
     static List<GeneratedUnit> generate(WitWorld world, String base, String generatedBy) {
@@ -42,7 +47,6 @@ final class WorldGenerator {
     }
 
     private List<GeneratedUnit> sources() {
-        checkInterfacePackages();
         List<GeneratedUnit> sources = new ArrayList<>();
         InterfaceGenerator interfaces = new InterfaceGenerator(generatedBy);
         for (WitInterface imported : world.importedInterfaces()) {
@@ -123,7 +127,7 @@ final class WorldGenerator {
         for (WitInterface exported : world.exportedInterfaces()) {
             type.addField(
                     AstBuilders.type(guestType(exported)),
-                    fieldName(exported.simpleName()),
+                    fieldName(exportNames.get(exported)),
                     Modifier.Keyword.PRIVATE,
                     Modifier.Keyword.FINAL);
         }
@@ -147,9 +151,9 @@ final class WorldGenerator {
         }
         for (WitInterface exported : world.exportedInterfaces()) {
             MethodDeclaration reader =
-                    type.addMethod(Names.member(exported.simpleName()), Modifier.Keyword.PUBLIC)
+                    type.addMethod(Names.member(exportNames.get(exported)), Modifier.Keyword.PUBLIC)
                             .setType(AstBuilders.type(guestType(exported)));
-            reader.setBody(returning(new NameExpr(fieldName(exported.simpleName()))));
+            reader.setBody(returning(new NameExpr(fieldName(exportNames.get(exported)))));
             reader.setJavadocComment("The exported interface {@code " + exported.name() + "}.");
         }
         return unit;
@@ -168,7 +172,7 @@ final class WorldGenerator {
                 continue;
             }
             MethodDeclaration reader = new MethodDeclaration();
-            reader.setName(Names.member(imported.simpleName()));
+            reader.setName(Names.member(importNames.get(imported)));
             reader.setType(AstBuilders.type(hostType(imported)));
             reader.removeBody();
             reader.setJavadocComment("The imported interface {@code " + imported.name() + "}.");
@@ -203,7 +207,7 @@ final class WorldGenerator {
                             AstBuilders.text(exported.name()));
             body.addStatement(
                     AstBuilders.assign(
-                            AstBuilders.thisField(fieldName(exported.simpleName())),
+                            AstBuilders.thisField(fieldName(exportNames.get(exported))),
                             AstBuilders.construct(
                                     AstBuilders.type(guestType(exported)), instance)));
         }
@@ -250,7 +254,7 @@ final class WorldGenerator {
         }
         HostWiring wiring = new HostWiring(unit);
         for (WitInterface imported : world.importedInterfaces()) {
-            wiring.addTo(body, imported, VALUES);
+            wiring.addTo(body, imported, importNames.get(imported), VALUES);
         }
 
         Expression linker =

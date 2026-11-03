@@ -432,6 +432,110 @@ class BindgenProcessorTest {
     }
 
     /**
+     * Interfaces sharing a name gain their package, then their namespace, and only those sharing
+     * one do. Imports and exports are named apart, so neither makes the other qualify.
+     */
+    @Test
+    void interfacesSharingANameAreQualified() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.SharedNamesHost",
+                                "package endive.testing;\n"
+                                    + "import run.endive.cm.runtime.Bindgen;\n"
+                                    + "@Bindgen(world = \"w\", inline = \"package t:w;\\n"
+                                    + "package a:files@0.2.0 {\\n"
+                                    + "  interface types { stat: func() -> u32; }\\n"
+                                    + "  interface preopens { count: func() -> u32; }\\n"
+                                    + "}\\n"
+                                    + "package a:http { interface types { send: func(); } }\\n"
+                                    + "package b:http { interface types { receive: func(); } }\\n"
+                                    + "package c:log { interface types { emit: func(); } }\\n"
+                                    + "world w {\\n"
+                                    + "  import a:files/types@0.2.0;\\n"
+                                    + "  import a:files/preopens@0.2.0;\\n"
+                                    + "  import a:http/types;\\n"
+                                    + "  import b:http/types;\\n"
+                                    + "  export c:log/types;\\n"
+                                    + "}\\n"
+                                    + "\")\n"
+                                    + "public class SharedNamesHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        String world = "endive.testing.WWorld";
+        for (String expected :
+                List.of(
+                        "endive.testing.a.files.types.Host filesTypes();",
+                        "endive.testing.a.http.types.Host aHttpTypes();",
+                        "endive.testing.b.http.types.Host bHttpTypes();",
+                        "endive.testing.a.files.preopens.Host preopens();",
+                        "HostInstance.Builder filesTypesBuilder = HostInstance.builder(store);",
+                        "HostInstance.Builder aHttpTypesBuilder = HostInstance.builder(store);",
+                        "public endive.testing.exports.c.log.types.Guest types()")) {
+            assertThat(compilation)
+                    .generatedSourceFile(world)
+                    .contentsAsUtf8String()
+                    .contains(expected);
+        }
+    }
+
+    /** Two exports sharing a name are qualified the same way two imports are. */
+    @Test
+    void exportsSharingANameAreQualified() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.SharedExportsHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"w\", inline = \"package t:w;\\n"
+                                        + "package a:files { interface types { stat: func(); } }\\n"
+                                        + "package a:http { interface types { send: func(); } }\\n"
+                                        + "world w {\\n"
+                                        + "  export a:files/types;\\n"
+                                        + "  export a:http/types;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class SharedExportsHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.WWorld")
+                .contentsAsUtf8String()
+                .contains("public endive.testing.exports.a.files.types.Guest filesTypes()");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.WWorld")
+                .contentsAsUtf8String()
+                .contains("public endive.testing.exports.a.http.types.Guest httpTypes()");
+    }
+
+    /**
+     * An inline interface has no id to qualify it, so one reading like another's qualified name is
+     * refused rather than bound to one name.
+     */
+    @Test
+    void interfacesStillSharingANameAreRefused() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.SameMemberHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"w\", inline = \"package t:w;\\n"
+                                        + "package x:c { interface d { f: func(); } }\\n"
+                                        + "package y:c { interface d { g: func(); } }\\n"
+                                        + "world w {\\n"
+                                        + "  import x:c/d;\\n"
+                                        + "  import y:c/d;\\n"
+                                        + "  import x-c-d: interface { h: func(); }\\n"
+                                        + "}\\n\")\n"
+                                        + "public class SameMemberHost {}\n"));
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("both generate Java member \"xCD\"");
+        assertThat(compilation).hadErrorContaining("\"x:c/d\"");
+    }
+
+    /**
      * A resource alias is the resource it names, so it generates no type of its own and is
      * exported as that resource's runtime type.
      */
@@ -1614,8 +1718,8 @@ class BindgenProcessorTest {
                 new WitInterface(
                         "wasi:io/streams@0.2.1", List.of(), List.of(), List.of(), new WitScope());
 
-        assertEquals("streams", first.simpleName());
-        assertEquals(first.simpleName(), next.simpleName());
+        assertEquals("streams", WitInterface.memberNames(List.of(first)).get(first));
+        assertEquals("streams", WitInterface.memberNames(List.of(next)).get(next));
         assertEquals(
                 first.javaPackage("endive.testing", false),
                 next.javaPackage("endive.testing", false));
