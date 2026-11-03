@@ -117,6 +117,11 @@ public class ApprovalTest {
         verifyGeneratedBindings("TypeAliasesHost.java");
     }
 
+    @Test
+    public void verifyResourceAliases() {
+        verifyGeneratedBindings("ResourceAliasesHost.java");
+    }
+
     /**
      * Sources are ordered by name and headed by it, so that the package a world lays out is part of
      * what is approved rather than something a separate assertion has to repeat.

@@ -744,6 +744,12 @@ declaring interface's `Handles`, whichever interface it crosses on, so there is 
 interfaces use it. The declaring interface is always imported ahead of any interface using it, so its `Handles` is
 already in reach. A world using a resource is refused, because nothing on the world's side reaches a `Handles`.
 
+An interface may also alias a resource it declares itself, as `wasi:http` does with `type headers = fields`. The
+encoding exports the alias with an `eq` bound on the resource, so `WorldReader` records it the way it records a used
+type, pointing back at the resource in the same space. The alias generates no Java type of its own. A handle to it binds
+as the resource's Java type and converts through that resource's `Handles`, and the host instance exports the same
+`HostResource` again under the alias's name.
+
 A used `result` is refused, since its exception belongs to the declaring interface's package while the functions
 throwing it are generated elsewhere. `use` on an exported interface
 is refused, because only the host side resolves a used type to its declaring package. A type a world declares in its
@@ -759,7 +765,7 @@ That is what the approved files are generated from, so a difference from the exa
 
 All seven of the non-async example worlds are present. A world covering a WIT feature no example declares is written
 for the purpose and named after it, such as `record-types`, `result-types`, `use-types`, `use-resources`,
-`handle-types`, `resource-handles` or `type-aliases`, and each such fixture says so at the top.
+`handle-types`, `resource-handles`, `type-aliases` or `resource-aliases`, and each such fixture says so at the top.
 
 The end-to-end fixtures use the same WIT, with one exception that has to be stated wherever it appears. A world that
 imports without exporting cannot be driven, since nothing enters the guest, so `with-imports`,
