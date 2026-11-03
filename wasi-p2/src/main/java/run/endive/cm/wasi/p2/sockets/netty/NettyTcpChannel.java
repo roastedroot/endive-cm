@@ -92,9 +92,7 @@ final class NettyTcpChannel implements TcpChannel {
         this.tcp = tcp;
         this.family = family;
         this.socket = socket;
-        this.input =
-                new BufferedHostInputStream(
-                        tcp.poll(), STREAM_CAPACITY, () -> socket.config().setAutoRead(true));
+        this.input = new BufferedHostInputStream(tcp.poll(), STREAM_CAPACITY, this::resumeReading);
         this.output = new BufferedHostOutputStream(tcp.poll(), STREAM_CAPACITY, this::deliverLater);
         socket.config().setOption(ChannelOption.ALLOW_HALF_CLOSURE, true);
         socket.config().setOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 0);
@@ -389,6 +387,18 @@ final class NettyTcpChannel implements TcpChannel {
         acceptReadiness = pending;
         if (!waiting.isEmpty() || acceptFailure != null) {
             pending.complete(null);
+        }
+    }
+
+    /**
+     * Called on the guest's thread once it has read enough of a full input stream. Reading resumes on
+     * the event loop, so it follows the read that paused it.
+     */
+    private void resumeReading() {
+        try {
+            socket.eventLoop().execute(() -> socket.config().setAutoRead(true));
+        } catch (IllegalStateException | RejectedExecutionException e) {
+            input.fail(e);
         }
     }
 
