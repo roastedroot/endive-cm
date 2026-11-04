@@ -92,7 +92,7 @@ final class NettyChannels {
 
     private final Function<SocketProtocolFamily, ? extends SocketChannel> socket;
     private final Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket;
-    private final ChannelFactory<? extends DatagramChannel> datagram;
+    private final Function<SocketProtocolFamily, ? extends DatagramChannel> datagram;
     private final Binder binder;
     private final Listener listener;
     private final Map<SocketOption<?>, ChannelOption<?>> options;
@@ -101,7 +101,7 @@ final class NettyChannels {
     private NettyChannels(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
-            ChannelFactory<? extends DatagramChannel> datagram,
+            Function<SocketProtocolFamily, ? extends DatagramChannel> datagram,
             Binder binder,
             Listener listener,
             Map<SocketOption<?>, ChannelOption<?>> options,
@@ -121,12 +121,13 @@ final class NettyChannels {
      * @param socket creates the channel of a TCP connection of a family, or of the host's default
      *     family when given {@code null}
      * @param serverSocket creates the channel of a listening TCP socket of a family
-     * @param datagram creates the channel of a UDP socket
+     * @param datagram creates the channel of a UDP socket of a family, or of the host's default
+     *     family when given {@code null}
      */
     static NettyChannels of(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
-            ChannelFactory<? extends DatagramChannel> datagram) {
+            Function<SocketProtocolFamily, ? extends DatagramChannel> datagram) {
         return new NettyChannels(
                 socket, serverSocket, datagram, Nio::bind, Nio::listen, STANDARD_OPTIONS, Map.of());
     }
@@ -144,8 +145,13 @@ final class NettyChannels {
         return serverSocket.apply(family);
     }
 
+    /** Creates the channel of a UDP socket of the host's default family. */
     ChannelFactory<? extends DatagramChannel> datagram() {
-        return datagram;
+        return () -> datagram.apply(null);
+    }
+
+    DatagramChannel datagram(SocketProtocolFamily family) {
+        return datagram.apply(family);
     }
 
     /**
@@ -255,7 +261,11 @@ final class NettyChannels {
                                         ? new NioSocketChannel()
                                         : new NioSocketChannel(SelectorProvider.provider(), family),
                         family -> new NioServerSocketChannel(SelectorProvider.provider(), family),
-                        NioDatagramChannel::new,
+                        family ->
+                                family == null
+                                        ? new NioDatagramChannel()
+                                        : new NioDatagramChannel(
+                                                SelectorProvider.provider(), family),
                         Nio::bind,
                         Nio::listen,
                         withKeepAlive(
@@ -348,7 +358,10 @@ final class NettyChannels {
                                         new EpollServerSocketChannel(family),
                                         family,
                                         Unix.LINUX_V6_ONLY),
-                        EpollDatagramChannel::new,
+                        family ->
+                                family == null
+                                        ? new EpollDatagramChannel()
+                                        : new EpollDatagramChannel(family),
                         Unix::bind,
                         (channel, backlog) ->
                                 new EpollServerSocketChannel(Unix.listen(channel, backlog)),
@@ -383,7 +396,10 @@ final class NettyChannels {
                                         new IoUringServerSocketChannel(),
                                         requireFamily(family),
                                         Unix.LINUX_V6_ONLY),
-                        IoUringDatagramChannel::new,
+                        family ->
+                                family == null
+                                        ? new IoUringDatagramChannel()
+                                        : new IoUringDatagramChannel(family),
                         Unix::bind,
                         (channel, backlog) -> null,
                         withKeepAlive(
@@ -421,7 +437,10 @@ final class NettyChannels {
                                                 Unix.BSD_V6_ONLY),
                         family ->
                                 ipv6Only(new KQueueServerSocketChannel(), family, Unix.BSD_V6_ONLY),
-                        KQueueDatagramChannel::new,
+                        family ->
+                                family == null
+                                        ? new KQueueDatagramChannel()
+                                        : new KQueueDatagramChannel(family),
                         Unix::bind,
                         (channel, backlog) ->
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
