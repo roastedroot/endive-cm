@@ -374,7 +374,7 @@ final class FunctionBindings {
     }
 
     private ClassOrInterfaceType exceptionType(WitFunction function) {
-        return types.exceptionType(function.scope(), function.type().result().typeIdx());
+        return types.exceptionType(function);
     }
 
     /** A local the generated body names, kept clear of the function's own parameter names. */
