@@ -1,0 +1,10 @@
+package endive:wasi-test;
+
+world tcp {
+  include endive:wasi/imports@0.2.12;
+
+  export listen: func() -> u16;
+  export echo-one: func();
+  export request: func(port: u16, message: string) -> string;
+  export connect-error: func(port: u16) -> u8;
+}
