@@ -15,7 +15,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.SocketProtocolFamily;
 import io.netty.util.concurrent.Future;
 import java.io.IOException;
-import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
@@ -26,7 +25,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import jdk.net.ExtendedSocketOptions;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.IpAddressFamily;
 import run.endive.cm.wasi.p2.io.streams.BufferedHostInputStream;
@@ -40,8 +38,9 @@ import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
  * A TCP socket on a Netty channel of the network's transport.
  *
  * <p>The socket opens a channel for connecting when it is created, so its options can be set
- * before it is bound. Netty cannot keep a socket bound without listening on it, so listening closes
- * that channel and binds a listening one to the same address. Another process could take the
+ * before it is bound. The channel is bound at once, and registered only once it connects. Listening
+ * moves the socket to a listening channel where the transport allows it. Otherwise listening closes
+ * the channel and binds a listening one to the same address, so another process could take the
  * address in between.
  *
  * <p>A connection reads into its input stream until the stream holds {@value #STREAM_CAPACITY}
@@ -51,9 +50,6 @@ import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
  * its directions are shut down.
  */
 final class NettyTcpChannel implements TcpChannel {
-
-    /** How many times listening tries to bind the address its socket released. */
-    private static final int RELEASE_ATTEMPTS = 100;
 
     /** How many bytes each direction of a connection buffers for the guest. */
     static final int STREAM_CAPACITY = 64 * 1024;
@@ -71,7 +67,6 @@ final class NettyTcpChannel implements TcpChannel {
     private final NettyTcp tcp;
     private final IpAddressFamily family;
     private final SocketChannel socket;
-    private final CompletableFuture<Void> registered;
     private final CompletableFuture<Void> terminated;
     private final BufferedHostInputStream input;
     private final BufferedHostOutputStream output;
@@ -79,9 +74,10 @@ final class NettyTcpChannel implements TcpChannel {
     private final Queue<NettyTcpChannel> waiting = new ConcurrentLinkedQueue<>();
     private volatile CompletableFuture<Void> acceptReadiness = new CompletableFuture<>();
     private volatile Throwable acceptFailure;
+    private volatile CompletableFuture<Void> registered;
+    private volatile InetSocketAddress bound;
     private volatile ServerSocketChannel server;
     private volatile CompletableFuture<Void> serverRegistered;
-    private volatile InetSocketAddress listenAddress;
     private volatile Map<SocketOption<?>, Object> inherited;
     private volatile int backlog;
     private volatile boolean closed;
@@ -98,7 +94,6 @@ final class NettyTcpChannel implements TcpChannel {
         socket.config().setOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 0);
         socket.pipeline().addLast(new Connection());
         this.terminated = completable(socket.closeFuture());
-        this.registered = completable(tcp.group().register(socket));
         tcp.track(this);
     }
 
@@ -117,28 +112,39 @@ final class NettyTcpChannel implements TcpChannel {
         return new NettyTcpChannel(tcp, family, socket);
     }
 
-    /** Binds without listening, letting a recently closed connection's address be reused. */
+    /**
+     * Binds at once, completing before this returns. A recently closed connection's address may be
+     * reused.
+     */
     @Override
     public CompletableFuture<Void> bind(InetSocketAddress local) {
-        if (local.getPort() != 0) {
-            socket.config().setOption(ChannelOption.SO_REUSEADDR, true);
+        try {
+            if (local.getPort() != 0) {
+                socket.config().setOption(ChannelOption.SO_REUSEADDR, true);
+            }
+            bound = tcp.channels().bind(socket, local);
+            return CompletableFuture.completedFuture(null);
+        } catch (ChannelException e) {
+            return CompletableFuture.failedFuture(unwrapped(e));
+        } catch (IOException e) {
+            return CompletableFuture.failedFuture(e);
         }
-        return registered.thenCompose(ignored -> completable(socket.bind(local)));
     }
 
     /** Connects with no timeout of its own, so the host's applies. */
     @Override
     public CompletableFuture<Void> connect(InetSocketAddress remote) {
-        return registered.thenCompose(ignored -> completable(socket.connect(remote)));
+        CompletableFuture<Void> registering = completable(tcp.group().register(socket));
+        registered = registering;
+        return registering.thenCompose(ignored -> completable(socket.connect(remote)));
     }
 
     /**
-     * Moves the bound address to a listening channel, which takes over the options the accepted
-     * connections inherit.
+     * Listens on the bound socket, or on a socket bound to the same address where the transport
+     * requires one. The listening channel takes over the options the accepted connections inherit.
      */
     @Override
     public CompletableFuture<Void> listen(int backlog) {
-        InetSocketAddress address = (InetSocketAddress) socket.localAddress();
         Map<SocketOption<?>, Object> options = new ConcurrentHashMap<>();
         for (SocketOption<?> option : INHERITED) {
             Object value = read(socket, option);
@@ -148,23 +154,34 @@ final class NettyTcpChannel implements TcpChannel {
         }
         ServerSocketChannel listener;
         try {
-            listener = tcp.channels().serverSocket(protocolFamily(family));
+            listener = tcp.channels().listen(socket, backlog);
         } catch (ChannelException e) {
             return CompletableFuture.failedFuture(unwrapped(e));
+        } catch (IOException e) {
+            return CompletableFuture.failedFuture(e);
         }
-        listener.config().setOption(ChannelOption.SO_REUSEADDR, true);
-        listener.config().setOption(ChannelOption.SO_BACKLOG, backlog);
+        boolean moved = listener != null;
+        if (!moved) {
+            socket.unsafe().closeForcibly();
+            try {
+                listener = tcp.channels().serverSocket(protocolFamily(family));
+            } catch (ChannelException e) {
+                return CompletableFuture.failedFuture(unwrapped(e));
+            }
+            listener.config().setOption(ChannelOption.SO_REUSEADDR, true);
+            listener.config().setOption(ChannelOption.SO_BACKLOG, backlog);
+        }
         listener.pipeline().addLast(new Acceptor());
         this.backlog = backlog;
         this.inherited = options;
-        this.listenAddress = address;
-        this.server = listener;
-        CompletableFuture<Void> registering =
-                completable(socket.close())
-                        .thenCompose(ignored -> completable(tcp.group().register(listener)));
+        CompletableFuture<Void> registering = completable(tcp.group().register(listener));
         this.serverRegistered = registering;
-        return registering.thenCompose(
-                ignored -> bindReleased(listener, address, RELEASE_ATTEMPTS));
+        this.server = listener;
+        if (moved) {
+            return registering;
+        }
+        ServerSocketChannel unbound = listener;
+        return registering.thenCompose(ignored -> completable(unbound.bind(bound)));
     }
 
     @Override
@@ -194,11 +211,13 @@ final class NettyTcpChannel implements TcpChannel {
     @Override
     public InetSocketAddress localAddress() {
         ServerSocketChannel listener = server;
-        InetSocketAddress address =
-                listener == null
-                        ? (InetSocketAddress) socket.localAddress()
-                        : (InetSocketAddress) listener.localAddress();
-        return inFamily(address == null && listener != null ? listenAddress : address);
+        InetSocketAddress address = null;
+        if (listener != null) {
+            address = (InetSocketAddress) listener.localAddress();
+        } else if (registered != null) {
+            address = (InetSocketAddress) socket.localAddress();
+        }
+        return inFamily(address == null ? bound : address);
     }
 
     @Override
@@ -311,8 +330,14 @@ final class NettyTcpChannel implements TcpChannel {
                     connection = waiting.poll()) {
                 connection.close(graceful);
             }
+            return;
         }
-        registered.whenComplete(
+        CompletableFuture<Void> registration = registered;
+        if (registration == null) {
+            socket.unsafe().closeForcibly();
+            return;
+        }
+        registration.whenComplete(
                 (ignored, failure) -> {
                     if (failure != null) {
                         socket.unsafe().closeForcibly();
@@ -332,40 +357,6 @@ final class NettyTcpChannel implements TcpChannel {
     /** Closes the socket at once, discarding what the guest wrote and has not been delivered. */
     void abort() {
         close(false);
-    }
-
-    /**
-     * Binds {@code listener} to the address the socket's own channel held. A NIO selector releases
-     * a closed channel's address only when it next selects, so a bind failing meanwhile is retried
-     * a millisecond later.
-     */
-    private CompletableFuture<Void> bindReleased(
-            ServerSocketChannel listener, InetSocketAddress address, int attempts) {
-        CompletableFuture<Void> bound = new CompletableFuture<>();
-        listener.bind(address)
-                .addListener(
-                        done -> {
-                            if (done.isSuccess()) {
-                                bound.complete(null);
-                            } else if (done.cause() instanceof BindException
-                                    && attempts > 1
-                                    && !closed) {
-                                listener.eventLoop()
-                                        .schedule(
-                                                () ->
-                                                        completeWith(
-                                                                bindReleased(
-                                                                        listener,
-                                                                        address,
-                                                                        attempts - 1),
-                                                                bound),
-                                                1,
-                                                TimeUnit.MILLISECONDS);
-                            } else {
-                                bound.completeExceptionally(done.cause());
-                            }
-                        });
-        return bound;
     }
 
     /**
@@ -453,19 +444,6 @@ final class NettyTcpChannel implements TcpChannel {
                 });
     }
 
-    /** Completes {@code target} as {@code source} completes. */
-    private static void completeWith(
-            CompletableFuture<Void> source, CompletableFuture<Void> target) {
-        source.whenComplete(
-                (ignored, failure) -> {
-                    if (failure == null) {
-                        target.complete(null);
-                    } else {
-                        target.completeExceptionally(failure);
-                    }
-                });
-    }
-
     private static SocketProtocolFamily protocolFamily(IpAddressFamily family) {
         return family == IpAddressFamily.IPV4
                 ? SocketProtocolFamily.INET
@@ -543,7 +521,9 @@ final class NettyTcpChannel implements TcpChannel {
             SocketChannel child = (SocketChannel) msg;
             NettyTcpChannel connection = new NettyTcpChannel(tcp, family, child);
             inherited.forEach((option, value) -> inherit(child, option, value));
-            connection.registered.whenComplete(
+            CompletableFuture<Void> registering = completable(tcp.group().register(child));
+            connection.registered = registering;
+            registering.whenComplete(
                     (ignored, failure) -> {
                         if (failure != null) {
                             connection.abort();

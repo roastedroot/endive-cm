@@ -1,5 +1,6 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFactory;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.IoEventLoopGroup;
@@ -12,6 +13,7 @@ import io.netty.channel.kqueue.KQueueDatagramChannel;
 import io.netty.channel.kqueue.KQueueIoHandler;
 import io.netty.channel.kqueue.KQueueServerSocketChannel;
 import io.netty.channel.kqueue.KQueueSocketChannel;
+import io.netty.channel.nio.AbstractNioChannel;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.ServerSocketChannel;
@@ -21,11 +23,15 @@ import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.unix.Socket;
+import io.netty.channel.unix.UnixChannel;
 import io.netty.channel.uring.IoUringChannelOption;
 import io.netty.channel.uring.IoUringDatagramChannel;
 import io.netty.channel.uring.IoUringIoHandler;
 import io.netty.channel.uring.IoUringServerSocketChannel;
 import io.netty.channel.uring.IoUringSocketChannel;
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.channels.spi.SelectorProvider;
@@ -40,10 +46,34 @@ import jdk.net.ExtendedSocketOptions;
  * for the socket options a guest sets. They have to suit the event loop group that runs the
  * network.
  *
+ * <p>A TCP socket's channel is bound before it is registered, since only then does the guest choose
+ * whether it connects or listens. Epoll and kqueue listen on that same socket. NIO and io_uring
+ * open a listening channel of their own, since Java and Netty offer them no way to listen on a
+ * socket they opened for connecting.
+ *
  * <p>A transport that cannot open a channel of the family asked for opens one taking both IPv4 and
  * IPv6.
  */
 final class NettyChannels {
+
+    /** Binds a TCP socket's channel before it is registered. */
+    @FunctionalInterface
+    interface Binder {
+
+        /** Binds {@code channel} to {@code local}, returning the address it is bound to. */
+        InetSocketAddress bind(SocketChannel channel, InetSocketAddress local) throws IOException;
+    }
+
+    /** Listens on a bound TCP socket's channel, which is not registered. */
+    @FunctionalInterface
+    interface Listener {
+
+        /**
+         * A listening channel on the same socket as {@code channel}, which then belongs to it, or
+         * {@code null} when the transport needs a socket of its own for listening.
+         */
+        ServerSocketChannel listen(SocketChannel channel, int backlog) throws IOException;
+    }
 
     /** The socket options every transport supports. */
     private static final Map<SocketOption<?>, ChannelOption<?>> STANDARD_OPTIONS =
@@ -55,21 +85,27 @@ final class NettyChannels {
     private final Function<SocketProtocolFamily, ? extends SocketChannel> socket;
     private final Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket;
     private final ChannelFactory<? extends DatagramChannel> datagram;
+    private final Binder binder;
+    private final Listener listener;
     private final Map<SocketOption<?>, ChannelOption<?>> options;
 
     private NettyChannels(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
             ChannelFactory<? extends DatagramChannel> datagram,
+            Binder binder,
+            Listener listener,
             Map<SocketOption<?>, ChannelOption<?>> options) {
         this.socket = Objects.requireNonNull(socket, "socket");
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         this.datagram = Objects.requireNonNull(datagram, "datagram");
+        this.binder = binder;
+        this.listener = listener;
         this.options = options;
     }
 
     /**
-     * Channels supporting only the socket options every transport supports.
+     * NIO channels supporting only the socket options every transport supports.
      *
      * @param socket creates the channel of a TCP connection of a family, or of the host's default
      *     family when given {@code null}
@@ -80,7 +116,8 @@ final class NettyChannels {
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
             ChannelFactory<? extends DatagramChannel> datagram) {
-        return new NettyChannels(socket, serverSocket, datagram, STANDARD_OPTIONS);
+        return new NettyChannels(
+                socket, serverSocket, datagram, Nio::bind, Nio::listen, STANDARD_OPTIONS);
     }
 
     /** Creates the channel of a TCP connection of the host's default family. */
@@ -98,6 +135,25 @@ final class NettyChannels {
 
     ChannelFactory<? extends DatagramChannel> datagram() {
         return datagram;
+    }
+
+    /**
+     * Binds {@code channel}, which is not registered, to {@code local}.
+     *
+     * @return the address the channel is bound to
+     */
+    InetSocketAddress bind(SocketChannel channel, InetSocketAddress local) throws IOException {
+        return binder.bind(channel, local);
+    }
+
+    /**
+     * Listens on the socket of {@code channel}, which is bound and not registered.
+     *
+     * @return a listening channel that now owns the socket, or {@code null} when the transport
+     *     cannot listen on it
+     */
+    ServerSocketChannel listen(SocketChannel channel, int backlog) throws IOException {
+        return listener.listen(channel, backlog);
     }
 
     /** The Netty option standing for {@code option}, or {@code null} when the transport has none. */
@@ -164,12 +220,52 @@ final class NettyChannels {
                                         : new NioSocketChannel(SelectorProvider.provider(), family),
                         family -> new NioServerSocketChannel(SelectorProvider.provider(), family),
                         NioDatagramChannel::new,
+                        Nio::bind,
+                        Nio::listen,
                         withKeepAlive(
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT)));
 
         private Nio() {}
+
+        static InetSocketAddress bind(SocketChannel channel, InetSocketAddress local)
+                throws IOException {
+            java.nio.channels.SocketChannel socket =
+                    (java.nio.channels.SocketChannel)
+                            ((AbstractNioChannel.NioUnsafe) channel.unsafe()).ch();
+            socket.bind(local);
+            return (InetSocketAddress) socket.getLocalAddress();
+        }
+
+        /** Java listens only on a socket opened for listening. */
+        static ServerSocketChannel listen(SocketChannel channel, int backlog) {
+            return null;
+        }
+    }
+
+    /** The socket under the channel of a native transport. */
+    private static final class Unix {
+
+        private Unix() {}
+
+        static InetSocketAddress bind(SocketChannel channel, InetSocketAddress local)
+                throws IOException {
+            Socket socket = socketOf(channel);
+            socket.bind(local);
+            return socket.localAddress();
+        }
+
+        /** Listens on the socket, returning its descriptor. */
+        static int listen(SocketChannel channel, int backlog) throws IOException {
+            Socket socket = socketOf(channel);
+            socket.listen(backlog);
+            return socket.intValue();
+        }
+
+        private static Socket socketOf(Channel channel) {
+            return (Socket) ((UnixChannel) channel).fd();
+        }
     }
 
     private static final class Epoll {
@@ -182,6 +278,9 @@ final class NettyChannels {
                                         : new EpollSocketChannel(family),
                         EpollServerSocketChannel::new,
                         EpollDatagramChannel::new,
+                        Unix::bind,
+                        (channel, backlog) ->
+                                new EpollServerSocketChannel(Unix.listen(channel, backlog)),
                         withKeepAlive(
                                 EpollChannelOption.TCP_KEEPIDLE,
                                 EpollChannelOption.TCP_KEEPINTVL,
@@ -194,6 +293,7 @@ final class NettyChannels {
         }
     }
 
+    /** Netty's io_uring channels take over no socket opened elsewhere. */
     private static final class IoUring {
 
         static final NettyChannels CHANNELS =
@@ -201,6 +301,8 @@ final class NettyChannels {
                         family -> new IoUringSocketChannel(),
                         family -> new IoUringServerSocketChannel(),
                         IoUringDatagramChannel::new,
+                        Unix::bind,
+                        (channel, backlog) -> null,
                         withKeepAlive(
                                 IoUringChannelOption.TCP_KEEPIDLE,
                                 IoUringChannelOption.TCP_KEEPINTVL,
@@ -224,6 +326,9 @@ final class NettyChannels {
                                         : new KQueueSocketChannel(family),
                         family -> new KQueueServerSocketChannel(),
                         KQueueDatagramChannel::new,
+                        Unix::bind,
+                        (channel, backlog) ->
+                                new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
                         STANDARD_OPTIONS);
 
         private KQueue() {}
