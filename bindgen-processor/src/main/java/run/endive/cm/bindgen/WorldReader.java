@@ -289,7 +289,7 @@ final class WorldReader {
     private static void requireOwnTypes(WitInterface exported) {
         WitScope scope = exported.scope();
         for (int i = 0; i < scope.size(); i++) {
-            if (scope.isUsed(i)) {
+            if (scope.declaringScope(i) != scope) {
                 throw new BindgenException(
                         "exported interface \""
                                 + exported.name()
@@ -373,7 +373,8 @@ final class WorldReader {
      *
      * <p>A {@code sub} bound is a resource, which has no structure to read. An {@code eq} bound
      * names a type the interface defined, and that is where a record or an enum gets its name. An
-     * {@code eq} bound naming an alias is a {@code use}, and the type stays declared elsewhere.
+     * {@code eq} bound naming an alias is a {@code use}, and the type stays declared elsewhere. An
+     * {@code eq} bound naming a resource of the same interface is an alias of that resource.
      */
     private static void declareType(
             String iface,
@@ -395,8 +396,12 @@ final class WorldReader {
             return;
         }
         Type named = scope.at(boundIndex);
+        if (named == null) {
+            scope.alias(scope, boundIndex, exportName);
+            return;
+        }
         scope.add(named, exportName);
-        if (named != null && named.defValType() != null) {
+        if (named.defValType() != null) {
             types.add(new WitType(exportName, named.defValType()));
         }
     }

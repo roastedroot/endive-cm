@@ -1,0 +1,25 @@
+package example:resource-aliases;
+
+interface types {
+    resource fields {
+        constructor();
+        add: func(value: u32);
+        total: func() -> u32;
+    }
+
+    type headers = fields;
+
+    resource request {
+        constructor(headers: headers);
+        headers: func() -> headers;
+    }
+
+    /// The total of the headers given.
+    count: func(h: borrow<headers>) -> u32;
+}
+
+world resource-aliases {
+    import types;
+
+    export run: func() -> u32;
+}

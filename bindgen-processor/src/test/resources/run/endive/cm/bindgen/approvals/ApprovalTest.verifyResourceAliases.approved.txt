@@ -1,0 +1,242 @@
+// endive.testing.ResourceAliasesWorld
+
+package endive.testing;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.ResourceValue;
+import run.endive.cm.runtime.ComponentFunction;
+import run.endive.cm.runtime.ComponentInstance;
+import run.endive.cm.runtime.ComponentLinker;
+import run.endive.cm.runtime.ComponentStore;
+import run.endive.cm.runtime.HostInstance;
+import run.endive.cm.runtime.HostResource;
+import run.endive.cm.runtime.PrimitiveHostTypeDescriptor;
+import run.endive.cm.types.FuncType;
+import run.endive.cm.types.LabelValType;
+import run.endive.cm.types.PrimValType;
+import run.endive.cm.types.ValType;
+import run.endive.cm.types.WasmComponent;
+
+/**
+ * Bindings for the WIT world {@code example:resource-aliases/resource-aliases}.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class ResourceAliasesWorld {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:resource-aliases/types}.
+         */
+        endive.testing.example.resourcealiases.types.Host types();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction run;
+
+    private ResourceAliasesWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.run = instance.export("run").typed(PrimitiveHostTypeDescriptor.forClass(Long.class));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static ResourceAliasesWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        endive.testing.example.resourcealiases.types.Host types = imports.types();
+        HostInstance.Builder typesBuilder = HostInstance.builder(store);
+        endive.testing.example.resourcealiases.types.Handles typesHandles = new endive.testing.example.resourcealiases.types.Handles(typesBuilder);
+        HostResource typesFields = typesHandles.fieldsResourceType();
+        typesBuilder.addResource("fields", typesFields);
+        HostResource typesRequest = typesHandles.requestResourceType();
+        typesBuilder.addResource("request", typesRequest);
+        typesBuilder.addResource("headers", typesFields);
+        typesBuilder.addFunction("[constructor]fields", FuncType.builder().withResult(typesFields.own()).build(), args -> new Object[] { typesHandles.ownFields(types.fields()) });
+        typesBuilder.addFunction("[method]fields.add", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(typesFields.borrow()).build()).addParam(LabelValType.builder().withLabel("value").withValType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()).build(), args -> {
+            typesHandles.getFields((ResourceValue) args[0]).add((Long) args[1]);
+            return new Object[0];
+        });
+        typesBuilder.addFunction("[method]fields.total", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(typesFields.borrow()).build()).withResult(ValType.builder().withPrimValType(PrimValType.U32).build()).build(), args -> new Object[] { typesHandles.getFields((ResourceValue) args[0]).total() });
+        typesBuilder.addFunction("[constructor]request", FuncType.builder().addParam(LabelValType.builder().withLabel("headers").withValType(typesFields.own()).build()).withResult(typesRequest.own()).build(), args -> new Object[] { typesHandles.ownRequest(types.request(typesHandles.takeFields((ResourceValue) args[0]))) });
+        typesBuilder.addFunction("[method]request.headers", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(typesRequest.borrow()).build()).withResult(typesFields.own()).build(), args -> new Object[] { typesHandles.ownFields(typesHandles.getRequest((ResourceValue) args[0]).headers()) });
+        typesBuilder.addFunction("count", FuncType.builder().addParam(LabelValType.builder().withLabel("h").withValType(typesFields.borrow()).build()).withResult(ValType.builder().withPrimValType(PrimValType.U32).build()).build(), args -> new Object[] { types.count(typesHandles.getFields((ResourceValue) args[0])) });
+        values.put("example:resource-aliases/types", typesBuilder.build());
+        return new ResourceAliasesWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public Long run() {
+        return (Long) this.run.apply()[0];
+    }
+}
+
+// endive.testing.example.resourcealiases.types.Fields
+
+package endive.testing.example.resourcealiases.types;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code fields}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public interface Fields {
+
+    void add(Long value);
+
+    Long total();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}
+
+// endive.testing.example.resourcealiases.types.Handles
+
+package endive.testing.example.resourcealiases.types;
+
+import javax.annotation.processing.Generated;
+import run.endive.cm.abi.ResourceValue;
+import run.endive.cm.runtime.HostInstance;
+import run.endive.cm.runtime.HostResource;
+import run.endive.cm.runtime.HostResourceTable;
+
+/**
+ * The resources {@code example:resource-aliases/types} declares, and the objects the handles to them stand for.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public final class Handles {
+
+    private final HostResource fields;
+
+    private final HostResourceTable<Fields> fieldsTable = new HostResourceTable<>();
+
+    private final HostResource request;
+
+    private final HostResourceTable<Request> requestTable = new HostResourceTable<>();
+
+    /**
+     * Declares each resource into {@code builder}.
+     */
+    public Handles(HostInstance.Builder builder) {
+        this.fields = builder.declareResource(rep -> fieldsTable.drop(rep, Fields::drop));
+        this.request = builder.declareResource(rep -> requestTable.drop(rep, Request::drop));
+    }
+
+    /**
+     * The resource type {@code fields}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource fieldsResourceType() {
+        return fields;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code fields}.
+     */
+    public ResourceValue ownFields(Fields value) {
+        return ResourceValue.owned(fields.type(), fieldsTable.add(value));
+    }
+
+    /**
+     * The {@code fields} a handle stands for.
+     */
+    public Fields getFields(ResourceValue handle) {
+        return fieldsTable.get(handle);
+    }
+
+    /**
+     * The {@code fields} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public Fields takeFields(ResourceValue handle) {
+        return fieldsTable.take(handle);
+    }
+
+    /**
+     * The resource type {@code request}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource requestResourceType() {
+        return request;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code request}.
+     */
+    public ResourceValue ownRequest(Request value) {
+        return ResourceValue.owned(request.type(), requestTable.add(value));
+    }
+
+    /**
+     * The {@code request} a handle stands for.
+     */
+    public Request getRequest(ResourceValue handle) {
+        return requestTable.get(handle);
+    }
+
+    /**
+     * The {@code request} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public Request takeRequest(ResourceValue handle) {
+        return requestTable.take(handle);
+    }
+}
+
+// endive.testing.example.resourcealiases.types.Host
+
+package endive.testing.example.resourcealiases.types;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:resource-aliases/types}, which the embedder implements.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public interface Host {
+
+    Long count(Fields h);
+
+    /**
+     * Makes a {@code fields}.
+     */
+    Fields fields();
+
+    /**
+     * Makes a {@code request}.
+     */
+    Request request(Fields headers);
+}
+
+// endive.testing.example.resourcealiases.types.Request
+
+package endive.testing.example.resourcealiases.types;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code request}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("run.endive.cm.bindgen.BindgenProcessor")
+public interface Request {
+
+    Fields headers();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}

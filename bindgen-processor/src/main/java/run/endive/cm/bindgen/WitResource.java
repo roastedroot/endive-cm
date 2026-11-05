@@ -74,8 +74,13 @@ final class WitResource {
         if (!type.hasResult() || type.result().primValType() != null) {
             return false;
         }
-        Type declared = function.scope().at(type.result().typeIdx());
+        WitScope scope = function.scope();
+        Type declared = scope.at(type.result().typeIdx());
         DefValType defined = declared == null ? null : declared.defValType();
-        return defined instanceof OwnType && ((OwnType) defined).typeIdx() == typeIndex;
+        if (!(defined instanceof OwnType)) {
+            return false;
+        }
+        int owned = ((OwnType) defined).typeIdx();
+        return scope.declaringScope(owned) == scope && scope.declaringIndex(owned) == typeIndex;
     }
 }

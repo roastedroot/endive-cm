@@ -103,7 +103,10 @@ final class WitScope {
         return -1;
     }
 
-    /** Whether the type at {@code index} was declared by another space and used here. */
+    /**
+     * Whether the type at {@code index} stands for one declared elsewhere, either by another space
+     * or at another index of this one.
+     */
     boolean isUsed(int index) {
         at(index);
         return origins.containsKey(index);
