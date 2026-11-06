@@ -19,9 +19,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigInteger;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -56,6 +58,8 @@ class NativeTransportTest {
         resolvesLocalhostOn(EpollIoHandler.newFactory());
         exchangesBytesOn(EpollIoHandler.newFactory());
         reportsAnAddressInUseOn(EpollIoHandler.newFactory());
+        refusesIpv4OnIpv6On(EpollIoHandler.newFactory());
+        keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
 
     @Test
@@ -65,6 +69,7 @@ class NativeTransportTest {
         resolvesLocalhostOn(IoUringIoHandler.newFactory());
         exchangesBytesOn(IoUringIoHandler.newFactory());
         reportsAnAddressInUseOn(IoUringIoHandler.newFactory());
+        refusesIpv4OnIpv6On(IoUringIoHandler.newFactory());
     }
 
     @Test
@@ -74,6 +79,8 @@ class NativeTransportTest {
         resolvesLocalhostOn(KQueueIoHandler.newFactory());
         exchangesBytesOn(KQueueIoHandler.newFactory());
         reportsAnAddressInUseOn(KQueueIoHandler.newFactory());
+        refusesIpv4OnIpv6On(KQueueIoHandler.newFactory());
+        keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
 
     /** Netty's resolver answers localhost from the hosts file, on the transport's channels. */
@@ -151,6 +158,64 @@ class NativeTransportTest {
             assertEquals(ErrorCode.ADDRESS_IN_USE, e.error());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** An IPv6 listener on the wildcard address takes no IPv4 connection. */
+    private static void refusesIpv4OnIpv6On(IoHandlerFactory transport) {
+        if (!NettyTcpTest.hasIpv6Loopback()) {
+            return;
+        }
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            TcpSocket listener = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV6);
+            listener.startBind(
+                    wasi.instanceNetwork().instanceNetwork(),
+                    IpAddresses.fromInet(new InetSocketAddress("::", 0)));
+            finish(wasi, listener, listener::finishBind);
+            listener.startListen();
+            finish(wasi, listener, listener::finishListen);
+            int port = IpAddresses.toInet(listener.localAddress()).getPort();
+
+            assertThrows(ConnectException.class, () -> new Socket("127.0.0.1", port).close());
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * An IPv6 socket leaves IPv4 the same port. Not on io_uring, whose IPv4 sockets are IPv6 ones
+     * that Linux binds as taking IPv4 traffic.
+     */
+    private static void keepsIpv6ApartFromIpv4On(IoHandlerFactory transport) {
+        if (!NettyTcpTest.hasIpv6Loopback()) {
+            return;
+        }
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            Network network = wasi.instanceNetwork().instanceNetwork();
+            TcpSocket ipv6 = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV6);
+            ipv6.startBind(network, IpAddresses.fromInet(new InetSocketAddress("::", 0)));
+            finish(wasi, ipv6, ipv6::finishBind);
+            ipv6.startListen();
+            finish(wasi, ipv6, ipv6::finishListen);
+            int port = IpAddresses.toInet(ipv6.localAddress()).getPort();
+
+            TcpSocket ipv4 = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            ipv4.startBind(network, IpAddresses.fromInet(new InetSocketAddress("0.0.0.0", port)));
+            finish(wasi, ipv4, ipv4::finishBind);
+            ipv4.startListen();
+            finish(wasi, ipv4, ipv4::finishListen);
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }

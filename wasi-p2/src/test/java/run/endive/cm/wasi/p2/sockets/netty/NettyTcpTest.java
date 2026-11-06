@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -17,6 +18,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -329,6 +331,7 @@ class NettyTcpTest {
 
     @Test
     void anIpv6SocketConnectsOverIpv6Loopback() {
+        assumeTrue(hasIpv6Loopback(), "IPv6 loopback is not available here");
         TcpSocket listener = network.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV6);
         listener.startBind(NETWORK, address(new InetSocketAddress("::1", 0)));
         finish(listener, listener::finishBind);
@@ -342,6 +345,38 @@ class NettyTcpTest {
 
         assertInstanceOf(IpSocketAddress.Ipv6.class, accepted.remoteAddress());
         assertEquals(client.localAddress(), accepted.remoteAddress());
+    }
+
+    /** WASI's IPv6 sockets take no IPv4 traffic, which a NIO listener would otherwise accept. */
+    @Test
+    void anIpv6ListenerTurnsAwayIpv4Peers() throws IOException {
+        assumeTrue(hasIpv6Loopback(), "IPv6 loopback is not available here");
+        TcpSocket listener = network.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV6);
+        listener.startBind(NETWORK, address(new InetSocketAddress("::", 0)));
+        finish(listener, listener::finishBind);
+        listener.startListen();
+        finish(listener, listener::finishListen);
+        int port = IpAddresses.toInet(listener.localAddress()).getPort();
+
+        try (Socket ipv4 = new Socket("127.0.0.1", port)) {
+            assertEndedByPeer(ipv4);
+        }
+        try (Socket ipv6 = new Socket("::1", port)) {
+            TcpSocket accepted = finish(listener, listener::accept).f0();
+
+            assertEquals(
+                    new InetSocketAddress("::1", ipv6.getLocalPort()),
+                    IpAddresses.toInet(accepted.remoteAddress()));
+        }
+    }
+
+    /** Whether the host has IPv6 loopback, which some CI machines lack. */
+    static boolean hasIpv6Loopback() {
+        try (ServerSocket probe = new ServerSocket(0, 1, InetAddress.getByName("::1"))) {
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private Connection connect() {
@@ -439,6 +474,15 @@ class NettyTcpTest {
             out.write(
                     Arrays.copyOf(
                             chunk, (int) Math.min(out.checkWrite().longValue(), chunk.length)));
+        }
+    }
+
+    /** The peer closed the connection, gracefully or by resetting it. */
+    private static void assertEndedByPeer(Socket socket) {
+        try {
+            assertEquals(-1, socket.getInputStream().read());
+        } catch (IOException e) {
+            assertInstanceOf(SocketException.class, e);
         }
     }
 

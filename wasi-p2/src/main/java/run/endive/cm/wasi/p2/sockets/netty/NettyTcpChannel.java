@@ -15,6 +15,8 @@ import io.netty.channel.socket.SocketProtocolFamily;
 import io.netty.util.NetUtil;
 import io.netty.util.concurrent.Future;
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
@@ -545,6 +547,10 @@ final class NettyTcpChannel implements TcpChannel {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
             SocketChannel child = (SocketChannel) msg;
+            if (isIpv4OnIpv6(child)) {
+                child.unsafe().closeForcibly();
+                return;
+            }
             NettyTcpChannel connection = new NettyTcpChannel(tcp, family, child);
             child.config().setAutoRead(false);
             inherited.forEach((option, value) -> inherit(child, option, value));
@@ -571,6 +577,20 @@ final class NettyTcpChannel implements TcpChannel {
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             acceptFailure = cause;
             acceptReadiness.complete(null);
+        }
+
+        /**
+         * Whether an IPv6 listener accepted an IPv4 peer, which only NIO allows.
+         *
+         * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp-create-socket.wit">wasi:sockets/tcp-create-socket, create-tcp-socket</a>
+         */
+        private boolean isIpv4OnIpv6(SocketChannel child) {
+            InetSocketAddress peer = child.remoteAddress();
+            if (family != IpAddressFamily.IPV6 || peer == null) {
+                return false;
+            }
+            InetAddress ip = peer.getAddress();
+            return ip instanceof Inet4Address || IpAddresses.isIpv4Mapped(ip);
         }
 
         /** A value the host refuses for the connection leaves it the host's default. */
