@@ -53,7 +53,7 @@ public final class NettyNetwork implements HostSockets {
                                 : nameResolver);
         this.tcp = new NettyTcp(poll, group, channels);
         this.tcpCreateSocket = new HostTcpCreateSocket(poll, policy, tcp);
-        this.udpCreateSocket = new HostUdpCreateSocket();
+        this.udpCreateSocket = new HostUdpCreateSocket(policy);
     }
 
     /**
