@@ -24,6 +24,8 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.Ipv6SocketAddress;
  */
 public final class IpAddresses {
 
+    private static final InetAddress IPV4_ANY = ipv4Any();
+
     private IpAddresses() {}
 
     public static InetSocketAddress toInet(IpSocketAddress address) {
@@ -103,12 +105,18 @@ public final class IpAddresses {
     /**
      * {@code address} as an address of {@code family}, for a socket whose channel takes both
      * families. An IPv4-mapped address is unmapped for IPv4, and an IPv4 address is mapped for
-     * IPv6.
+     * IPv6. IPv6's wildcard address is IPv4's for IPv4, since Netty binds a channel taking both
+     * families there when given IPv4's.
      */
     public static InetSocketAddress inFamily(InetSocketAddress address, IpAddressFamily family) {
         InetAddress ip = address.getAddress();
         if (family == IpAddressFamily.IPV4 && isIpv4Mapped(ip)) {
             return new InetSocketAddress(unmapped(ip), address.getPort());
+        }
+        if (family == IpAddressFamily.IPV4
+                && ip instanceof Inet6Address
+                && ip.isAnyLocalAddress()) {
+            return new InetSocketAddress(IPV4_ANY, address.getPort());
         }
         if (family == IpAddressFamily.IPV6 && ip instanceof Inet4Address) {
             byte[] bytes = new byte[16];
@@ -123,6 +131,14 @@ public final class IpAddresses {
             }
         }
         return address;
+    }
+
+    private static InetAddress ipv4Any() {
+        try {
+            return InetAddress.getByAddress(new byte[4]);
+        } catch (UnknownHostException e) {
+            throw new IllegalStateException("4 bytes are always an IPv4 address", e);
+        }
     }
 
     private static InetAddress ipv4Address(Tuple4<Short, Short, Short, Short> address) {

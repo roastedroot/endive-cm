@@ -548,7 +548,7 @@ final class NettyTcpChannel implements TcpChannel {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
             SocketChannel child = (SocketChannel) msg;
-            if (isIpv4OnIpv6(child)) {
+            if (isOfTheOtherFamily(child)) {
                 child.unsafe().closeForcibly();
                 return;
             }
@@ -581,17 +581,20 @@ final class NettyTcpChannel implements TcpChannel {
         }
 
         /**
-         * Whether an IPv6 listener accepted an IPv4 peer, which only NIO allows.
+         * Whether the listener accepted a peer of the other family. An IPv6 listener on NIO takes
+         * IPv4 peers, and an IPv4 listener on io_uring bound to the wildcard address takes IPv6
+         * peers.
          *
          * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp-create-socket.wit">wasi:sockets/tcp-create-socket, create-tcp-socket</a>
          */
-        private boolean isIpv4OnIpv6(SocketChannel child) {
+        private boolean isOfTheOtherFamily(SocketChannel child) {
             InetSocketAddress peer = child.remoteAddress();
-            if (family != IpAddressFamily.IPV6 || peer == null) {
+            if (peer == null) {
                 return false;
             }
             InetAddress ip = peer.getAddress();
-            return ip instanceof Inet4Address || IpAddresses.isIpv4Mapped(ip);
+            boolean ipv4 = ip instanceof Inet4Address || IpAddresses.isIpv4Mapped(ip);
+            return ipv4 != (family == IpAddressFamily.IPV4);
         }
 
         /** A value the host refuses for the connection leaves it the host's default. */

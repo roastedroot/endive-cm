@@ -2,6 +2,7 @@ package run.endive.cm.wasi.p2.sockets.netty;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,6 +26,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -60,6 +62,7 @@ class NativeTransportTest {
         exchangesBytesOn(EpollIoHandler.newFactory());
         reportsAnAddressInUseOn(EpollIoHandler.newFactory());
         refusesIpv4OnIpv6On(EpollIoHandler.newFactory());
+        keepsIpv4ApartFromIpv6On(EpollIoHandler.newFactory());
         setsTheHopLimitOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
@@ -72,6 +75,7 @@ class NativeTransportTest {
         exchangesBytesOn(IoUringIoHandler.newFactory());
         reportsAnAddressInUseOn(IoUringIoHandler.newFactory());
         refusesIpv4OnIpv6On(IoUringIoHandler.newFactory());
+        keepsIpv4ApartFromIpv6On(IoUringIoHandler.newFactory());
         setsTheHopLimitOn(IoUringIoHandler.newFactory());
     }
 
@@ -83,6 +87,7 @@ class NativeTransportTest {
         exchangesBytesOn(KQueueIoHandler.newFactory());
         reportsAnAddressInUseOn(KQueueIoHandler.newFactory());
         refusesIpv4OnIpv6On(KQueueIoHandler.newFactory());
+        keepsIpv4ApartFromIpv6On(KQueueIoHandler.newFactory());
         setsTheHopLimitOn(KQueueIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
@@ -160,6 +165,43 @@ class NativeTransportTest {
                             () -> finish(wasi, socket, socket::finishBind));
 
             assertEquals(ErrorCode.ADDRESS_IN_USE, e.error());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** An IPv4 socket on the wildcard address stays IPv4, and its guest sees no IPv6 peer. */
+    private static void keepsIpv4ApartFromIpv6On(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            TcpSocket listener = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            IpSocketAddress wildcard = IpAddresses.fromInet(new InetSocketAddress("0.0.0.0", 0));
+            listener.startBind(wasi.instanceNetwork().instanceNetwork(), wildcard);
+            finish(wasi, listener, listener::finishBind);
+            listener.startListen();
+            finish(wasi, listener, listener::finishListen);
+            InetSocketAddress bound = IpAddresses.toInet(listener.localAddress());
+            assertEquals(new InetSocketAddress("0.0.0.0", bound.getPort()), bound);
+
+            if (NettyTcpTest.hasIpv6Loopback()) {
+                try (Socket ipv6 = new Socket("::1", bound.getPort())) {
+                    assertEquals(-1, ipv6.getInputStream().read());
+                } catch (IOException e) {
+                    assertInstanceOf(SocketException.class, e);
+                }
+            }
+            try (Socket ipv4 = new Socket("127.0.0.1", bound.getPort())) {
+                TcpSocket accepted = finish(wasi, listener, listener::accept).f0();
+                assertEquals(
+                        new InetSocketAddress("127.0.0.1", ipv4.getLocalPort()),
+                        IpAddresses.toInet(accepted.remoteAddress()));
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } finally {
