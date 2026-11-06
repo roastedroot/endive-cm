@@ -127,6 +127,18 @@ class NettyTcpTest {
         assertClosed(connection.serverIn);
     }
 
+    /** Shutting down does not close the socket, which stays connected while the peer is open. */
+    @Test
+    void shuttingDownBothDirectionsKeepsTheSocketConnected() {
+        Connection connection = connect();
+
+        connection.client.shutdown(ShutdownType.BOTH);
+        assertClosed(connection.serverIn);
+
+        connection.client.shutdown(ShutdownType.BOTH);
+        assertEquals(connection.server.localAddress(), connection.client.remoteAddress());
+    }
+
     /** A peer that stops reading cannot keep a dropped socket open. */
     @Test
     void droppingASocketClosesItAtOnceWhenThePeerStopsReading() throws Exception {

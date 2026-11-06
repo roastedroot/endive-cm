@@ -377,8 +377,9 @@ public class HostTcpSocket implements TcpSocket {
     }
 
     /**
-     * Closes the connection's streams in the directions given. The socket closes once both
-     * directions are shut down and the peer has finished sending.
+     * Closes the connection's streams in the directions given. The socket closes once it has shut
+     * down sending and the peer has finished sending. After shutting down receiving, the socket
+     * cannot tell when the peer finishes, so it stays connected until the guest drops it.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp.wit">wasi:sockets/tcp, shutdown</a>
      */

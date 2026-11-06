@@ -47,8 +47,8 @@ import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
  * bytes, and resumes once the guest has read half of them. What the guest writes is handed to
  * Netty on the event loop, and counts as delivered once Netty has written it to the socket.
  * Closing the socket hands Netty what the guest wrote and closes at once, so only what the host's
- * send buffer takes still reaches the peer. A connection closes itself once both of its directions
- * are shut down.
+ * send buffer takes still reaches the peer. A connection closes itself once it has shut down
+ * sending and the peer has finished sending.
  */
 final class NettyTcpChannel implements TcpChannel {
 
@@ -87,6 +87,7 @@ final class NettyTcpChannel implements TcpChannel {
     private volatile boolean closed;
     private boolean receiveShut;
     private boolean sendShut;
+    private boolean peerEnded;
 
     private NettyTcpChannel(NettyTcp tcp, IpAddressFamily family, SocketChannel socket) {
         this.tcp = tcp;
@@ -298,7 +299,7 @@ final class NettyTcpChannel implements TcpChannel {
         if (receive && !receiveShut) {
             receiveShut = true;
             input.drop();
-            socket.shutdownInput().addListener(done -> closeIfShutDown());
+            socket.shutdownInput();
         }
         if (send && !sendShut) {
             sendShut = true;
@@ -364,11 +365,11 @@ final class NettyTcpChannel implements TcpChannel {
     }
 
     /**
-     * Closes a connection whose directions are both shut down, which Netty leaves open while it
-     * allows half closure.
+     * Closes a connection once it has shut down sending and the peer has finished sending, which
+     * Netty leaves open while it allows half closure. The event loop calls this.
      */
     private void closeIfShutDown() {
-        if (socket.isShutdown()) {
+        if (peerEnded && socket.isOutputShutdown()) {
             socket.close();
         }
     }
@@ -511,6 +512,7 @@ final class NettyTcpChannel implements TcpChannel {
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
             if (evt == ChannelInputShutdownEvent.INSTANCE) {
+                peerEnded = true;
                 input.close();
                 closeIfShutDown();
             }
