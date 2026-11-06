@@ -30,6 +30,7 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.tcp.ShutdownType;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.tcp.TcpSocket;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
+import run.endive.cm.wasi.p2.sockets.instancenetwork.HostInstanceNetwork;
 import run.endive.cm.wasi.p2.sockets.network.HostNetwork;
 import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
 
@@ -196,6 +197,18 @@ class HostTcpSocketTest {
         HostNetwork other = new HostNetwork(NetworkPolicy.allowAll());
 
         assertEquals(ErrorCode.INVALID_ARGUMENT, errorOf(() -> socket.startConnect(other, REMOTE)));
+    }
+
+    @Test
+    void everyInstanceNetworkHandleIsTheSameNetwork() {
+        HostInstanceNetwork instance = new HostInstanceNetwork(NetworkPolicy.allowAll());
+        socket.startBind(instance.instanceNetwork(), LOCAL);
+        channel.bound.complete(null);
+        socket.finishBind();
+
+        socket.startConnect(instance.instanceNetwork(), REMOTE);
+
+        assertEquals(List.of("bind /127.0.0.1:8080", "connect /192.0.2.1:80"), channel.calls);
     }
 
     /** A call in the wrong state is refused without changing the state. */
