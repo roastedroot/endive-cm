@@ -307,6 +307,27 @@ class NettyTcpTest {
         assertTrue(accepted.sendBufferSize().compareTo(BigInteger.ZERO) > 0);
     }
 
+    /** Linux reports twice the size it was given, which the JDK halves for NIO. */
+    @Test
+    void aBufferSizeReadsBackAsItWasSet() {
+        TcpSocket listener = create();
+        listener.setReceiveBufferSize(BigInteger.valueOf(0x10000));
+        listener.startBind(NETWORK, LOOPBACK);
+        finish(listener, listener::finishBind);
+        listener.startListen();
+        finish(listener, listener::finishListen);
+        listener.setSendBufferSize(BigInteger.valueOf(0x10000));
+
+        TcpSocket client = create();
+        client.startConnect(NETWORK, listener.localAddress());
+        finish(client, client::finishConnect);
+        TcpSocket accepted = finish(listener, listener::accept).f0();
+
+        assertEquals(BigInteger.valueOf(0x10000), listener.receiveBufferSize());
+        assertEquals(BigInteger.valueOf(0x10000), accepted.receiveBufferSize());
+        assertEquals(BigInteger.valueOf(0x10000), accepted.sendBufferSize());
+    }
+
     /** Java offers NIO no way to read or set the hop limit of a TCP socket. */
     @Test
     void theHopLimitIsNotSupportedOnNio() {

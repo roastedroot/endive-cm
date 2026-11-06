@@ -101,6 +101,7 @@ final class NettyChannels {
     private final Map<SocketOption<?>, ChannelOption<?>> options;
     private final Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits;
     private final Function<Channel, SocketAddress> localAddresses;
+    private final boolean reportsDoubledBufferSizes;
 
     private NettyChannels(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
@@ -110,7 +111,8 @@ final class NettyChannels {
             Listener listener,
             Map<SocketOption<?>, ChannelOption<?>> options,
             Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits,
-            Function<Channel, SocketAddress> localAddresses) {
+            Function<Channel, SocketAddress> localAddresses,
+            boolean reportsDoubledBufferSizes) {
         this.socket = Objects.requireNonNull(socket, "socket");
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         this.datagram = Objects.requireNonNull(datagram, "datagram");
@@ -119,6 +121,7 @@ final class NettyChannels {
         this.options = options;
         this.hopLimits = hopLimits;
         this.localAddresses = localAddresses;
+        this.reportsDoubledBufferSizes = reportsDoubledBufferSizes;
     }
 
     /**
@@ -142,7 +145,8 @@ final class NettyChannels {
                 Nio::listen,
                 STANDARD_OPTIONS,
                 Map.of(),
-                Nio::localAddress);
+                Nio::localAddress,
+                false);
     }
 
     /** Creates the channel of a TCP connection of the host's default family. */
@@ -189,6 +193,15 @@ final class NettyChannels {
     /** The address {@code channel} is bound to now, which Netty's io_uring reads only once. */
     InetSocketAddress localAddress(Channel channel) {
         return (InetSocketAddress) localAddresses.apply(channel);
+    }
+
+    /**
+     * Whether the transport reports twice the buffer size a socket was given. Linux doubles it to
+     * leave room for its own bookkeeping, and the JDK halves what it reports for NIO, so only
+     * Netty's Linux transports report it doubled.
+     */
+    boolean reportsDoubledBufferSizes() {
+        return reportsDoubledBufferSizes;
     }
 
     /**
@@ -300,7 +313,8 @@ final class NettyChannels {
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT)),
                         Map.of(),
-                        Nio::localAddress);
+                        Nio::localAddress,
+                        false);
 
         private Nio() {}
 
@@ -410,7 +424,8 @@ final class NettyChannels {
                                 EpollChannelOption.TCP_KEEPINTVL,
                                 EpollChannelOption.TCP_KEEPCNT),
                         Unix.LINUX_HOP_LIMITS,
-                        Unix::localAddress);
+                        Unix::localAddress,
+                        true);
 
         private Epoll() {}
 
@@ -452,7 +467,8 @@ final class NettyChannels {
                                 IoUringChannelOption.TCP_KEEPINTVL,
                                 IoUringChannelOption.TCP_KEEPCNT),
                         Unix.LINUX_HOP_LIMITS,
-                        Unix::localAddress);
+                        Unix::localAddress,
+                        true);
 
         private IoUring() {}
 
@@ -496,7 +512,8 @@ final class NettyChannels {
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
                         STANDARD_OPTIONS,
                         Unix.BSD_HOP_LIMITS,
-                        Unix::localAddress);
+                        Unix::localAddress,
+                        false);
 
         private KQueue() {}
 

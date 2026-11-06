@@ -74,6 +74,7 @@ class NativeTransportTest {
         refusesIpv4OnIpv6On(EpollIoHandler.newFactory());
         keepsIpv4ApartFromIpv6On(EpollIoHandler.newFactory());
         setsTheHopLimitOn(EpollIoHandler.newFactory());
+        readsBackBufferSizesOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
         sendsDatagramsOn(EpollIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(EpollIoHandler.newFactory());
@@ -93,6 +94,7 @@ class NativeTransportTest {
         refusesIpv4OnIpv6On(IoUringIoHandler.newFactory());
         keepsIpv4ApartFromIpv6On(IoUringIoHandler.newFactory());
         setsTheHopLimitOn(IoUringIoHandler.newFactory());
+        readsBackBufferSizesOn(IoUringIoHandler.newFactory());
         sendsDatagramsOn(IoUringIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(IoUringIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(IoUringIoHandler.newFactory());
@@ -111,6 +113,7 @@ class NativeTransportTest {
         refusesIpv4OnIpv6On(KQueueIoHandler.newFactory());
         keepsIpv4ApartFromIpv6On(KQueueIoHandler.newFactory());
         setsTheHopLimitOn(KQueueIoHandler.newFactory());
+        readsBackBufferSizesOn(KQueueIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
         sendsDatagramsOn(KQueueIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(KQueueIoHandler.newFactory());
@@ -232,6 +235,37 @@ class NativeTransportTest {
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** A buffer size reads back as it was set, on the listener and the connections it accepts. */
+    private static void readsBackBufferSizesOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            Network network = wasi.instanceNetwork().instanceNetwork();
+            TcpSocket listener = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            listener.setReceiveBufferSize(BigInteger.valueOf(0x10000));
+            assertEquals(BigInteger.valueOf(0x10000), listener.receiveBufferSize());
+            listener.startBind(network, LOOPBACK);
+            finish(wasi, listener, listener::finishBind);
+            listener.startListen();
+            finish(wasi, listener, listener::finishListen);
+            listener.setSendBufferSize(BigInteger.valueOf(0x10000));
+
+            TcpSocket client = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            client.startConnect(network, listener.localAddress());
+            finish(wasi, client, client::finishConnect);
+            TcpSocket accepted = finish(wasi, listener, listener::accept).f0();
+
+            assertEquals(BigInteger.valueOf(0x10000), listener.receiveBufferSize());
+            assertEquals(BigInteger.valueOf(0x10000), accepted.receiveBufferSize());
+            assertEquals(BigInteger.valueOf(0x10000), accepted.sendBufferSize());
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }
