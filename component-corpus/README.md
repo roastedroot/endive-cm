@@ -3,6 +3,7 @@
 Components built by real toolchains, for use as test resources.
 The upstream [wasi-testsuite](https://github.com/WebAssembly/wasi-testsuite) has no WASI 0.2 tests,
 so the command programs here, together with their expected outcomes, are the conformance programs for the WASI 0.2 host.
+Wasmtime's own tests of WASI 0.2 sockets join them, built from a pinned wasmtime release.
 The built binaries are committed, so the Maven build needs none of the toolchains below.
 
 ## Layout
@@ -11,6 +12,7 @@ The built binaries are committed, so the Maven build needs none of the toolchain
 src/main/resources/
   compile.sh          builds the programs into compiled/
   verify.sh           runs every compiled program that has a spec on wasmtime
+  wasmtime.sh         builds wasmtime's socket tests into compiled/wasmtime/
   rust/<name>/        one Cargo project per program, with its Cargo.lock
     src/main.rs       a command, built for wasm32-wasip2
     src/lib.rs        or a library, built for wasm32-unknown-unknown and then componentized
@@ -20,6 +22,7 @@ src/main/resources/
     <name>.rs.wasm    the component
     <name>.rs.json    spec.json, copied
     <name>.rs.root/   root/, copied
+    wasmtime/         wasmtime's socket tests, one <name>.wasm each
     index.txt         every file under compiled/, since a jar's resources cannot be listed
 ```
 
@@ -97,6 +100,38 @@ cd component-corpus/src/main/resources
 ./compile.sh rust
 ./verify.sh
 ```
+
+## Wasmtime's socket tests
+
+`compiled/wasmtime/` holds wasmtime's tests of WASI 0.2 sockets from
+[`crates/test-programs/src/bin`](https://github.com/bytecodealliance/wasmtime/tree/v50.0.1/crates/test-programs/src/bin),
+every `p2_tcp_*`, `p2_udp_*`, `p2_ip_name_lookup` and `p2_cli_no_*` program.
+`wasmtime.sh` builds them as wasmtime does, for wasm32-wasip1 with the release's command adapter,
+except in release mode to keep them small.
+A program passes when it exits with success, so none has a spec.
+`WasmtimeTestProgramsTest` in `wasi-p2` runs each on every Netty transport available,
+with the host set up as wasmtime's test harness sets up its own.
+It skips a program that fails for a known reason, which it lists with that reason.
+
+`wasmtime.Dockerfile` pins wasmtime by tag and commit, and the adapter, wasm-tools and Rust by checksum.
+
+| Tool       | Version                           |
+|------------|-----------------------------------|
+| wasmtime   | v50.0.1, commit `c307ec81`        |
+| Rust       | 1.99.0, with target wasm32-wasip1 |
+| wasm-tools | 1.262.0                           |
+
+```sh
+cd component-corpus
+
+# build the image if the Dockerfile changed, then the programs
+./run.sh wasmtime
+```
+
+To move to another wasmtime release, change the tag, the commit and the adapter's checksum in `wasmtime.Dockerfile`,
+and Rust as well if the release needs a newer one.
+Then rebuild, run `WasmtimeTestProgramsTest`, and commit every file that changed under `compiled/`.
+A program the release adds runs without further changes.
 
 ## Consuming
 
