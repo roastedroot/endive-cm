@@ -287,6 +287,21 @@ class NettyTcpTest {
         assertEquals(accepted.remoteAddress(), client.localAddress());
     }
 
+    /** Dropping a listener frees its address at once, so the guest may bind it again. */
+    @Test
+    void aDroppedListenersAddressIsFreeAtOnce() {
+        IpSocketAddress bound = LOOPBACK;
+        for (int i = 0; i < 20; i++) {
+            TcpSocket listener = create();
+            listener.startBind(NETWORK, bound);
+            finish(listener, listener::finishBind);
+            listener.startListen();
+            finish(listener, listener::finishListen);
+            bound = listener.localAddress();
+            listener.drop();
+        }
+    }
+
     @Test
     void anAcceptedConnectionInheritsTheListenersOptions() {
         TcpSocket listener = create();

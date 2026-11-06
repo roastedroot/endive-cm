@@ -68,6 +68,9 @@ final class NettyTcpChannel implements TcpChannel {
                     StandardSocketOptions.SO_SNDBUF,
                     TcpChannel.HOP_LIMIT);
 
+    /** How long dropping a listener waits for its address to be free. */
+    private static final long LISTENER_CLOSE_MILLIS = 1000;
+
     private static final List<SocketOption<?>> BUFFER_SIZES =
             List.of(StandardSocketOptions.SO_RCVBUF, StandardSocketOptions.SO_SNDBUF);
 
@@ -347,6 +350,7 @@ final class NettyTcpChannel implements TcpChannel {
                     connection = waiting.poll()) {
                 connection.close(deliverFirst);
             }
+            awaitClosed(listener);
             return;
         }
         CompletableFuture<Void> registration = registered;
@@ -472,6 +476,17 @@ final class NettyTcpChannel implements TcpChannel {
             return (T) Integer.valueOf((Integer) value / 2);
         }
         return value;
+    }
+
+    /**
+     * Waits a while for {@code listener} to close, which frees its address for the guest to bind
+     * again as soon as it is dropped. Netty closes a channel on its event loop, after the call
+     * that asked for it returns.
+     */
+    private static void awaitClosed(ServerSocketChannel listener) {
+        if (listener.isRegistered() && !listener.eventLoop().inEventLoop()) {
+            listener.closeFuture().awaitUninterruptibly(LISTENER_CLOSE_MILLIS);
+        }
     }
 
     private static void closeOnceRegistered(Channel channel, CompletableFuture<Void> registration) {
