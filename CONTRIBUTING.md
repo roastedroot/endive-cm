@@ -89,6 +89,15 @@ recognizes these command types and generates `@Disabled` placeholder methods for
 | `cm-test-gen-plugin` | Maven plugin wrapper (phase: `generate-test-sources`) |
 | `wasm-tools` | Provides `JsonFromWast` (converts `.wast` to JSON + `.wasm` via wasm-tools WASI module) |
 
+## Wasmtime's WASI Socket Tests
+
+`wasi-p2` runs wasmtime's own tests of WASI 0.2 sockets through `WasiPreview2`, on every Netty transport available,
+in `WasmtimeTestProgramsTest`.
+They are built from a pinned wasmtime release and committed in `component-corpus`, so the build needs no Rust toolchain.
+[component-corpus/README.md](component-corpus/README.md#wasmtimes-socket-tests) explains how to rebuild them
+and how to move to another wasmtime release.
+A program that fails for a known reason is listed in `WasmtimeTestProgramsTest` with that reason, and skipped.
+
 ## General
 
 - Java 11+ required (parser module requires Java 16+)
