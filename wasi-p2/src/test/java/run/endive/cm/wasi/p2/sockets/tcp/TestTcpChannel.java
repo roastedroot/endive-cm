@@ -49,6 +49,7 @@ final class TestTcpChannel implements TcpChannel {
         options.put(ExtendedSocketOptions.TCP_KEEPCOUNT, 9);
         options.put(StandardSocketOptions.SO_RCVBUF, 65536);
         options.put(StandardSocketOptions.SO_SNDBUF, 65536);
+        options.put(TcpChannel.HOP_LIMIT, 64);
     }
 
     /** Queues a connection to be accepted. */

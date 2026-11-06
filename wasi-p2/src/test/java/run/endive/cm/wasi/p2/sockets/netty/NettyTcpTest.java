@@ -307,6 +307,20 @@ class NettyTcpTest {
         assertTrue(accepted.sendBufferSize().compareTo(BigInteger.ZERO) > 0);
     }
 
+    /** Java offers NIO no way to read or set the hop limit of a TCP socket. */
+    @Test
+    void theHopLimitIsNotSupportedOnNio() {
+        TcpSocket socket = create();
+
+        assertEquals(
+                ErrorCode.NOT_SUPPORTED,
+                assertThrows(ErrorCodeException.class, socket::hopLimit).error());
+        assertEquals(
+                ErrorCode.NOT_SUPPORTED,
+                assertThrows(ErrorCodeException.class, () -> socket.setHopLimit((short) 64))
+                        .error());
+    }
+
     @Test
     void closingTheNetworkClosesEverySocketLeftOpen() {
         Connection connection = connect();

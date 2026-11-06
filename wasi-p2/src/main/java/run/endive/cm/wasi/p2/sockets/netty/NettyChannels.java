@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
+import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
 
 /**
  * The Netty channels from which the network creates its sockets, and the Netty options standing
@@ -95,6 +96,7 @@ final class NettyChannels {
     private final Binder binder;
     private final Listener listener;
     private final Map<SocketOption<?>, ChannelOption<?>> options;
+    private final Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits;
 
     private NettyChannels(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
@@ -102,13 +104,15 @@ final class NettyChannels {
             ChannelFactory<? extends DatagramChannel> datagram,
             Binder binder,
             Listener listener,
-            Map<SocketOption<?>, ChannelOption<?>> options) {
+            Map<SocketOption<?>, ChannelOption<?>> options,
+            Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits) {
         this.socket = Objects.requireNonNull(socket, "socket");
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         this.datagram = Objects.requireNonNull(datagram, "datagram");
         this.binder = binder;
         this.listener = listener;
         this.options = options;
+        this.hopLimits = hopLimits;
     }
 
     /**
@@ -124,7 +128,7 @@ final class NettyChannels {
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
             ChannelFactory<? extends DatagramChannel> datagram) {
         return new NettyChannels(
-                socket, serverSocket, datagram, Nio::bind, Nio::listen, STANDARD_OPTIONS);
+                socket, serverSocket, datagram, Nio::bind, Nio::listen, STANDARD_OPTIONS, Map.of());
     }
 
     /** Creates the channel of a TCP connection of the host's default family. */
@@ -163,9 +167,15 @@ final class NettyChannels {
         return listener.listen(channel, backlog);
     }
 
-    /** The Netty option standing for {@code option}, or {@code null} when the transport has none. */
+    /**
+     * The Netty option standing for {@code option} on a socket of {@code family}, or {@code null}
+     * when the transport has none.
+     */
     @SuppressWarnings("unchecked")
-    <T> ChannelOption<T> option(SocketOption<T> option) {
+    <T> ChannelOption<T> option(SocketOption<T> option, SocketProtocolFamily family) {
+        if (option == TcpChannel.HOP_LIMIT) {
+            return (ChannelOption<T>) hopLimits.get(family);
+        }
         return (ChannelOption<T>) options.get(option);
     }
 
@@ -251,7 +261,8 @@ final class NettyChannels {
                         withKeepAlive(
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL),
-                                NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT)));
+                                NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT)),
+                        Map.of());
 
         private Nio() {}
 
@@ -273,6 +284,7 @@ final class NettyChannels {
     /** The socket under the channel of a native transport. */
     private static final class Unix {
 
+        private static final int IPPROTO_IP = 0;
         private static final int IPPROTO_IPV6 = 41;
 
         /** {@code IPV6_V6ONLY} on Linux. */
@@ -282,6 +294,22 @@ final class NettyChannels {
         /** {@code IPV6_V6ONLY} on macOS and the BSDs. */
         static final ChannelOption<Integer> BSD_V6_ONLY =
                 new IntegerUnixChannelOption("IPV6_V6ONLY", IPPROTO_IPV6, 27);
+
+        /** {@code IP_TTL} and {@code IPV6_UNICAST_HOPS} on Linux. */
+        static final Map<SocketProtocolFamily, ChannelOption<Integer>> LINUX_HOP_LIMITS =
+                Map.of(
+                        SocketProtocolFamily.INET,
+                        new IntegerUnixChannelOption("IP_TTL", IPPROTO_IP, 2),
+                        SocketProtocolFamily.INET6,
+                        new IntegerUnixChannelOption("IPV6_UNICAST_HOPS", IPPROTO_IPV6, 16));
+
+        /** {@code IP_TTL} and {@code IPV6_UNICAST_HOPS} on macOS and the BSDs. */
+        static final Map<SocketProtocolFamily, ChannelOption<Integer>> BSD_HOP_LIMITS =
+                Map.of(
+                        SocketProtocolFamily.INET,
+                        new IntegerUnixChannelOption("IP_TTL", IPPROTO_IP, 4),
+                        SocketProtocolFamily.INET6,
+                        new IntegerUnixChannelOption("IPV6_UNICAST_HOPS", IPPROTO_IPV6, 4));
 
         private Unix() {}
 
@@ -327,7 +355,8 @@ final class NettyChannels {
                         withKeepAlive(
                                 EpollChannelOption.TCP_KEEPIDLE,
                                 EpollChannelOption.TCP_KEEPINTVL,
-                                EpollChannelOption.TCP_KEEPCNT));
+                                EpollChannelOption.TCP_KEEPCNT),
+                        Unix.LINUX_HOP_LIMITS);
 
         private Epoll() {}
 
@@ -360,7 +389,8 @@ final class NettyChannels {
                         withKeepAlive(
                                 IoUringChannelOption.TCP_KEEPIDLE,
                                 IoUringChannelOption.TCP_KEEPINTVL,
-                                IoUringChannelOption.TCP_KEEPCNT));
+                                IoUringChannelOption.TCP_KEEPCNT),
+                        Unix.LINUX_HOP_LIMITS);
 
         private IoUring() {}
 
@@ -395,7 +425,8 @@ final class NettyChannels {
                         Unix::bind,
                         (channel, backlog) ->
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
-                        STANDARD_OPTIONS);
+                        STANDARD_OPTIONS,
+                        Unix.BSD_HOP_LIMITS);
 
         private KQueue() {}
 

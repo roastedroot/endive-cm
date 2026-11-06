@@ -51,6 +51,12 @@ public class HostTcpSocket implements TcpSocket {
     /** The most keep-alive probes that every host accepts. */
     static final int MAX_KEEP_ALIVE_COUNT = Byte.MAX_VALUE;
 
+    /**
+     * The hop limit Linux and macOS use unless configured otherwise, which macOS reports as -1 for
+     * an IPv6 socket the guest has not set.
+     */
+    static final short DEFAULT_HOP_LIMIT = 64;
+
     private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
     private static final BigInteger MAX_INT = BigInteger.valueOf(Integer.MAX_VALUE);
     private static final byte[] LIMITED_BROADCAST = {-1, -1, -1, -1};
@@ -321,19 +327,26 @@ public class HostTcpSocket implements TcpSocket {
         setOption(ExtendedSocketOptions.TCP_KEEPCOUNT, (int) Math.min(value, MAX_KEEP_ALIVE_COUNT));
     }
 
-    /** Java offers no way to read the hop limit of a TCP socket. */
+    /**
+     * Not supported where the host offers no way to read it, as on NIO.
+     *
+     * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp.wit">wasi:sockets/tcp, hop-limit</a>
+     */
     @Override
     public Short hopLimit() {
-        requireOpen();
-        throw ErrorCodes.error(ErrorCode.NOT_SUPPORTED);
+        int value = option(TcpChannel.HOP_LIMIT);
+        return (short) (value < 0 ? DEFAULT_HOP_LIMIT : value);
     }
 
-    /** Java offers no way to set the hop limit of a TCP socket. */
+    /**
+     * Not supported where the host offers no way to set it, as on NIO.
+     *
+     * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp.wit">wasi:sockets/tcp, set-hop-limit</a>
+     */
     @Override
     public void setHopLimit(Short value) {
         requirePositive(value);
-        requireOpen();
-        throw ErrorCodes.error(ErrorCode.NOT_SUPPORTED);
+        setOption(TcpChannel.HOP_LIMIT, value.intValue());
     }
 
     @Override

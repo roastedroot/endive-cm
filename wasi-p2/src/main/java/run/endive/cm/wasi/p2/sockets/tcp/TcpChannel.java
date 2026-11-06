@@ -64,7 +64,7 @@ public interface TcpChannel {
 
     /**
      * A future that completes once a connection has ended, because it failed, the peer reset it,
-     * or both of its directions were shut down.
+     * or it shut down sending after the peer finished sending.
      */
     CompletableFuture<?> terminated();
 
@@ -73,6 +73,28 @@ public interface TcpChannel {
 
     /** The stream of what a connected channel sends the peer, the same one each time. */
     HostOutputStream output();
+
+    /**
+     * The hop limit of the packets a channel sends, {@code IP_TTL} on IPv4 and {@code
+     * IPV6_UNICAST_HOPS} on IPv6. Java has no option standing for it.
+     */
+    SocketOption<Integer> HOP_LIMIT =
+            new SocketOption<>() {
+                @Override
+                public String name() {
+                    return "HOP_LIMIT";
+                }
+
+                @Override
+                public Class<Integer> type() {
+                    return Integer.class;
+                }
+
+                @Override
+                public String toString() {
+                    return name();
+                }
+            };
 
     /**
      * @throws UnsupportedOperationException when the host does not support {@code option}

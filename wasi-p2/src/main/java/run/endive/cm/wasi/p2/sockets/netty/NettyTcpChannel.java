@@ -65,7 +65,8 @@ final class NettyTcpChannel implements TcpChannel {
                     ExtendedSocketOptions.TCP_KEEPINTERVAL,
                     ExtendedSocketOptions.TCP_KEEPCOUNT,
                     StandardSocketOptions.SO_RCVBUF,
-                    StandardSocketOptions.SO_SNDBUF);
+                    StandardSocketOptions.SO_SNDBUF,
+                    TcpChannel.HOP_LIMIT);
 
     private final NettyTcp tcp;
     private final IpAddressFamily family;
@@ -277,7 +278,7 @@ final class NettyTcpChannel implements TcpChannel {
     /** A listening socket keeps the options its connections inherit, to set on each of them. */
     @Override
     public <T> void setOption(SocketOption<T> option, T value) throws IOException {
-        ChannelOption<T> netty = tcp.channels().option(option);
+        ChannelOption<T> netty = tcp.channels().option(option, protocolFamily(family));
         Map<SocketOption<?>, Object> options = inherited;
         if (netty == null || (options != null && !options.containsKey(option))) {
             throw new UnsupportedOperationException(option.name());
@@ -456,7 +457,7 @@ final class NettyTcpChannel implements TcpChannel {
 
     @SuppressWarnings("unchecked")
     private <T> T read(Channel channel, SocketOption<T> option) {
-        ChannelOption<T> netty = tcp.channels().option(option);
+        ChannelOption<T> netty = tcp.channels().option(option, protocolFamily(family));
         return netty == null ? null : channel.config().getOption(netty);
     }
 
@@ -596,7 +597,7 @@ final class NettyTcpChannel implements TcpChannel {
         /** A value the host refuses for the connection leaves it the host's default. */
         @SuppressWarnings("unchecked")
         private <T> void inherit(SocketChannel child, SocketOption<T> option, Object value) {
-            ChannelOption<T> netty = tcp.channels().option(option);
+            ChannelOption<T> netty = tcp.channels().option(option, protocolFamily(family));
             if (netty == null) {
                 return;
             }

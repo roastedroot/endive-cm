@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.netty.channel.EventLoopGroup;
@@ -59,6 +60,7 @@ class NativeTransportTest {
         exchangesBytesOn(EpollIoHandler.newFactory());
         reportsAnAddressInUseOn(EpollIoHandler.newFactory());
         refusesIpv4OnIpv6On(EpollIoHandler.newFactory());
+        setsTheHopLimitOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
 
@@ -70,6 +72,7 @@ class NativeTransportTest {
         exchangesBytesOn(IoUringIoHandler.newFactory());
         reportsAnAddressInUseOn(IoUringIoHandler.newFactory());
         refusesIpv4OnIpv6On(IoUringIoHandler.newFactory());
+        setsTheHopLimitOn(IoUringIoHandler.newFactory());
     }
 
     @Test
@@ -80,6 +83,7 @@ class NativeTransportTest {
         exchangesBytesOn(KQueueIoHandler.newFactory());
         reportsAnAddressInUseOn(KQueueIoHandler.newFactory());
         refusesIpv4OnIpv6On(KQueueIoHandler.newFactory());
+        setsTheHopLimitOn(KQueueIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
 
@@ -158,6 +162,41 @@ class NativeTransportTest {
             assertEquals(ErrorCode.ADDRESS_IN_USE, e.error());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** A connection inherits the hop limit of the listener that accepted it. */
+    private static void setsTheHopLimitOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            Network network = wasi.instanceNetwork().instanceNetwork();
+            TcpSocket listener = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            assertTrue(listener.hopLimit() > 0);
+            listener.setHopLimit((short) 42);
+            listener.startBind(network, LOOPBACK);
+            finish(wasi, listener, listener::finishBind);
+            listener.startListen();
+            finish(wasi, listener, listener::finishListen);
+
+            TcpSocket client = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            client.startConnect(network, listener.localAddress());
+            finish(wasi, client, client::finishConnect);
+            TcpSocket accepted = finish(wasi, listener, listener::accept).f0();
+
+            assertEquals((short) 42, listener.hopLimit());
+            assertEquals((short) 42, accepted.hopLimit());
+            if (NettyTcpTest.hasIpv6Loopback()) {
+                TcpSocket ipv6 = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV6);
+                assertTrue(ipv6.hopLimit() > 0);
+                ipv6.setHopLimit((short) 255);
+                assertEquals((short) 255, ipv6.hopLimit());
+            }
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }

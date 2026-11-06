@@ -359,10 +359,26 @@ class HostTcpSocketTest {
     @Test
     void anOptionTheHostLacksIsNotSupported() {
         channel.options.remove(ExtendedSocketOptions.TCP_KEEPIDLE);
+        channel.options.remove(TcpChannel.HOP_LIMIT);
 
         assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(socket::keepAliveIdleTime));
         assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(socket::hopLimit));
         assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(() -> socket.setHopLimit((short) 64)));
+    }
+
+    @Test
+    void theHopLimitIsReadAndWrittenOnTheChannel() {
+        socket.setHopLimit((short) 255);
+
+        assertEquals((short) 255, socket.hopLimit());
+        assertEquals(255, channel.options.get(TcpChannel.HOP_LIMIT));
+    }
+
+    @Test
+    void aHopLimitTheHostLeftUnsetIsItsDefault() {
+        channel.options.put(TcpChannel.HOP_LIMIT, -1);
+
+        assertEquals(HostTcpSocket.DEFAULT_HOP_LIMIT, socket.hopLimit());
     }
 
     @Test
