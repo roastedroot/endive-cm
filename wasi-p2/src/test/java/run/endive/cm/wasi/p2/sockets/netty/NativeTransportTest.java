@@ -3,6 +3,7 @@ package run.endive.cm.wasi.p2.sockets.netty;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.netty.channel.EventLoopGroup;
@@ -15,8 +16,12 @@ import io.netty.channel.kqueue.KQueueIoHandler;
 import io.netty.channel.uring.IoUring;
 import io.netty.channel.uring.IoUringIoHandler;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.math.BigInteger;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -50,6 +55,7 @@ class NativeTransportTest {
 
         resolvesLocalhostOn(EpollIoHandler.newFactory());
         exchangesBytesOn(EpollIoHandler.newFactory());
+        reportsAnAddressInUseOn(EpollIoHandler.newFactory());
     }
 
     @Test
@@ -58,6 +64,7 @@ class NativeTransportTest {
 
         resolvesLocalhostOn(IoUringIoHandler.newFactory());
         exchangesBytesOn(IoUringIoHandler.newFactory());
+        reportsAnAddressInUseOn(IoUringIoHandler.newFactory());
     }
 
     @Test
@@ -66,6 +73,7 @@ class NativeTransportTest {
 
         resolvesLocalhostOn(KQueueIoHandler.newFactory());
         exchangesBytesOn(KQueueIoHandler.newFactory());
+        reportsAnAddressInUseOn(KQueueIoHandler.newFactory());
     }
 
     /** Netty's resolver answers localhost from the hosts file, on the transport's channels. */
@@ -117,6 +125,32 @@ class NativeTransportTest {
                 read.writeBytes(in.blockingRead(BigInteger.valueOf(6 - read.size())));
             }
             assertEquals("native", read.toString(UTF_8));
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** The transport reports its failures in a form the host recognizes. */
+    private static void reportsAnAddressInUseOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                        WasiPreview2.builder()
+                                .withScheduler(group)
+                                .withNetworkPolicy(NetworkPolicy.allowAll())
+                                .build();
+                ServerSocket taken = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) {
+            TcpSocket socket = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            socket.startBind(
+                    wasi.instanceNetwork().instanceNetwork(),
+                    IpAddresses.fromInet(new InetSocketAddress("127.0.0.1", taken.getLocalPort())));
+            ErrorCodeException e =
+                    assertThrows(
+                            ErrorCodeException.class,
+                            () -> finish(wasi, socket, socket::finishBind));
+
+            assertEquals(ErrorCode.ADDRESS_IN_USE, e.error());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -50,14 +51,19 @@ class HostTcpCreateSocketTest {
         assertEquals(ErrorCode.NEW_SOCKET_LIMIT, errorOf(host, IpAddressFamily.IPV4));
     }
 
-    /** The JDK opens no IPv6 socket on a host without IPv6. */
+    /**
+     * The JDK opens no IPv6 socket on a host without IPv6, and Netty wraps the failure it reports.
+     */
     @Test
     void aFamilyTheHostLacksIsNotSupported() {
         HostTcpCreateSocket host =
                 create(
                         NetworkPolicy.allowAll(),
                         family -> {
-                            throw new UnsupportedOperationException("Protocol family unavailable");
+                            throw new IOException(
+                                    new InvocationTargetException(
+                                            new UnsupportedOperationException(
+                                                    "IPv6 not available")));
                         });
 
         assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(host, IpAddressFamily.IPV6));
