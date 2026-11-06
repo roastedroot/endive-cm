@@ -236,6 +236,24 @@ class NettyTcpTest {
     }
 
     @Test
+    void aConnectionThatEndedBeforeItWasAcceptedStillDelivers() throws IOException {
+        TcpSocket listener = create();
+        listener.startBind(NETWORK, LOOPBACK);
+        finish(listener, listener::finishBind);
+        listener.startListen();
+        finish(listener, listener::finishListen);
+        InetSocketAddress bound = IpAddresses.toInet(listener.localAddress());
+
+        try (Socket client = new Socket(bound.getAddress(), bound.getPort())) {
+            client.getOutputStream().write("early".getBytes(UTF_8));
+        }
+        InputStream in = finish(listener, listener::accept).f1();
+
+        assertEquals("early", new String(readExactly(in, 5), UTF_8));
+        assertClosed(in);
+    }
+
+    @Test
     void anAcceptedConnectionInheritsTheListenersOptions() {
         TcpSocket listener = create();
         listener.setKeepAliveEnabled(true);

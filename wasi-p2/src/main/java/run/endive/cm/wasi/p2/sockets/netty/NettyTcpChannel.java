@@ -12,6 +12,7 @@ import io.netty.channel.socket.ChannelInputShutdownEvent;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.SocketProtocolFamily;
+import io.netty.util.NetUtil;
 import io.netty.util.concurrent.Future;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -79,7 +80,10 @@ final class NettyTcpChannel implements TcpChannel {
     private volatile ServerSocketChannel server;
     private volatile CompletableFuture<Void> serverRegistered;
     private volatile Map<SocketOption<?>, Object> inherited;
+
+    /** How many accepted connections wait for the guest, at most the host's own listen limit. */
     private volatile int backlog;
+
     private volatile boolean closed;
     private boolean receiveShut;
     private boolean sendShut;
@@ -172,7 +176,7 @@ final class NettyTcpChannel implements TcpChannel {
             listener.config().setOption(ChannelOption.SO_BACKLOG, backlog);
         }
         listener.pipeline().addLast(new Acceptor());
-        this.backlog = backlog;
+        this.backlog = Math.min(backlog, NetUtil.SOMAXCONN);
         this.inherited = options;
         CompletableFuture<Void> registering = completable(tcp.group().register(listener));
         this.serverRegistered = registering;
@@ -192,6 +196,7 @@ final class NettyTcpChannel implements TcpChannel {
             acceptFailure = null;
         }
         if (next != null) {
+            next.resumeReading();
             updateAccepting();
         }
         if (waiting.isEmpty()) {
@@ -396,8 +401,8 @@ final class NettyTcpChannel implements TcpChannel {
     }
 
     /**
-     * Called on the guest's thread once it has read enough of a full input stream. Reading resumes on
-     * the event loop, so it follows the read that paused it.
+     * Called on the guest's thread once it has accepted the connection or read enough of a full input
+     * stream. Reading resumes on the event loop, so it follows the read that paused it.
      */
     private void resumeReading() {
         try {
@@ -527,13 +532,14 @@ final class NettyTcpChannel implements TcpChannel {
         }
     }
 
-    /** Queues each accepted connection until the guest accepts it. */
+    /** Queues each accepted connection, which reads nothing until the guest accepts it. */
     private final class Acceptor extends ChannelInboundHandlerAdapter {
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
             SocketChannel child = (SocketChannel) msg;
             NettyTcpChannel connection = new NettyTcpChannel(tcp, family, child);
+            child.config().setAutoRead(false);
             inherited.forEach((option, value) -> inherit(child, option, value));
             CompletableFuture<Void> registering = completable(tcp.group().register(child));
             connection.registered = registering;
