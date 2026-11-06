@@ -265,6 +265,26 @@ class NettyTcpTest {
         assertClosed(in);
     }
 
+    /** Connecting picks the address a wildcard-bound socket sends from. */
+    @Test
+    void aSocketBoundToTheWildcardAddressReportsTheAddressItConnectedFrom() {
+        TcpSocket listener = create();
+        listener.startBind(NETWORK, LOOPBACK);
+        finish(listener, listener::finishBind);
+        listener.startListen();
+        finish(listener, listener::finishListen);
+
+        TcpSocket client = create();
+        client.startBind(NETWORK, address(new InetSocketAddress("0.0.0.0", 0)));
+        finish(client, client::finishBind);
+        client.startConnect(NETWORK, listener.localAddress());
+        client.localAddress();
+        finish(client, client::finishConnect);
+        TcpSocket accepted = finish(listener, listener::accept).f0();
+
+        assertEquals(accepted.remoteAddress(), client.localAddress());
+    }
+
     @Test
     void anAcceptedConnectionInheritsTheListenersOptions() {
         TcpSocket listener = create();

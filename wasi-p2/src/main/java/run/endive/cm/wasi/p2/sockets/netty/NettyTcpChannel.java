@@ -214,6 +214,7 @@ final class NettyTcpChannel implements TcpChannel {
         return acceptReadiness;
     }
 
+    /** Asks the socket each time, since connecting may change the address Netty saw first. */
     @Override
     public InetSocketAddress localAddress() {
         ServerSocketChannel listener = server;
@@ -221,7 +222,7 @@ final class NettyTcpChannel implements TcpChannel {
         if (listener != null) {
             address = (InetSocketAddress) listener.localAddress();
         } else if (registered != null) {
-            address = (InetSocketAddress) socket.localAddress();
+            address = (InetSocketAddress) socket.unsafe().localAddress();
         }
         return inFamily(address == null ? bound : address);
     }
