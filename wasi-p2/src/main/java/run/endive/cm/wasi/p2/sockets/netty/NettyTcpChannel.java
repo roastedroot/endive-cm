@@ -1,5 +1,6 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.awaitClosed;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.closeOnceRegistered;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isOfTheOtherFamily;
@@ -350,6 +351,7 @@ final class NettyTcpChannel implements TcpChannel {
                     connection = waiting.poll()) {
                 connection.close(deliverFirst);
             }
+            awaitClosed(listener);
             return;
         }
         CompletableFuture<Void> registration = registered;

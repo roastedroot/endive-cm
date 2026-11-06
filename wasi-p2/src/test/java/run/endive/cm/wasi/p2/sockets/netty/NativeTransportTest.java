@@ -75,6 +75,7 @@ class NativeTransportTest {
         keepsIpv4ApartFromIpv6On(EpollIoHandler.newFactory());
         setsTheHopLimitOn(EpollIoHandler.newFactory());
         readsBackBufferSizesOn(EpollIoHandler.newFactory());
+        freesADroppedListenersAddressOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
         sendsDatagramsOn(EpollIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(EpollIoHandler.newFactory());
@@ -95,6 +96,7 @@ class NativeTransportTest {
         keepsIpv4ApartFromIpv6On(IoUringIoHandler.newFactory());
         setsTheHopLimitOn(IoUringIoHandler.newFactory());
         readsBackBufferSizesOn(IoUringIoHandler.newFactory());
+        freesADroppedListenersAddressOn(IoUringIoHandler.newFactory());
         sendsDatagramsOn(IoUringIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(IoUringIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(IoUringIoHandler.newFactory());
@@ -114,6 +116,7 @@ class NativeTransportTest {
         keepsIpv4ApartFromIpv6On(KQueueIoHandler.newFactory());
         setsTheHopLimitOn(KQueueIoHandler.newFactory());
         readsBackBufferSizesOn(KQueueIoHandler.newFactory());
+        freesADroppedListenersAddressOn(KQueueIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
         sendsDatagramsOn(KQueueIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(KQueueIoHandler.newFactory());
@@ -266,6 +269,30 @@ class NativeTransportTest {
             assertEquals(BigInteger.valueOf(0x10000), listener.receiveBufferSize());
             assertEquals(BigInteger.valueOf(0x10000), accepted.receiveBufferSize());
             assertEquals(BigInteger.valueOf(0x10000), accepted.sendBufferSize());
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** Dropping a listener frees its address at once, so the guest may bind it again. */
+    private static void freesADroppedListenersAddressOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            Network network = wasi.instanceNetwork().instanceNetwork();
+            IpSocketAddress bound = LOOPBACK;
+            for (int i = 0; i < 20; i++) {
+                TcpSocket listener = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+                listener.startBind(network, bound);
+                finish(wasi, listener, listener::finishBind);
+                listener.startListen();
+                finish(wasi, listener, listener::finishListen);
+                bound = listener.localAddress();
+                listener.drop();
+            }
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }
