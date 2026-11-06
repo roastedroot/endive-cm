@@ -279,17 +279,22 @@ would be indistinguishable from a case carrying nothing.
 
 A function's own `result` becomes control flow rather than a value. One anywhere else, such as a parameter, a record
 field, a list element or a variant case, is a value and arrives as a `Result`, with `Void` standing for a case that
-carries nothing. The generated exception is unchecked, so a signature stays free of `throws`. A world's bindings catch only that exception when lowering an import, because catching
-`RuntimeException` would deliver a genuine bug in embedder code to the guest as a well formed error.
+carries nothing. The generated exception is unchecked, so a signature stays free of `throws`, and the method's Javadoc
+names it in a `@throws` tag instead. A world's bindings catch only that exception when lowering an import, because
+catching `RuntimeException` would deliver a genuine bug in embedder code to the guest as a well formed error.
 
 An exception is named after the error payload's type when that type has a name, so `parse-error` gives
-`ParseErrorException`. An anonymous result type is shared by every function with the same signature, so it cannot be
-named after a function, and it falls back to the interface and the type's index in the scope, giving
-`RunningResult6Exception`. Two results sharing an error payload share the exception named after it, since the exception
+`ParseErrorException`. Two results sharing a named payload share the exception named after it, since the exception
 carries the payload and nothing else. That holds across interfaces too. An exception named after a payload is generated
 once, in the package of the interface declaring the payload, so every interface using it throws one Java type.
 `wasi:sockets` is what needed this, since five of its interfaces return a `result` carrying the `error-code` that
-`network` declares. A `variant` becomes case subclasses rather than a visitor because an `instanceof`
+`network` declares. Any other result, one with no error payload or a payload with no name, gets an exception named after
+its function, so `count: func(fail: bool) -> result<u32>` gives `CountException`. A resource's method or static function
+puts the resource first, so `set-method` on `outgoing-request` gives `OutgoingRequestSetMethodException`. The result
+type's index would also be unique, but it moves whenever a later version of the interface declares another type first,
+which would rename the exception on a patch release. Two functions whose exceptions would share a name, such as
+`foo-bar` and a `bar` method on `foo`, are refused. Wasmtime has no such names to choose, since its Rust bindings carry
+an anonymous error as `Result<T, ()>`. A `variant` becomes case subclasses rather than a visitor because an `instanceof`
 test allocates nothing, and because the same generated classes become `sealed` once the Java baseline allows it.
 
 ### Type metadata is generated as builder code

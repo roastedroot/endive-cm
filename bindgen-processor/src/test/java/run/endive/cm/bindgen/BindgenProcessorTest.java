@@ -1109,6 +1109,168 @@ class BindgenProcessorTest {
     }
 
     /**
+     * A result whose error has no name of its own throws an exception named after its function,
+     * while a named error payload still gives one exception every function shares.
+     */
+    @Test
+    void anAnonymousResultIsNamedAfterItsFunction() {
+        Compilation compilation =
+                compileInline(
+                        "AnonymousResultHost",
+                        "checks-world",
+                        "package my:project;\n"
+                                + "interface checks {\n"
+                                + "  enum my-error { bad }\n"
+                                + "  ping: func() -> result;\n"
+                                + "  pong: func() -> result;\n"
+                                + "  first: func() -> result<_, my-error>;\n"
+                                + "  second: func() -> result<u32, my-error>;\n"
+                                + "  describe: func() -> result<u32, string>;\n"
+                                + "}\n"
+                                + "world checks-world {\n"
+                                + "  import checks;\n"
+                                + "}\n");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertExceptions(
+                compilation,
+                List.of(
+                        "endive.testing.my.project.checks.DescribeException",
+                        "endive.testing.my.project.checks.MyErrorException",
+                        "endive.testing.my.project.checks.PingException",
+                        "endive.testing.my.project.checks.PongException"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.my.project.checks.DescribeException")
+                .contentsAsUtf8String()
+                .contains("public String error()");
+    }
+
+    /** Two resources may each declare a function of the same name returning a result. */
+    @Test
+    void aResourceFunctionsAnonymousResultCarriesItsResource() {
+        Compilation compilation =
+                compileInline(
+                        "ResourceResultHost",
+                        "resource-results",
+                        "package my:project;\n"
+                                + "interface bodies {\n"
+                                + "  resource request {\n"
+                                + "    consume: func() -> result<u32>;\n"
+                                + "    parse: static func(text: string) -> result<u32>;\n"
+                                + "  }\n"
+                                + "  resource response {\n"
+                                + "    consume: func() -> result<u32>;\n"
+                                + "  }\n"
+                                + "}\n"
+                                + "world resource-results {\n"
+                                + "  import bodies;\n"
+                                + "}\n");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertExceptions(
+                compilation,
+                List.of(
+                        "endive.testing.my.project.bodies.RequestConsumeException",
+                        "endive.testing.my.project.bodies.RequestParseException",
+                        "endive.testing.my.project.bodies.ResponseConsumeException"));
+    }
+
+    /** A static keeps its own description beside the exception it throws. */
+    @Test
+    void aStaticNamesTheExceptionItThrows() {
+        Compilation compilation =
+                compileInline(
+                        "StaticResultHost",
+                        "static-results",
+                        "package my:project;\n"
+                                + "interface bodies {\n"
+                                + "  resource request {\n"
+                                + "    parse: static func(text: string) -> result<u32>;\n"
+                                + "  }\n"
+                                + "}\n"
+                                + "world static-results {\n"
+                                + "  import bodies;\n"
+                                + "}\n");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.my.project.bodies.Host")
+                .contentsAsUtf8String()
+                .contains(
+                        "     * The static {@code request.parse}.\n"
+                                + "     *\n"
+                                + "     * @throws RequestParseException as the error case of the"
+                                + " result\n");
+    }
+
+    /** A type declared ahead of a result moves the result's index but not its exception. */
+    @Test
+    void anAnonymousResultKeepsItsNameWhenTypesAreAdded() {
+        String world = "world checks-world {\n  import checks;\n}\n";
+        Compilation before =
+                compileInline(
+                        "BeforeHost",
+                        "checks-world",
+                        "package my:project;\n"
+                                + "interface checks {\n"
+                                + "  ping: func() -> result;\n"
+                                + "}\n"
+                                + world);
+        Compilation after =
+                compileInline(
+                        "AfterHost",
+                        "checks-world",
+                        "package my:project;\n"
+                                + "interface checks {\n"
+                                + "  enum level { low, high }\n"
+                                + "  record point { x: u32, y: u32 }\n"
+                                + "  set: func(l: level, p: point) -> result<point>;\n"
+                                + "  ping: func() -> result;\n"
+                                + "}\n"
+                                + world);
+
+        assertThat(before).succeededWithoutWarnings();
+        assertThat(after).succeededWithoutWarnings();
+        assertThat(before).generatedSourceFile("endive.testing.my.project.checks.PingException");
+        assertThat(after).generatedSourceFile("endive.testing.my.project.checks.PingException");
+    }
+
+    @Test
+    void exceptionNamesThatClashAreRefused() {
+        Compilation compilation =
+                compileInline(
+                        "ClashingResultHost",
+                        "clash-world",
+                        "package my:project;\n"
+                                + "interface clash {\n"
+                                + "  resource foo {\n"
+                                + "    bar: func() -> result;\n"
+                                + "  }\n"
+                                + "  foo-bar: func() -> result;\n"
+                                + "}\n"
+                                + "world clash-world {\n"
+                                + "  import clash;\n"
+                                + "}\n");
+
+        assertThat(compilation).failed();
+        assertThat(compilation)
+                .hadErrorContaining(
+                        "WIT function \"foo-bar\" and WIT function \"foo.bar\" both generate Java"
+                                + " exception \"FooBarException\"");
+    }
+
+    private static void assertExceptions(Compilation compilation, List<String> expected) {
+        List<String> actual =
+                compilation.generatedSourceFiles().stream()
+                        .map(JavaFileObject::getName)
+                        .map(BindgenProcessorTest::qualifiedName)
+                        .filter(name -> name.endsWith("Exception"))
+                        .sorted()
+                        .collect(Collectors.toList());
+        assertEquals(expected, actual);
+    }
+
+    /**
      * A record carrying a handle converts it through the {@code Handles} its conversions take,
      * minting one on the way out and taking ownership on the way in. An interface sharing a name
      * with a parameter of {@code instantiate} gives way to it.
@@ -1467,7 +1629,7 @@ class BindgenProcessorTest {
                 List.of(
                         "endive.testing.VersionedResultsWorld",
                         "endive.testing.wasi.cli.run.Host",
-                        "endive.testing.wasi.cli.run.RunResult0Exception"));
+                        "endive.testing.wasi.cli.run.RunException"));
     }
 
     @Test
@@ -1523,5 +1685,22 @@ class BindgenProcessorTest {
         return javac().withProcessors(new BindgenProcessor())
                 .withClasspathFrom(BindgenProcessorTest.class.getClassLoader())
                 .compile(source);
+    }
+
+    /** Binds {@code world} from {@code wit} given inline on a class named {@code host}. */
+    private static Compilation compileInline(String host, String world, String wit) {
+        return compile(
+                JavaFileObjects.forSourceString(
+                        "endive.testing." + host,
+                        "package endive.testing;\n"
+                                + "import run.endive.cm.runtime.Bindgen;\n"
+                                + "@Bindgen(world = \""
+                                + world
+                                + "\", inline = \""
+                                + wit.replace("\n", "\\n")
+                                + "\")\n"
+                                + "public class "
+                                + host
+                                + " {}\n"));
     }
 }

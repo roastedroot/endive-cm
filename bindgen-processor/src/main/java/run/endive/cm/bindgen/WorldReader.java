@@ -475,11 +475,9 @@ final class WorldReader {
             if (exportName.startsWith("[constructor]")) {
                 constructor = new WitFunction(name, function.type(), function.scope());
             } else if (exportName.startsWith("[method]")) {
-                methods.add(
-                        new WitFunction(memberName(exportName), function.type(), function.scope()));
+                methods.add(member(exportName, function));
             } else if (exportName.startsWith("[static]")) {
-                statics.add(
-                        new WitFunction(memberName(exportName), function.type(), function.scope()));
+                statics.add(member(exportName, function));
             } else {
                 throw new BindgenException(
                         "\""
@@ -489,9 +487,10 @@ final class WorldReader {
             }
         }
 
-        /** {@code [method]file.get-name} names the method {@code get-name}. */
-        private static String memberName(String exportName) {
-            return exportName.substring(exportName.indexOf('.') + 1);
+        /** {@code [method]file.get-name} names the method {@code get-name} of {@code file}. */
+        private WitFunction member(String exportName, WitFunction function) {
+            String memberName = exportName.substring(exportName.indexOf('.') + 1);
+            return new WitFunction(name, memberName, function.type(), function.scope());
         }
 
         WitResource toResource() {

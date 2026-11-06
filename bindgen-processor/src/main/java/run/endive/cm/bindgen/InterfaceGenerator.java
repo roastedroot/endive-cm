@@ -36,7 +36,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
 import com.github.javaparser.ast.type.WildcardType;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -72,8 +72,8 @@ final class InterfaceGenerator {
 
     private final String generatedBy;
 
-    /** The qualified name of every exception generated so far, since interfaces may share one. */
-    private final Set<String> exceptions = new HashSet<>();
+    /** What claimed each exception generated so far, by qualified name, since interfaces share some. */
+    private final Map<String, String> exceptions = new HashMap<>();
 
     InterfaceGenerator(String generatedBy) {
         this.generatedBy = generatedBy;
@@ -124,72 +124,93 @@ final class InterfaceGenerator {
      * result is encoded as control flow rather than as a value. A result reached any other way is
      * a value and needs none.
      *
-     * <p>A result is written anonymously, so the scope is walked rather than the named types. Two
-     * results sharing an error payload share the exception named after it, generated once in the
-     * package of the interface declaring the payload, whichever interfaces use it.
+     * <p>Two results sharing a named error payload share the exception named after it, generated
+     * once in the package of the interface declaring the payload, whichever interfaces use it. Any
+     * other result gets an exception named after its function.
      */
     private List<GeneratedUnit> exceptionSources(WitInterface iface) {
         List<GeneratedUnit> sources = new ArrayList<>();
-        Set<run.endive.cm.types.Type> returned = returnedTypes(iface);
-        WitScope scope = iface.scope();
-        for (int i = 0; i < scope.size(); i++) {
-            run.endive.cm.types.Type declared = scope.at(i);
-            if (declared == null
-                    || declared.defValType() == null
-                    || declared.defValType().kind() != DefValType.Kind.RESULT
-                    || !returned.contains(declared)) {
+        List<WitFunction> functions = new ArrayList<>(iface.functions());
+        for (WitResource resource : iface.resources()) {
+            functions.addAll(resourceFunctions(resource));
+        }
+        for (WitFunction function : functions) {
+            ResultType result = returnedResult(function);
+            if (result == null) {
                 continue;
             }
-            String className = WitTypes.exceptionName(scope, i);
-            WitScope home = WitTypes.exceptionScope(scope, i);
-            if (exceptions.add(home.javaPackage() + "." + className)) {
-                sources.add(
-                        exceptionSource(
-                                iface, i, home, className, (ResultType) declared.defValType()));
+            String className = WitTypes.exceptionName(function);
+            WitScope home = WitTypes.exceptionScope(function);
+            String errorName = WitTypes.errorName(function.scope(), WitTypes.resultIndex(function));
+            String claimant =
+                    errorName != null
+                            ? "WIT type \"" + errorName + "\""
+                            : "WIT function \"" + function.witName() + "\"";
+            String claimed = exceptions.putIfAbsent(home.javaPackage() + "." + className, claimant);
+            if (claimed == null) {
+                sources.add(exceptionSource(iface, function, home, className, result));
+            } else if (!claimed.equals(claimant)) {
+                throw new BindgenException(
+                        claimed
+                                + " and "
+                                + claimant
+                                + " both generate Java exception \""
+                                + className
+                                + "\" and cannot be bound together");
             }
         }
         return sources;
     }
 
-    /**
-     * What the interface's functions return, by identity, since a named type sits at more than one
-     * index.
-     */
-    private static Set<run.endive.cm.types.Type> returnedTypes(WitInterface iface) {
-        List<WitFunction> functions = new ArrayList<>(iface.functions());
-        for (WitResource resource : iface.resources()) {
-            functions.addAll(resourceFunctions(resource));
+    /** The {@code result} {@code function} returns, or {@code null} when it returns anything else. */
+    private static ResultType returnedResult(WitFunction function) {
+        ValType returned = function.type().hasResult() ? function.type().result() : null;
+        if (returned == null || returned.primValType() != null) {
+            return null;
         }
-        Set<run.endive.cm.types.Type> returned = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (WitFunction function : functions) {
-            ValType result = function.type().hasResult() ? function.type().result() : null;
-            if (result != null && result.primValType() == null) {
-                returned.add(function.scope().at(result.typeIdx()));
-            }
+        run.endive.cm.types.Type declared = function.scope().at(returned.typeIdx());
+        if (declared == null
+                || declared.defValType() == null
+                || declared.defValType().kind() != DefValType.Kind.RESULT) {
+            return null;
         }
-        return returned;
+        return (ResultType) declared.defValType();
     }
 
     /**
      * The error case of a {@code result}, as an unchecked exception carrying the error payload so
      * that a bound signature stays free of {@code throws}.
      *
-     * @param index where the result sits in the interface's scope
+     * @param function the function returning the result
      * @param home the space whose package the exception is generated into
      */
     private GeneratedUnit exceptionSource(
-            WitInterface iface, int index, WitScope home, String className, ResultType result) {
+            WitInterface iface,
+            WitFunction function,
+            WitScope home,
+            String className,
+            ResultType result) {
         GeneratedUnit unit = new GeneratedUnit(home.javaPackage(), generatedBy);
         WitTypes types = new WitTypes(unit);
 
         ClassOrInterfaceDeclaration type = unit.addClass(className);
         type.addExtendedType("RuntimeException");
-        type.setJavadocComment(
-                home == iface.scope()
-                        ? "The error case of a WIT result declared by {@code " + iface.name() + "}."
-                        : "The error case of a WIT result carrying {@code "
-                                + WitTypes.errorName(iface.scope(), index)
-                                + "}.");
+        String errorName = WitTypes.errorName(function.scope(), WitTypes.resultIndex(function));
+        if (errorName == null) {
+            type.setJavadocComment(
+                    "The error case of the result returned by {@code "
+                            + function.witName()
+                            + "}, declared by {@code "
+                            + iface.name()
+                            + "}.");
+        } else {
+            type.setJavadocComment(
+                    home == iface.scope()
+                            ? "The error case of a WIT result declared by {@code "
+                                    + iface.name()
+                                    + "}."
+                            : "The error case of a WIT result carrying {@code " + errorName + "}.");
+        }
         type.addFieldWithInitializer(
                 PrimitiveType.longType(),
                 "serialVersionUID",
@@ -1347,9 +1368,11 @@ final class InterfaceGenerator {
             }
             for (WitFunction function : resource.statics()) {
                 MethodDeclaration method = hostSignature(bindings, function, methods.get(function));
-                method.setJavadocComment(
-                        "The static {@code " + resource.name() + "." + function.name() + "}.");
-                type.addMember(method);
+                type.addMember(
+                        bindings.document(
+                                method,
+                                function,
+                                "The static {@code " + function.witName() + "}."));
             }
         }
         return unit;
@@ -1645,9 +1668,8 @@ final class InterfaceGenerator {
                                         AstBuilders.thisField(fields.of(function)),
                                         List.of())
                                 .setName(name);
-        method.setJavadocComment(
-                "The static {@code " + resource.name() + "." + function.name() + "}.");
-        return method;
+        return bindings.document(
+                method, function, "The static {@code " + function.witName() + "}.");
     }
 
     /**

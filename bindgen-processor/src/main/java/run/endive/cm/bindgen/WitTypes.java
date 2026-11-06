@@ -161,26 +161,32 @@ final class WitTypes {
     }
 
     /**
-     * The exception generated for the result at {@code index}, by its simple Java name.
+     * The exception generated for the result {@code function} returns, by its simple Java name.
      *
      * <p>The error payload's own name is what an embedder recognises, so it is used whenever the
-     * payload has one. An anonymous result is shared by every function of the same signature, so
-     * it falls back to the interface and the type's index instead.
+     * payload has one. Otherwise the exception is named after the function, with the resource in
+     * front for a method or a static function.
      */
-    static String exceptionName(WitScope scope, int index) {
-        String named = errorName(scope, index);
-        return named != null
-                ? Names.type(named) + "Exception"
-                : Names.type(scope.owner()) + "Result" + index + "Exception";
+    static String exceptionName(WitFunction function) {
+        String named = errorName(function.scope(), resultIndex(function));
+        if (named != null) {
+            return Names.type(named) + "Exception";
+        }
+        String resource = function.resource();
+        String prefix = resource == null ? "" : Names.type(resource);
+        return prefix + Names.type(function.name()) + "Exception";
     }
 
     /**
-     * The space whose package holds the exception generated for the result at {@code index}.
+     * The space whose package holds the exception generated for the result {@code function}
+     * returns.
      *
      * <p>An exception named after its error payload lives with that payload, so every interface
      * using the payload throws one Java type.
      */
-    static WitScope exceptionScope(WitScope scope, int index) {
+    static WitScope exceptionScope(WitFunction function) {
+        WitScope scope = function.scope();
+        int index = resultIndex(function);
         if (errorName(scope, index) == null) {
             return scope;
         }
@@ -188,9 +194,14 @@ final class WitTypes {
         return scope.declaringScope(error.typeIdx());
     }
 
-    /** The exception generated for the result at {@code index}, as this unit has to write it. */
-    ClassOrInterfaceType exceptionType(WitScope scope, int index) {
-        return AstBuilders.type(qualify(exceptionScope(scope, index), exceptionName(scope, index)));
+    /** The exception generated for the result {@code function} returns, as this unit writes it. */
+    ClassOrInterfaceType exceptionType(WitFunction function) {
+        return AstBuilders.type(qualify(exceptionScope(function), exceptionName(function)));
+    }
+
+    /** Where the result {@code function} returns sits in the function's scope. */
+    static int resultIndex(WitFunction function) {
+        return function.type().result().typeIdx();
     }
 
     /**
