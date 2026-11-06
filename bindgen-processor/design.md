@@ -279,8 +279,9 @@ would be indistinguishable from a case carrying nothing.
 
 A function's own `result` becomes control flow rather than a value. One anywhere else, such as a parameter, a record
 field, a list element or a variant case, is a value and arrives as a `Result`, with `Void` standing for a case that
-carries nothing. The generated exception is unchecked, so a signature stays free of `throws`. A world's bindings catch only that exception when lowering an import, because catching
-`RuntimeException` would deliver a genuine bug in embedder code to the guest as a well formed error.
+carries nothing. The generated exception is unchecked, so a signature stays free of `throws`, and the method's Javadoc
+names it in a `@throws` tag instead. A world's bindings catch only that exception when lowering an import, because
+catching `RuntimeException` would deliver a genuine bug in embedder code to the guest as a well formed error.
 
 An exception is named after the error payload's type when that type has a name, so `parse-error` gives
 `ParseErrorException`. Two results sharing a named payload share the exception named after it, since the exception

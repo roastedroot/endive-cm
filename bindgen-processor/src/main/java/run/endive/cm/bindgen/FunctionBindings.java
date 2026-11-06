@@ -17,6 +17,8 @@ import com.github.javaparser.ast.stmt.TryStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
+import com.github.javaparser.javadoc.Javadoc;
+import com.github.javaparser.javadoc.description.JavadocDescription;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -70,13 +72,35 @@ final class FunctionBindings {
         return types;
     }
 
-    /** The Java signature of {@code function}, with neither modifiers nor a body. */
+    /**
+     * The Java signature of {@code function}, with neither modifiers nor a body. One returning a
+     * {@code result} names the exception it throws in its Javadoc.
+     */
     MethodDeclaration signature(WitFunction function, int skip) {
         MethodDeclaration method = new MethodDeclaration();
         method.setName(Names.member(function.name()));
         method.setType(returnType(function));
         method.removeBody();
+        if (resultOf(function) != null) {
+            String kind = function.resource() == null ? "WIT function" : "method";
+            document(method, function, "The " + kind + " {@code " + function.witName() + "}.");
+        }
         return addParameters(method, function, skip);
+    }
+
+    /**
+     * Documents {@code method} with {@code description}, adding a {@code @throws} tag when {@code
+     * function} returns a {@code result}.
+     */
+    MethodDeclaration document(MethodDeclaration method, WitFunction function, String description) {
+        Javadoc javadoc = new Javadoc(JavadocDescription.parseText(description));
+        if (resultOf(function) != null) {
+            javadoc.addBlockTag(
+                    "throws",
+                    exceptionType(function).asString(),
+                    "as the error case of the result");
+        }
+        return method.setJavadocComment(javadoc);
     }
 
     /**

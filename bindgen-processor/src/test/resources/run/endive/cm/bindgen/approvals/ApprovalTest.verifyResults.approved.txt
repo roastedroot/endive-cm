@@ -93,6 +93,11 @@ import javax.annotation.processing.Generated;
 @Generated("run.endive.cm.bindgen.BindgenProcessor")
 public interface Host {
 
+    /**
+     * The WIT function {@code parse}.
+     *
+     * @throws ParseErrorException as the error case of the result
+     */
     Long parse(String text);
 }
 
@@ -221,6 +226,11 @@ public final class Guest {
         this.ping = instance.export("ping").typed(VariantHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Boolean.class));
     }
 
+    /**
+     * The WIT function {@code run}.
+     *
+     * @throws RunErrorException as the error case of the result
+     */
     public Long run(String text) {
         VariantValue outcome = (VariantValue) this.run.apply(text)[0];
         if (!"ok".equals(outcome.label())) {
@@ -229,6 +239,11 @@ public final class Guest {
         return (Long) outcome.value();
     }
 
+    /**
+     * The WIT function {@code check}.
+     *
+     * @throws RunErrorException as the error case of the result
+     */
     public void check(Long value) {
         VariantValue outcome = (VariantValue) this.check.apply(value)[0];
         if (!"ok".equals(outcome.label())) {
@@ -236,6 +251,11 @@ public final class Guest {
         }
     }
 
+    /**
+     * The WIT function {@code count}.
+     *
+     * @throws CountException as the error case of the result
+     */
     public Long count(Boolean fail) {
         VariantValue outcome = (VariantValue) this.count.apply(fail)[0];
         if (!"ok".equals(outcome.label())) {
@@ -244,6 +264,11 @@ public final class Guest {
         return (Long) outcome.value();
     }
 
+    /**
+     * The WIT function {@code ping}.
+     *
+     * @throws PingException as the error case of the result
+     */
     public void ping(Boolean fail) {
         VariantValue outcome = (VariantValue) this.ping.apply(fail)[0];
         if (!"ok".equals(outcome.label())) {

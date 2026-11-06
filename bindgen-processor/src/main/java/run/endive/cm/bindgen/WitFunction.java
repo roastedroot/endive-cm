@@ -35,6 +35,11 @@ final class WitFunction {
         return name;
     }
 
+    /** This function as WIT writes it, with the resource in front of a method or a static. */
+    String witName() {
+        return resource == null ? name : resource + "." + name;
+    }
+
     FuncType type() {
         return type;
     }

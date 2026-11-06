@@ -145,7 +145,7 @@ final class InterfaceGenerator {
             String claimant =
                     errorName != null
                             ? "WIT type \"" + errorName + "\""
-                            : "WIT function \"" + witName(function) + "\"";
+                            : "WIT function \"" + function.witName() + "\"";
             String claimed = exceptions.putIfAbsent(home.javaPackage() + "." + className, claimant);
             if (claimed == null) {
                 sources.add(exceptionSource(iface, function, home, className, result));
@@ -177,13 +177,6 @@ final class InterfaceGenerator {
         return (ResultType) declared.defValType();
     }
 
-    /** {@code function} as WIT writes it, with the resource in front of a method or a static. */
-    private static String witName(WitFunction function) {
-        return function.resource() == null
-                ? function.name()
-                : function.resource() + "." + function.name();
-    }
-
     /**
      * The error case of a {@code result}, as an unchecked exception carrying the error payload so
      * that a bound signature stays free of {@code throws}.
@@ -206,7 +199,7 @@ final class InterfaceGenerator {
         if (errorName == null) {
             type.setJavadocComment(
                     "The error case of the result returned by {@code "
-                            + witName(function)
+                            + function.witName()
                             + "}, declared by {@code "
                             + iface.name()
                             + "}.");
@@ -1375,9 +1368,11 @@ final class InterfaceGenerator {
             }
             for (WitFunction function : resource.statics()) {
                 MethodDeclaration method = hostSignature(bindings, function, methods.get(function));
-                method.setJavadocComment(
-                        "The static {@code " + resource.name() + "." + function.name() + "}.");
-                type.addMember(method);
+                type.addMember(
+                        bindings.document(
+                                method,
+                                function,
+                                "The static {@code " + function.witName() + "}."));
             }
         }
         return unit;
@@ -1673,9 +1668,8 @@ final class InterfaceGenerator {
                                         AstBuilders.thisField(fields.of(function)),
                                         List.of())
                                 .setName(name);
-        method.setJavadocComment(
-                "The static {@code " + resource.name() + "." + function.name() + "}.");
-        return method;
+        return bindings.document(
+                method, function, "The static {@code " + function.witName() + "}.");
     }
 
     /**

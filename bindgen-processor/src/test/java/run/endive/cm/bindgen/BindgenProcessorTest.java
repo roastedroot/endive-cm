@@ -1175,6 +1175,34 @@ class BindgenProcessorTest {
                         "endive.testing.my.project.bodies.ResponseConsumeException"));
     }
 
+    /** A static keeps its own description beside the exception it throws. */
+    @Test
+    void aStaticNamesTheExceptionItThrows() {
+        Compilation compilation =
+                compileInline(
+                        "StaticResultHost",
+                        "static-results",
+                        "package my:project;\n"
+                                + "interface bodies {\n"
+                                + "  resource request {\n"
+                                + "    parse: static func(text: string) -> result<u32>;\n"
+                                + "  }\n"
+                                + "}\n"
+                                + "world static-results {\n"
+                                + "  import bodies;\n"
+                                + "}\n");
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.my.project.bodies.Host")
+                .contentsAsUtf8String()
+                .contains(
+                        "     * The static {@code request.parse}.\n"
+                                + "     *\n"
+                                + "     * @throws RequestParseException as the error case of the"
+                                + " result\n");
+    }
+
     /** A type declared ahead of a result moves the result's index but not its exception. */
     @Test
     void anAnonymousResultKeepsItsNameWhenTypesAreAdded() {
