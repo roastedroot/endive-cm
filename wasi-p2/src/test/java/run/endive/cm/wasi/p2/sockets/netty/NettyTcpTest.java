@@ -217,6 +217,24 @@ class NettyTcpTest {
         assertTrue(listener.isListening());
     }
 
+    /** Each connection fills a backlog of one, which pauses accepting until the guest takes it. */
+    @Test
+    void aListenerWithABacklogOfOneKeepsAccepting() throws IOException {
+        TcpSocket listener = create();
+        listener.setListenBacklogSize(BigInteger.ONE);
+        listener.startBind(NETWORK, LOOPBACK);
+        finish(listener, listener::finishBind);
+        listener.startListen();
+        finish(listener, listener::finishListen);
+        InetSocketAddress bound = IpAddresses.toInet(listener.localAddress());
+
+        for (int i = 0; i < 100; i++) {
+            try (Socket client = new Socket(bound.getAddress(), bound.getPort())) {
+                finish(listener, listener::accept).f0().drop();
+            }
+        }
+    }
+
     @Test
     void anAcceptedConnectionInheritsTheListenersOptions() {
         TcpSocket listener = create();

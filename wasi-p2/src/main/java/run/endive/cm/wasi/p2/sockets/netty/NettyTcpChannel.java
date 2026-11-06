@@ -191,8 +191,8 @@ final class NettyTcpChannel implements TcpChannel {
         if (failure != null) {
             acceptFailure = null;
         }
-        if (waiting.size() < backlog) {
-            server.config().setAutoRead(true);
+        if (next != null) {
+            updateAccepting();
         }
         if (waiting.isEmpty()) {
             awaitConnections();
@@ -368,6 +368,21 @@ final class NettyTcpChannel implements TcpChannel {
         }
     }
 
+    /**
+     * Accepts connections while fewer than the backlog wait. The listener's event loop decides, so
+     * each decision sees the queue as it is once the decisions before it are made.
+     */
+    private void updateAccepting() {
+        ServerSocketChannel listener = server;
+        try {
+            listener.eventLoop()
+                    .execute(() -> listener.config().setAutoRead(waiting.size() < backlog));
+        } catch (IllegalStateException | RejectedExecutionException e) {
+            acceptFailure = e;
+            acceptReadiness.complete(null);
+        }
+    }
+
     /** Makes {@link #acceptReadiness} pending, unless a connection or failure is waiting. */
     private void awaitConnections() {
         if (!acceptReadiness.isDone()) {
@@ -535,9 +550,7 @@ final class NettyTcpChannel implements TcpChannel {
                             return;
                         }
                         acceptReadiness.complete(null);
-                        if (waiting.size() >= backlog) {
-                            ctx.channel().config().setAutoRead(false);
-                        }
+                        updateAccepting();
                     });
         }
 
