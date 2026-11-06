@@ -50,7 +50,8 @@ class WithoutNettyTest {
                             .export("lookup-error");
 
             assertEquals(
-                    (short) ErrorCode.ACCESS_DENIED.ordinal(), lookupError.apply("localhost")[0]);
+                    (short) ErrorCode.PERMANENT_RESOLVER_FAILURE.ordinal(),
+                    lookupError.apply("localhost")[0]);
         }
     }
 
