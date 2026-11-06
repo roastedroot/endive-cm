@@ -162,23 +162,27 @@ class HostTcpSocketTest {
         assertEquals(ErrorCode.INVALID_STATE, errorOf(() -> socket.startConnect(NETWORK, REMOTE)));
     }
 
+    /** The guest may try another address, as wasmtime's tests of WASI do. */
     @Test
-    void aConnectToTheWildcardAddressOrPortZeroClosesTheSocket() {
+    void aConnectToAnAddressRefusedBeforeConnectingLeavesTheSocketToTryAgain() {
         assertEquals(
                 ErrorCode.INVALID_ARGUMENT,
                 errorOf(() -> socket.startConnect(NETWORK, address("0.0.0.0", 80))));
-        assertTrue(channel.closed);
-
-        TestTcpChannel other = new TestTcpChannel(poll);
-        HostTcpSocket portZero = new HostTcpSocket(poll, IpAddressFamily.IPV4, other);
         assertEquals(
                 ErrorCode.INVALID_ARGUMENT,
-                errorOf(() -> portZero.startConnect(NETWORK, address("192.0.2.1", 0))));
-        assertTrue(other.closed);
+                errorOf(() -> socket.startConnect(NETWORK, address("192.0.2.1", 0))));
+        assertEquals(
+                ErrorCode.INVALID_ARGUMENT,
+                errorOf(() -> socket.startConnect(NETWORK, address("224.0.0.1", 80))));
+        assertEquals(ErrorCode.NOT_IN_PROGRESS, errorOf(socket::finishConnect));
+        assertFalse(channel.closed);
+
+        socket.startConnect(NETWORK, REMOTE);
+        assertEquals(List.of("connect /192.0.2.1:80"), channel.calls);
     }
 
     @Test
-    void aConnectThePolicyDeniesClosesTheSocket() {
+    void aConnectThePolicyDeniesLeavesTheSocketUnconnected() {
         HostNetwork bindOnly =
                 new HostNetwork(
                         NetworkPolicy.builder()
@@ -188,7 +192,7 @@ class HostTcpSocketTest {
                                 .build());
 
         assertEquals(ErrorCode.ACCESS_DENIED, errorOf(() -> socket.startConnect(bindOnly, REMOTE)));
-        assertTrue(channel.closed);
+        assertFalse(channel.closed);
         assertEquals(List.of(), channel.calls);
     }
 

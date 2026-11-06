@@ -18,7 +18,6 @@ import run.endive.cm.wasi.p2.bindings.wasi.io.poll.Pollable;
 import run.endive.cm.wasi.p2.bindings.wasi.io.streams.InputStream;
 import run.endive.cm.wasi.p2.bindings.wasi.io.streams.OutputStream;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.ErrorCode;
-import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.ErrorCodeException;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.IpAddressFamily;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.IpSocketAddress;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.Network;
@@ -135,30 +134,26 @@ public class HostTcpSocket implements TcpSocket {
 
     /**
      * Starts connecting to {@code remoteAddress}, binding an unbound socket to an address the host
-     * picks. Any failure other than calling it in the wrong state closes the socket.
+     * picks. An address refused before connecting leaves the socket as it was, so the guest may try
+     * another, as wasmtime allows. Only a failed connection closes the socket.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp.wit">wasi:sockets/tcp, start-connect</a>
      */
     @Override
     public void startConnect(Network network, IpSocketAddress remoteAddress) {
         requireState(State.UNBOUND, State.BOUND);
-        try {
-            HostNetwork host = HostNetwork.of(network);
-            if (this.network != null && this.network != host) {
-                throw ErrorCodes.error(ErrorCode.INVALID_ARGUMENT);
-            }
-            InetSocketAddress remote = unicast(remoteAddress);
-            if (remote.getAddress().isAnyLocalAddress() || remote.getPort() == 0) {
-                throw ErrorCodes.error(ErrorCode.INVALID_ARGUMENT);
-            }
-            host.checkAddress(remote, NetworkPolicy.AddressUse.TCP_CONNECT);
-            this.network = host;
-            pending = channel.connect(remote);
-            state = State.CONNECT_IN_PROGRESS;
-        } catch (ErrorCodeException e) {
-            close();
-            throw e;
+        HostNetwork host = HostNetwork.of(network);
+        if (this.network != null && this.network != host) {
+            throw ErrorCodes.error(ErrorCode.INVALID_ARGUMENT);
         }
+        InetSocketAddress remote = unicast(remoteAddress);
+        if (remote.getAddress().isAnyLocalAddress() || remote.getPort() == 0) {
+            throw ErrorCodes.error(ErrorCode.INVALID_ARGUMENT);
+        }
+        host.checkAddress(remote, NetworkPolicy.AddressUse.TCP_CONNECT);
+        this.network = host;
+        pending = channel.connect(remote);
+        state = State.CONNECT_IN_PROGRESS;
     }
 
     /**
