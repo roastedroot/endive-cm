@@ -5,7 +5,6 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelException;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
@@ -46,8 +45,9 @@ import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
  * <p>A connection reads into its input stream until the stream holds {@value #STREAM_CAPACITY}
  * bytes, and resumes once the guest has read half of them. What the guest writes is handed to
  * Netty on the event loop, and counts as delivered once Netty has written it to the socket.
- * Closing the socket delivers what the guest wrote first. A connection closes itself once both of
- * its directions are shut down.
+ * Closing the socket hands Netty what the guest wrote and closes at once, so only what the host's
+ * send buffer takes still reaches the peer. A connection closes itself once both of its directions
+ * are shut down.
  */
 final class NettyTcpChannel implements TcpChannel {
 
@@ -310,13 +310,13 @@ final class NettyTcpChannel implements TcpChannel {
         }
     }
 
-    /** Closes the socket once what the guest wrote is delivered. */
+    /** Closes the socket at once, after handing Netty what the guest wrote. */
     @Override
     public void close() {
         close(true);
     }
 
-    private void close(boolean graceful) {
+    private void close(boolean deliverFirst) {
         if (closed) {
             return;
         }
@@ -328,7 +328,7 @@ final class NettyTcpChannel implements TcpChannel {
             for (NettyTcpChannel connection = waiting.poll();
                     connection != null;
                     connection = waiting.poll()) {
-                connection.close(graceful);
+                connection.close(deliverFirst);
             }
             return;
         }
@@ -341,12 +341,11 @@ final class NettyTcpChannel implements TcpChannel {
                 (ignored, failure) -> {
                     if (failure != null) {
                         socket.unsafe().closeForcibly();
-                    } else if (graceful) {
+                    } else if (deliverFirst) {
                         onEventLoop(
                                 () -> {
                                     deliver();
-                                    socket.writeAndFlush(Unpooled.EMPTY_BUFFER)
-                                            .addListener(ChannelFutureListener.CLOSE);
+                                    socket.close();
                                 });
                     } else {
                         socket.close();

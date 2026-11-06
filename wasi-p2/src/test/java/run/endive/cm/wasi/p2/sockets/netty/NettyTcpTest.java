@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,9 +42,11 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.IpSocketAddress;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.tcp.ShutdownType;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.tcp.TcpSocket;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
+import run.endive.cm.wasi.p2.io.streams.HostOutputStream;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
 import run.endive.cm.wasi.p2.sockets.network.HostNetwork;
 import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
+import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
 
 /** Guest sockets talk to each other and to the host over loopback, on a NIO event loop. */
 @Timeout(value = 20, unit = TimeUnit.SECONDS)
@@ -122,6 +125,23 @@ class NettyTcpTest {
 
         assertEquals("bye", new String(readExactly(connection.serverIn, 3), UTF_8));
         assertClosed(connection.serverIn);
+    }
+
+    /** A peer that stops reading cannot keep a dropped socket open. */
+    @Test
+    void droppingASocketClosesItAtOnceWhenThePeerStopsReading() throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) {
+            TcpChannel channel = network.tcp().open(IpAddressFamily.IPV4);
+            channel.connect((InetSocketAddress) server.getLocalSocketAddress())
+                    .get(5, TimeUnit.SECONDS);
+
+            try (Socket peer = server.accept()) {
+                fillUntilBlocked(channel.output());
+                channel.close();
+
+                channel.terminated().get(5, TimeUnit.SECONDS);
+            }
+        }
     }
 
     /** Neither socket closes while the peer may still send, since TCP allows half closure. */
@@ -336,6 +356,21 @@ class NettyTcpTest {
         for (int offset = 0; offset < bytes.length; offset += 4096) {
             out.blockingWriteAndFlush(
                     Arrays.copyOfRange(bytes, offset, Math.min(bytes.length, offset + 4096)));
+        }
+    }
+
+    /** Writes until the host takes no more, as happens once the peer stops reading. */
+    private static void fillUntilBlocked(HostOutputStream out) throws Exception {
+        byte[] chunk = new byte[64 * 1024];
+        while (true) {
+            try {
+                out.readiness().get(500, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                return;
+            }
+            out.write(
+                    Arrays.copyOf(
+                            chunk, (int) Math.min(out.checkWrite().longValue(), chunk.length)));
         }
     }
 
