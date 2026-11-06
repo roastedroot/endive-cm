@@ -151,11 +151,15 @@ final class NettyTcpChannel implements TcpChannel {
     @Override
     public CompletableFuture<Void> listen(int backlog) {
         Map<SocketOption<?>, Object> options = new ConcurrentHashMap<>();
-        for (SocketOption<?> option : INHERITED) {
-            Object value = read(socket, option);
-            if (value != null) {
-                options.put(option, value);
+        try {
+            for (SocketOption<?> option : INHERITED) {
+                Object value = read(socket, option);
+                if (value != null) {
+                    options.put(option, value);
+                }
             }
+        } catch (ChannelException e) {
+            return CompletableFuture.failedFuture(unwrapped(e));
         }
         ServerSocketChannel listener;
         try {
@@ -569,11 +573,17 @@ final class NettyTcpChannel implements TcpChannel {
             acceptReadiness.complete(null);
         }
 
+        /** A value the host refuses for the connection leaves it the host's default. */
         @SuppressWarnings("unchecked")
         private <T> void inherit(SocketChannel child, SocketOption<T> option, Object value) {
             ChannelOption<T> netty = tcp.channels().option(option);
-            if (netty != null) {
+            if (netty == null) {
+                return;
+            }
+            try {
                 child.config().setOption(netty, (T) value);
+            } catch (ChannelException e) {
+                // The connection keeps the host's default.
             }
         }
     }

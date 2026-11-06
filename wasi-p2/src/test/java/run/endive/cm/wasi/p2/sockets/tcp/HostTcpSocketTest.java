@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.math.BigInteger;
 import java.net.BindException;
 import java.net.ConnectException;
@@ -325,6 +326,17 @@ class HostTcpSocketTest {
                 channel.options.get(ExtendedSocketOptions.TCP_KEEPIDLE));
         assertEquals(HostTcpSocket.MAX_KEEP_ALIVE_COUNT, socket.keepAliveCount().intValue());
         assertEquals(BigInteger.valueOf(Integer.MAX_VALUE), socket.receiveBufferSize());
+    }
+
+    @Test
+    void aBufferSizeTheHostRefusesAsTooLargeIsIgnored() {
+        channel.refusal = new IOException("No buffer space available");
+
+        socket.setReceiveBufferSize(BigInteger.ONE.shiftLeft(40));
+        socket.setSendBufferSize(BigInteger.ONE.shiftLeft(40));
+
+        assertEquals(BigInteger.valueOf(65536), socket.receiveBufferSize());
+        assertEquals(ErrorCode.OUT_OF_MEMORY, errorOf(() -> socket.setKeepAliveEnabled(true)));
     }
 
     @Test

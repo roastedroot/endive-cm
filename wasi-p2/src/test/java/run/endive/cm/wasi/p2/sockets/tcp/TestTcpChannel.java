@@ -33,6 +33,7 @@ final class TestTcpChannel implements TcpChannel {
     final Map<SocketOption<?>, Object> options = new HashMap<>();
     InetSocketAddress local;
     InetSocketAddress remote;
+    IOException refusal;
     boolean closed;
 
     private final HostPoll poll;
@@ -138,9 +139,12 @@ final class TestTcpChannel implements TcpChannel {
     }
 
     @Override
-    public <T> void setOption(SocketOption<T> option, T value) {
+    public <T> void setOption(SocketOption<T> option, T value) throws IOException {
         if (!options.containsKey(option)) {
             throw new UnsupportedOperationException(option.name());
+        }
+        if (refusal != null) {
+            throw refusal;
         }
         options.put(option, value);
     }

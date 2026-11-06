@@ -342,14 +342,13 @@ public class HostTcpSocket implements TcpSocket {
     }
 
     /**
-     * Clamped to the largest {@code int}, which the host may reduce further.
+     * Clamped to the largest {@code int}, which the host may reduce further or refuse as too large.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp.wit">wasi:sockets/tcp, set-receive-buffer-size</a>
      */
     @Override
     public void setReceiveBufferSize(BigInteger value) {
-        requirePositive(value.signum());
-        setOption(StandardSocketOptions.SO_RCVBUF, clampToInt(value));
+        setBufferSize(StandardSocketOptions.SO_RCVBUF, value);
     }
 
     @Override
@@ -358,14 +357,13 @@ public class HostTcpSocket implements TcpSocket {
     }
 
     /**
-     * Clamped to the largest {@code int}, which the host may reduce further.
+     * Clamped to the largest {@code int}, which the host may reduce further or refuse as too large.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp.wit">wasi:sockets/tcp, set-send-buffer-size</a>
      */
     @Override
     public void setSendBufferSize(BigInteger value) {
-        requirePositive(value.signum());
-        setOption(StandardSocketOptions.SO_SNDBUF, clampToInt(value));
+        setBufferSize(StandardSocketOptions.SO_SNDBUF, value);
     }
 
     /**
@@ -465,6 +463,22 @@ public class HostTcpSocket implements TcpSocket {
             channel.setOption(option, value);
         } catch (IOException | UnsupportedOperationException e) {
             throw ErrorCodes.failed(e);
+        }
+    }
+
+    /**
+     * A host refusing a size as too large, as macOS does with {@code ENOBUFS}, keeps the size it had.
+     * The guest sees no error, since a size other than zero may be clamped.
+     */
+    private void setBufferSize(SocketOption<Integer> option, BigInteger value) {
+        requirePositive(value.signum());
+        requireOpen();
+        try {
+            channel.setOption(option, clampToInt(value));
+        } catch (IOException | UnsupportedOperationException e) {
+            if (ErrorCodes.codeOf(e) != ErrorCode.OUT_OF_MEMORY) {
+                throw ErrorCodes.failed(e);
+            }
         }
     }
 
