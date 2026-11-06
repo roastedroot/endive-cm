@@ -97,6 +97,7 @@ final class NettyChannels {
     private final Listener listener;
     private final Map<SocketOption<?>, ChannelOption<?>> options;
     private final Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits;
+    private final boolean reportsDoubledBufferSizes;
 
     private NettyChannels(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
@@ -105,7 +106,8 @@ final class NettyChannels {
             Binder binder,
             Listener listener,
             Map<SocketOption<?>, ChannelOption<?>> options,
-            Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits) {
+            Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits,
+            boolean reportsDoubledBufferSizes) {
         this.socket = Objects.requireNonNull(socket, "socket");
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         this.datagram = Objects.requireNonNull(datagram, "datagram");
@@ -113,6 +115,7 @@ final class NettyChannels {
         this.listener = listener;
         this.options = options;
         this.hopLimits = hopLimits;
+        this.reportsDoubledBufferSizes = reportsDoubledBufferSizes;
     }
 
     /**
@@ -128,7 +131,14 @@ final class NettyChannels {
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
             ChannelFactory<? extends DatagramChannel> datagram) {
         return new NettyChannels(
-                socket, serverSocket, datagram, Nio::bind, Nio::listen, STANDARD_OPTIONS, Map.of());
+                socket,
+                serverSocket,
+                datagram,
+                Nio::bind,
+                Nio::listen,
+                STANDARD_OPTIONS,
+                Map.of(),
+                false);
     }
 
     /** Creates the channel of a TCP connection of the host's default family. */
@@ -165,6 +175,15 @@ final class NettyChannels {
      */
     ServerSocketChannel listen(SocketChannel channel, int backlog) throws IOException {
         return listener.listen(channel, backlog);
+    }
+
+    /**
+     * Whether the transport reports twice the buffer size a socket was given. Linux doubles it to
+     * leave room for its own bookkeeping, and the JDK halves what it reports for NIO, so only
+     * Netty's Linux transports report it doubled.
+     */
+    boolean reportsDoubledBufferSizes() {
+        return reportsDoubledBufferSizes;
     }
 
     /**
@@ -262,7 +281,8 @@ final class NettyChannels {
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT)),
-                        Map.of());
+                        Map.of(),
+                        false);
 
         private Nio() {}
 
@@ -356,7 +376,8 @@ final class NettyChannels {
                                 EpollChannelOption.TCP_KEEPIDLE,
                                 EpollChannelOption.TCP_KEEPINTVL,
                                 EpollChannelOption.TCP_KEEPCNT),
-                        Unix.LINUX_HOP_LIMITS);
+                        Unix.LINUX_HOP_LIMITS,
+                        true);
 
         private Epoll() {}
 
@@ -390,7 +411,8 @@ final class NettyChannels {
                                 IoUringChannelOption.TCP_KEEPIDLE,
                                 IoUringChannelOption.TCP_KEEPINTVL,
                                 IoUringChannelOption.TCP_KEEPCNT),
-                        Unix.LINUX_HOP_LIMITS);
+                        Unix.LINUX_HOP_LIMITS,
+                        true);
 
         private IoUring() {}
 
@@ -426,7 +448,8 @@ final class NettyChannels {
                         (channel, backlog) ->
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
                         STANDARD_OPTIONS,
-                        Unix.BSD_HOP_LIMITS);
+                        Unix.BSD_HOP_LIMITS,
+                        false);
 
         private KQueue() {}
 

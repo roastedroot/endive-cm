@@ -68,6 +68,9 @@ final class NettyTcpChannel implements TcpChannel {
                     StandardSocketOptions.SO_SNDBUF,
                     TcpChannel.HOP_LIMIT);
 
+    private static final List<SocketOption<?>> BUFFER_SIZES =
+            List.of(StandardSocketOptions.SO_RCVBUF, StandardSocketOptions.SO_SNDBUF);
+
     private final NettyTcp tcp;
     private final IpAddressFamily family;
     private final SocketChannel socket;
@@ -455,10 +458,20 @@ final class NettyTcpChannel implements TcpChannel {
         return address == null ? null : IpAddresses.inFamily(address, family);
     }
 
+    /**
+     * The value of {@code option} on {@code channel}, with a buffer size halved where the transport
+     * reports twice the size it was given.
+     */
     @SuppressWarnings("unchecked")
     private <T> T read(Channel channel, SocketOption<T> option) {
         ChannelOption<T> netty = tcp.channels().option(option, protocolFamily(family));
-        return netty == null ? null : channel.config().getOption(netty);
+        T value = netty == null ? null : channel.config().getOption(netty);
+        if (value != null
+                && BUFFER_SIZES.contains(option)
+                && tcp.channels().reportsDoubledBufferSizes()) {
+            return (T) Integer.valueOf((Integer) value / 2);
+        }
+        return value;
     }
 
     private static void closeOnceRegistered(Channel channel, CompletableFuture<Void> registration) {
