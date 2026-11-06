@@ -64,18 +64,20 @@ final class NettyChannelSupport {
     }
 
     /**
-     * Whether {@code peer} is an IPv4 address reaching a socket of {@code family} that is IPv6,
-     * which only NIO allows.
+     * Whether {@code peer} is of another family than the socket of {@code family} it reached. An
+     * IPv6 socket on NIO takes IPv4 peers, and an IPv4 TCP socket on io_uring bound to the wildcard
+     * address takes IPv6 peers.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp-create-socket.wit">wasi:sockets/tcp-create-socket, create-tcp-socket</a>
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp-create-socket.wit">wasi:sockets/udp-create-socket, create-udp-socket</a>
      */
-    static boolean isIpv4OnIpv6(IpAddressFamily family, InetSocketAddress peer) {
-        if (family != IpAddressFamily.IPV6 || peer == null) {
+    static boolean isOfTheOtherFamily(IpAddressFamily family, InetSocketAddress peer) {
+        if (peer == null) {
             return false;
         }
         InetAddress ip = peer.getAddress();
-        return ip instanceof Inet4Address || IpAddresses.isIpv4Mapped(ip);
+        boolean ipv4 = ip instanceof Inet4Address || IpAddresses.isIpv4Mapped(ip);
+        return ipv4 != (family == IpAddressFamily.IPV4);
     }
 
     /** What Netty wrapped, which tells the guest why the host failed. */

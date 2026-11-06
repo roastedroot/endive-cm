@@ -2,7 +2,7 @@ package run.endive.cm.wasi.p2.sockets.netty;
 
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.closeOnceRegistered;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
-import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isIpv4OnIpv6;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isOfTheOtherFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.protocolFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.unwrapped;
 
@@ -510,7 +510,7 @@ final class NettyTcpChannel implements TcpChannel {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
             SocketChannel child = (SocketChannel) msg;
-            if (isIpv4OnIpv6(family, child.remoteAddress())) {
+            if (isOfTheOtherFamily(family, child.remoteAddress())) {
                 child.unsafe().closeForcibly();
                 return;
             }

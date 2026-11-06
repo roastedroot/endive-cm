@@ -3,7 +3,7 @@ package run.endive.cm.wasi.p2.sockets.netty;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.closeOnceRegistered;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completeWith;
-import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isIpv4OnIpv6;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isOfTheOtherFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.protocolFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.unwrapped;
 
@@ -286,7 +286,7 @@ final class NettyUdpChannel implements UdpChannel {
                     (io.netty.channel.socket.DatagramPacket) msg;
             try {
                 int length = packet.content().readableBytes();
-                if (isIpv4OnIpv6(family, packet.sender())
+                if (isOfTheOtherFamily(family, packet.sender())
                         || receivedBytes.get() + length + DATAGRAM_OVERHEAD > RECEIVE_CAPACITY) {
                     return;
                 }

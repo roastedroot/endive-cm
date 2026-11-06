@@ -58,8 +58,9 @@ import run.endive.cm.wasi.p2.sockets.network.HopLimits;
  * them. Java offers NIO no way to set it, so on NIO an IPv6 socket still takes a port from IPv4's
  * wildcard address. A listening one closes each IPv4 connection it accepts, and a UDP one drops
  * each IPv4 datagram it receives. Netty's io_uring TCP channels are IPv6 wherever the host has
- * IPv6, so an IPv4 TCP socket on io_uring is an IPv6 one used only with IPv4 addresses. Linux then
- * refuses to bind it to a port an IPv6 socket holds on the wildcard address.
+ * IPv6, so an IPv4 TCP socket on io_uring is an IPv6 one used only with IPv4 addresses. Netty binds
+ * it to IPv6's wildcard address when given IPv4's, so there it takes the port from IPv6 too, and a
+ * listening one closes each IPv6 connection it accepts.
  *
  * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp-create-socket.wit">wasi:sockets/tcp-create-socket, create-tcp-socket</a>
  * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp-create-socket.wit">wasi:sockets/udp-create-socket, create-udp-socket</a>
