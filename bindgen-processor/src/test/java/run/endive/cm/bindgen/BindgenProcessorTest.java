@@ -431,6 +431,112 @@ class BindgenProcessorTest {
                 .contains("pollHandles.ownPollable(streams.subscribe())");
     }
 
+    /**
+     * A resource alias is the resource it names, so it generates no type of its own and is
+     * exported as that resource's runtime type.
+     */
+    @Test
+    void aResourceAliasIsTheResourceItNames() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.ResourceAliasHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"w\", inline = \"package t:t;\\n"
+                                        + "interface i {\\n"
+                                        + "  resource fields { from-list: static func() -> headers;"
+                                        + " }\\n"
+                                        + "  type headers = fields;\\n"
+                                        + "  type trailers = headers;\\n"
+                                        + "  resource body { trailers: func() -> trailers; }\\n"
+                                        + "}\\n"
+                                        + "world w {\\n"
+                                        + "  import i;\\n"
+                                        + "}\\n"
+                                        + "\")\n"
+                                        + "public class ResourceAliasHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertGenerated(
+                compilation,
+                List.of(
+                        "endive.testing.WWorld",
+                        "endive.testing.t.t.i.Body",
+                        "endive.testing.t.t.i.Fields",
+                        "endive.testing.t.t.i.Handles",
+                        "endive.testing.t.t.i.Host"));
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.t.t.i.Body")
+                .contentsAsUtf8String()
+                .contains("Fields trailers();");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.WWorld")
+                .contentsAsUtf8String()
+                .contains("iBuilder.addResource(\"trailers\", iFields);");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.WWorld")
+                .contentsAsUtf8String()
+                .contains("iHandles.ownFields(i.fieldsFromList())");
+    }
+
+    /** Java lets an interface declare a public {@code clone}, so the WIT name is kept. */
+    @Test
+    void aResourceMethodMayBeNamedClone() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.CloneHost",
+                                "package endive.testing;\n"
+                                        + "import run.endive.cm.runtime.Bindgen;\n"
+                                        + "@Bindgen(world = \"w\", inline = \"package t:t;\\n"
+                                        + "interface i {\\n"
+                                        + "  resource fields { clone: func() -> fields; }\\n"
+                                        + "}\\n"
+                                        + "world w {\\n"
+                                        + "  import i;\\n"
+                                        + "}\\n\")\n"
+                                        + "public class CloneHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.t.t.i.Fields")
+                .contentsAsUtf8String()
+                .contains("Fields clone();");
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.WWorld")
+                .contentsAsUtf8String()
+                .contains(
+                        "iHandles.ownFields(iHandles.getFields((ResourceValue) args[0]).clone())");
+    }
+
+    /** A static of an exported resource returning an alias of it makes one, like a constructor. */
+    @Test
+    void anExportedStaticReturningAnAliasMakesTheResource() {
+        Compilation compilation =
+                compile(
+                        JavaFileObjects.forSourceString(
+                                "endive.testing.ExportedAliasHost",
+                                "package endive.testing;\n"
+                                    + "import run.endive.cm.runtime.Bindgen;\n"
+                                    + "@Bindgen(world = \"w\", inline = \"package t:t;\\n"
+                                    + "interface i {\\n"
+                                    + "  resource fields { empty: static func() -> headers; }\\n"
+                                    + "  type headers = fields;\\n"
+                                    + "}\\n"
+                                    + "world w {\\n"
+                                    + "  export i;\\n"
+                                    + "}\\n"
+                                    + "\")\n"
+                                    + "public class ExportedAliasHost {}\n"));
+
+        assertThat(compilation).succeededWithoutWarnings();
+        assertThat(compilation)
+                .generatedSourceFile("endive.testing.exports.t.t.i.Guest")
+                .contentsAsUtf8String()
+                .contains("return new Fields(this, (ResourceValue) this.fieldsEmpty.apply()[0]);");
+    }
+
     /** Only an interface's wiring reaches a {@code Handles}, so a world using a resource is refused. */
     @Test
     void aResourceAWorldUsesIsRefused() {
