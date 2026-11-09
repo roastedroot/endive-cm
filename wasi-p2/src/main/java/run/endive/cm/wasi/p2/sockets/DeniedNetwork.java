@@ -10,8 +10,9 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.UdpSocket;
 import run.endive.cm.wasi.p2.sockets.network.ErrorCodes;
 
 /**
- * The {@code wasi:sockets} interfaces for a guest granted no network access, which refuse
- * everything with {@code access-denied} and need no additional dependencies.
+ * The {@code wasi:sockets} interfaces for a guest granted no network access, which need no
+ * additional dependencies. They refuse sockets with {@code access-denied} and name lookups with
+ * {@code permanent-resolver-failure}, as wasmtime does.
  *
  * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/network.wit">wasi:sockets/network</a>
  */
@@ -46,7 +47,7 @@ final class DeniedNetwork
 
     @Override
     public ResolveAddressStream resolveAddresses(Network network, String name) {
-        throw ErrorCodes.error(ErrorCode.ACCESS_DENIED);
+        throw ErrorCodes.error(ErrorCode.PERMANENT_RESOLVER_FAILURE);
     }
 
     @Override

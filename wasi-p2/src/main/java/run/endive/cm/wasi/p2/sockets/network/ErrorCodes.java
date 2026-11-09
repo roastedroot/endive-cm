@@ -2,6 +2,7 @@ package run.endive.cm.wasi.p2.sockets.network;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.InvocationTargetException;
 import java.net.BindException;
 import java.net.ConnectException;
 import java.net.NoRouteToHostException;
@@ -19,6 +20,7 @@ import java.nio.channels.UnsupportedAddressTypeException;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.ErrorCode;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.ErrorCodeException;
 
@@ -27,7 +29,8 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.ErrorCodeException;
  * error-code}.
  *
  * <p>The JDK reports many failures only as an {@link IOException} carrying the host's message, so
- * the messages the C libraries of Linux and macOS give in English are recognized too.
+ * the messages the C libraries of Linux and macOS give in English are recognized too. Netty's
+ * native transports put the call that failed before the message.
  *
  * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/network.wit">wasi:sockets/network</a>
  */
@@ -60,6 +63,10 @@ public final class ErrorCodes {
                     Map.entry("Cannot allocate memory", ErrorCode.OUT_OF_MEMORY),
                     Map.entry("Invalid argument", ErrorCode.INVALID_ARGUMENT));
 
+    /** What Netty's native transports put before the host's message, such as {@code bind(..)}. */
+    private static final Pattern NATIVE_CALL =
+            Pattern.compile("^\\w+\\(\\.\\.\\) failed with error\\(-?\\d+\\): ");
+
     private ErrorCodes() {}
 
     public static ErrorCodeException error(ErrorCode code) {
@@ -76,7 +83,8 @@ public final class ErrorCodes {
     public static ErrorCode codeOf(Throwable cause) {
         if (cause instanceof UncheckedIOException
                 || cause instanceof CompletionException
-                || cause instanceof ExecutionException) {
+                || cause instanceof ExecutionException
+                || cause instanceof InvocationTargetException) {
             return cause.getCause() == null ? null : codeOf(cause.getCause());
         }
         if (cause instanceof UnknownHostException) {
@@ -115,6 +123,9 @@ public final class ErrorCodes {
             return null;
         }
         ErrorCode code = reasonCode(cause.getMessage());
+        if (code == null && cause.getCause() != null) {
+            code = codeOf(cause.getCause());
+        }
         if (code != null) {
             return code;
         }
@@ -132,8 +143,9 @@ public final class ErrorCodes {
         if (reason == null) {
             return null;
         }
+        String message = NATIVE_CALL.matcher(reason).replaceFirst("");
         for (Map.Entry<String, ErrorCode> known : REASONS.entrySet()) {
-            if (reason.startsWith(known.getKey())) {
+            if (message.startsWith(known.getKey())) {
                 return known.getValue();
             }
         }

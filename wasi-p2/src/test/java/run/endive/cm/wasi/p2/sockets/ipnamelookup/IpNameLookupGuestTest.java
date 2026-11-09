@@ -98,7 +98,8 @@ class IpNameLookupGuestTest {
         try (var wasi = WasiPreview2.builder().build()) {
             var lookupError = instantiate(wasi).export("lookup-error");
 
-            assertEquals(code(ErrorCode.ACCESS_DENIED), lookupError.apply("localhost")[0]);
+            assertEquals(
+                    code(ErrorCode.PERMANENT_RESOLVER_FAILURE), lookupError.apply("localhost")[0]);
         }
     }
 

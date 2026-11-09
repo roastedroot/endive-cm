@@ -56,14 +56,16 @@ public class HostIpNameLookup implements Host {
     }
 
     /**
-     * Starts resolving {@code name}, which never blocks.
+     * Starts resolving {@code name}, which never blocks. A policy denying name lookup fails it with
+     * {@code permanent-resolver-failure}, as wasmtime does, since the interface lists no {@code
+     * access-denied}.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/ip-name-lookup.wit">wasi:sockets/ip-name-lookup, resolve-addresses</a>
      */
     @Override
     public ResolveAddressStream resolveAddresses(Network network, String name) {
         if (!HostNetwork.of(network).policy().allowsIpNameLookup()) {
-            throw ErrorCodes.error(ErrorCode.ACCESS_DENIED);
+            throw ErrorCodes.error(ErrorCode.PERMANENT_RESOLVER_FAILURE);
         }
         InetAddress literal = ipLiteral(name);
         if (literal != null) {
