@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.InvocationTargetException;
 import java.net.BindException;
 import java.net.ConnectException;
 import java.net.NoRouteToHostException;
@@ -76,6 +77,20 @@ class ErrorCodesTest {
     }
 
     @Test
+    void aNativeTransportsMessageHasItsCode() {
+        assertEquals(
+                ErrorCode.ADDRESS_IN_USE,
+                ErrorCodes.codeOf(
+                        new IOException(
+                                "bind(..) failed with error(-98): Address already in use")));
+        assertEquals(
+                ErrorCode.TIMEOUT,
+                ErrorCodes.codeOf(
+                        new ConnectException(
+                                "connect(..) failed with error(-110): Connection timed out")));
+    }
+
+    @Test
     void aBindOrConnectFailureWithoutAKnownMessageHasItsUsualCode() {
         assertEquals(ErrorCode.ADDRESS_IN_USE, ErrorCodes.codeOf(new BindException()));
         assertEquals(
@@ -92,6 +107,17 @@ class ErrorCodesTest {
         assertEquals(
                 ErrorCode.TIMEOUT,
                 ErrorCodes.codeOf(new UncheckedIOException(new SocketTimeoutException())));
+    }
+
+    /** Netty opens NIO channels of a family through reflection, wrapping what the JDK throws. */
+    @Test
+    void aFailureNettyWrappedHasTheCodeOfItsCause() {
+        assertEquals(
+                ErrorCode.NOT_SUPPORTED,
+                ErrorCodes.codeOf(
+                        new IOException(
+                                new InvocationTargetException(
+                                        new UnsupportedOperationException("IPv6 not available")))));
     }
 
     @Test

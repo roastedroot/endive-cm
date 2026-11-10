@@ -14,14 +14,19 @@ import run.endive.cm.wasi.p2.sockets.network.HostNetwork;
  */
 public class HostInstanceNetwork implements Host {
 
-    private final NetworkPolicy policy;
+    private final HostNetwork network;
 
     public HostInstanceNetwork(NetworkPolicy policy) {
-        this.policy = Objects.requireNonNull(policy, "policy");
+        this.network = new HostNetwork(Objects.requireNonNull(policy, "policy"));
     }
 
+    /**
+     * The same network on every call, since connecting needs the network a socket was bound with.
+     *
+     * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/instance-network.wit">wasi:sockets/instance-network, instance-network</a>
+     */
     @Override
     public Network instanceNetwork() {
-        return new HostNetwork(policy);
+        return network;
     }
 }

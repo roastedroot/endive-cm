@@ -36,7 +36,7 @@ public final class HostSocketsFactory {
             return new DeniedNetwork();
         }
         requireNetty();
-        return NettyNetwork.start(poll, scheduler, nameResolver);
+        return NettyNetwork.start(poll, policy, scheduler, nameResolver);
     }
 
     /** Whether {@code policy} grants anything, which is when the guest needs Netty. */
