@@ -268,6 +268,11 @@ import javax.annotation.processing.Generated;
 @Generated("run.endive.cm.bindgen.BindgenProcessor")
 public interface InputStream {
 
+    /**
+     * The method {@code input-stream.read}.
+     *
+     * @throws StreamErrorException as the error case of the result
+     */
     byte[] read(BigInteger len);
 
     /**

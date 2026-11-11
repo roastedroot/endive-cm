@@ -10,11 +10,11 @@ import run.endive.cm.bindgen.it.Components;
 import run.endive.cm.bindgen.it.results.example.resulttypes.parsing.Host;
 import run.endive.cm.bindgen.it.results.example.resulttypes.parsing.ParseError;
 import run.endive.cm.bindgen.it.results.example.resulttypes.parsing.ParseErrorException;
+import run.endive.cm.bindgen.it.results.exports.example.resulttypes.running.CountException;
 import run.endive.cm.bindgen.it.results.exports.example.resulttypes.running.Guest;
+import run.endive.cm.bindgen.it.results.exports.example.resulttypes.running.PingException;
 import run.endive.cm.bindgen.it.results.exports.example.resulttypes.running.RunError;
 import run.endive.cm.bindgen.it.results.exports.example.resulttypes.running.RunErrorException;
-import run.endive.cm.bindgen.it.results.exports.example.resulttypes.running.RunningResult6Exception;
-import run.endive.cm.bindgen.it.results.exports.example.resulttypes.running.RunningResult8Exception;
 import run.endive.cm.runtime.Bindgen;
 import run.endive.cm.runtime.ComponentStore;
 import run.endive.cm.types.WasmComponent;
@@ -125,7 +125,7 @@ public class ResultTest {
         Guest guest = running(text -> 21L);
 
         assertEquals(99L, guest.count(false));
-        assertThrows(RunningResult6Exception.class, () -> guest.count(true));
+        assertThrows(CountException.class, () -> guest.count(true));
     }
 
     /** A bare {@code result} carries neither payload, so only the case is left. */
@@ -134,7 +134,7 @@ public class ResultTest {
         Guest guest = running(text -> 21L);
 
         guest.ping(false);
-        assertThrows(RunningResult8Exception.class, () -> guest.ping(true));
+        assertThrows(PingException.class, () -> guest.ping(true));
     }
 
     private static Guest running(Host host) {
