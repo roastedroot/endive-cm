@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigInteger;
 import java.net.ConnectException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -40,6 +42,11 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.IpAddressFamily;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.IpSocketAddress;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.Network;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.tcp.TcpSocket;
+import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.IncomingDatagram;
+import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.IncomingDatagramStream;
+import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.OutgoingDatagram;
+import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.OutgoingDatagramStream;
+import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.UdpSocket;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
 import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
 
@@ -62,6 +69,9 @@ class NativeTransportTest {
         refusesIpv4OnIpv6On(EpollIoHandler.newFactory());
         setsTheHopLimitOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
+        sendsDatagramsOn(EpollIoHandler.newFactory());
+        setsTheUnicastHopLimitOn(EpollIoHandler.newFactory());
+        keepsUdpIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
 
     @Test
@@ -73,6 +83,9 @@ class NativeTransportTest {
         reportsAnAddressInUseOn(IoUringIoHandler.newFactory());
         refusesIpv4OnIpv6On(IoUringIoHandler.newFactory());
         setsTheHopLimitOn(IoUringIoHandler.newFactory());
+        sendsDatagramsOn(IoUringIoHandler.newFactory());
+        setsTheUnicastHopLimitOn(IoUringIoHandler.newFactory());
+        keepsUdpIpv6ApartFromIpv4On(IoUringIoHandler.newFactory());
     }
 
     @Test
@@ -85,6 +98,9 @@ class NativeTransportTest {
         refusesIpv4OnIpv6On(KQueueIoHandler.newFactory());
         setsTheHopLimitOn(KQueueIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
+        sendsDatagramsOn(KQueueIoHandler.newFactory());
+        setsTheUnicastHopLimitOn(KQueueIoHandler.newFactory());
+        keepsUdpIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
 
     /** Netty's resolver answers localhost from the hosts file, on the transport's channels. */
@@ -257,6 +273,127 @@ class NativeTransportTest {
             finish(wasi, ipv4, ipv4::finishListen);
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * A guest socket limited to another sends it a datagram over loopback, on the transport's UDP
+     * channels.
+     */
+    private static void sendsDatagramsOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket receiver = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            UdpSocket sender = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            OutgoingDatagramStream out = sender.stream(receiver.localAddress()).f1();
+            IncomingDatagramStream in = receiver.stream(null).f0();
+
+            while (out.checkSend().signum() == 0) {
+                wasi.poll().poll(List.of(out.subscribe()));
+            }
+            out.send(List.of(new OutgoingDatagram("native".getBytes(UTF_8), null)));
+            IncomingDatagram received = receiveOne(wasi, in);
+
+            assertEquals("native", new String(received.data(), UTF_8));
+            assertEquals(sender.localAddress(), received.remoteAddress());
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    private static void setsTheUnicastHopLimitOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket ipv4 = wasi.udpCreateSocket().createUdpSocket(IpAddressFamily.IPV4);
+            assertTrue(ipv4.unicastHopLimit() > 0);
+            ipv4.setUnicastHopLimit((short) 42);
+            assertEquals((short) 42, ipv4.unicastHopLimit());
+            if (NettyTcpTest.hasIpv6Loopback()) {
+                UdpSocket ipv6 = wasi.udpCreateSocket().createUdpSocket(IpAddressFamily.IPV6);
+                assertTrue(ipv6.unicastHopLimit() > 0);
+                ipv6.setUnicastHopLimit((short) 255);
+                assertEquals((short) 255, ipv6.unicastHopLimit());
+            }
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * A UDP socket on IPv6's wildcard address leaves IPv4 the same port, and the IPv4 datagrams
+     * sent to it.
+     */
+    private static void keepsUdpIpv6ApartFromIpv4On(IoHandlerFactory transport) {
+        if (!NettyTcpTest.hasIpv6Loopback()) {
+            return;
+        }
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                        WasiPreview2.builder()
+                                .withScheduler(group)
+                                .withNetworkPolicy(NetworkPolicy.allowAll())
+                                .build();
+                DatagramSocket host = new DatagramSocket(0, InetAddress.getLoopbackAddress())) {
+            UdpSocket ipv6 =
+                    bound(
+                            wasi,
+                            IpAddressFamily.IPV6,
+                            IpAddresses.fromInet(new InetSocketAddress("::", 0)));
+            int port = IpAddresses.toInet(ipv6.localAddress()).getPort();
+            UdpSocket ipv4 =
+                    bound(
+                            wasi,
+                            IpAddressFamily.IPV4,
+                            IpAddresses.fromInet(new InetSocketAddress("0.0.0.0", port)));
+            IncomingDatagramStream ipv4In = ipv4.stream(null).f0();
+            IncomingDatagramStream ipv6In = ipv6.stream(null).f0();
+
+            byte[] four = "four".getBytes(UTF_8);
+            host.send(
+                    new DatagramPacket(
+                            four, four.length, new InetSocketAddress("127.0.0.1", port)));
+
+            assertEquals("four", new String(receiveOne(wasi, ipv4In).data(), UTF_8));
+            assertTrue(ipv6In.receive(BigInteger.ONE).isEmpty());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    private static IncomingDatagram receiveOne(WasiPreview2 wasi, IncomingDatagramStream in) {
+        while (true) {
+            List<IncomingDatagram> received = in.receive(BigInteger.ONE);
+            if (!received.isEmpty()) {
+                return received.get(0);
+            }
+            wasi.poll().poll(List.of(in.subscribe()));
+        }
+    }
+
+    private static UdpSocket bound(
+            WasiPreview2 wasi, IpAddressFamily family, IpSocketAddress local) {
+        UdpSocket socket = wasi.udpCreateSocket().createUdpSocket(family);
+        socket.startBind(wasi.instanceNetwork().instanceNetwork(), local);
+        while (true) {
+            try {
+                socket.finishBind();
+                return socket;
+            } catch (ErrorCodeException e) {
+                if (e.error() != ErrorCode.WOULD_BLOCK) {
+                    throw e;
+                }
+                wasi.poll().poll(List.of(socket.subscribe()));
+            }
         }
     }
 

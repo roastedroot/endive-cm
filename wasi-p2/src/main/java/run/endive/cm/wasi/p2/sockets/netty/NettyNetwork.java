@@ -30,6 +30,7 @@ public final class NettyNetwork implements HostSockets {
     private final boolean ownsGroup;
     private final DnsNameResolver defaultNameResolver;
     private final NettyTcp tcp;
+    private final NettyUdp udp;
     private final HostIpNameLookup ipNameLookup;
     private final HostTcpCreateSocket tcpCreateSocket;
     private final HostUdpCreateSocket udpCreateSocket;
@@ -53,7 +54,8 @@ public final class NettyNetwork implements HostSockets {
                                 : nameResolver);
         this.tcp = new NettyTcp(poll, group, channels);
         this.tcpCreateSocket = new HostTcpCreateSocket(poll, policy, tcp);
-        this.udpCreateSocket = new HostUdpCreateSocket();
+        this.udp = new NettyUdp(group, channels);
+        this.udpCreateSocket = new HostUdpCreateSocket(poll, policy, udp);
     }
 
     /**
@@ -120,6 +122,11 @@ public final class NettyNetwork implements HostSockets {
         return tcp;
     }
 
+    /** Opens the network's UDP sockets, for a test reaching past the guest's interface. */
+    NettyUdp udp() {
+        return udp;
+    }
+
     @Override
     public run.endive.cm.wasi.p2.bindings.wasi.sockets.ipnamelookup.Host ipNameLookup() {
         return ipNameLookup;
@@ -142,6 +149,7 @@ public final class NettyNetwork implements HostSockets {
     @Override
     public void close() {
         tcp.close();
+        udp.close();
         if (defaultNameResolver != null) {
             defaultNameResolver.close();
         }

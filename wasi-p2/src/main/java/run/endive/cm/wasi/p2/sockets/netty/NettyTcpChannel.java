@@ -1,5 +1,11 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.closeOnceRegistered;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isIpv4OnIpv6;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.protocolFamily;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.unwrapped;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -11,12 +17,8 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.socket.ChannelInputShutdownEvent;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.SocketProtocolFamily;
 import io.netty.util.NetUtil;
-import io.netty.util.concurrent.Future;
 import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
@@ -33,6 +35,7 @@ import run.endive.cm.wasi.p2.io.streams.BufferedHostInputStream;
 import run.endive.cm.wasi.p2.io.streams.BufferedHostOutputStream;
 import run.endive.cm.wasi.p2.io.streams.HostInputStream;
 import run.endive.cm.wasi.p2.io.streams.HostOutputStream;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
 import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
 
@@ -66,7 +69,7 @@ final class NettyTcpChannel implements TcpChannel {
                     ExtendedSocketOptions.TCP_KEEPCOUNT,
                     StandardSocketOptions.SO_RCVBUF,
                     StandardSocketOptions.SO_SNDBUF,
-                    TcpChannel.HOP_LIMIT);
+                    HopLimits.OPTION);
 
     private final NettyTcp tcp;
     private final IpAddressFamily family;
@@ -461,47 +464,6 @@ final class NettyTcpChannel implements TcpChannel {
         return netty == null ? null : channel.config().getOption(netty);
     }
 
-    private static void closeOnceRegistered(Channel channel, CompletableFuture<Void> registration) {
-        registration.whenComplete(
-                (ignored, failure) -> {
-                    if (failure == null) {
-                        channel.close();
-                    } else {
-                        channel.unsafe().closeForcibly();
-                    }
-                });
-    }
-
-    private static SocketProtocolFamily protocolFamily(IpAddressFamily family) {
-        return family == IpAddressFamily.IPV4
-                ? SocketProtocolFamily.INET
-                : SocketProtocolFamily.INET6;
-    }
-
-    /** What Netty wrapped, which tells the guest why the host failed. */
-    private static IOException unwrapped(ChannelException e) {
-        Throwable cause = e.getCause();
-        if (cause instanceof RuntimeException) {
-            throw (RuntimeException) cause;
-        }
-        return cause instanceof IOException ? (IOException) cause : new IOException(e);
-    }
-
-    private static CompletableFuture<Void> completable(Future<?> future) {
-        CompletableFuture<Void> completable = new CompletableFuture<>();
-        future.addListener(
-                done -> {
-                    if (done.isSuccess()) {
-                        completable.complete(null);
-                    } else if (done.isCancelled()) {
-                        completable.cancel(false);
-                    } else {
-                        completable.completeExceptionally(done.cause());
-                    }
-                });
-        return completable;
-    }
-
     /** Moves what a connection receives into its input stream, and ends its streams. */
     private final class Connection extends ChannelInboundHandlerAdapter {
 
@@ -548,7 +510,7 @@ final class NettyTcpChannel implements TcpChannel {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
             SocketChannel child = (SocketChannel) msg;
-            if (isIpv4OnIpv6(child)) {
+            if (isIpv4OnIpv6(family, child.remoteAddress())) {
                 child.unsafe().closeForcibly();
                 return;
             }
@@ -578,20 +540,6 @@ final class NettyTcpChannel implements TcpChannel {
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             acceptFailure = cause;
             acceptReadiness.complete(null);
-        }
-
-        /**
-         * Whether an IPv6 listener accepted an IPv4 peer, which only NIO allows.
-         *
-         * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp-create-socket.wit">wasi:sockets/tcp-create-socket, create-tcp-socket</a>
-         */
-        private boolean isIpv4OnIpv6(SocketChannel child) {
-            InetSocketAddress peer = child.remoteAddress();
-            if (family != IpAddressFamily.IPV6 || peer == null) {
-                return false;
-            }
-            InetAddress ip = peer.getAddress();
-            return ip instanceof Inet4Address || IpAddresses.isIpv4Mapped(ip);
         }
 
         /** A value the host refuses for the connection leaves it the host's default. */
