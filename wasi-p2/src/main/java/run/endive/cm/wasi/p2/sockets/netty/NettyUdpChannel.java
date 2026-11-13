@@ -3,6 +3,7 @@ package run.endive.cm.wasi.p2.sockets.netty;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.closeOnceRegistered;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completeWith;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isIpv4OnIpv6;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.protocolFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.unwrapped;
 
@@ -268,7 +269,10 @@ final class NettyUdpChannel implements UdpChannel {
         return address == null ? null : IpAddresses.inFamily(address, family);
     }
 
-    /** Keeps each datagram received, with its sender, until the guest receives it. */
+    /**
+     * Keeps each datagram received, with its sender, until the guest receives it. An IPv6 socket
+     * drops each datagram from an IPv4 sender, which only NIO delivers.
+     */
     private final class Receiver extends ChannelInboundHandlerAdapter {
 
         @Override
@@ -277,7 +281,8 @@ final class NettyUdpChannel implements UdpChannel {
                     (io.netty.channel.socket.DatagramPacket) msg;
             try {
                 int length = packet.content().readableBytes();
-                if (receivedBytes.get() + length > RECEIVE_CAPACITY) {
+                if (isIpv4OnIpv6(family, packet.sender())
+                        || receivedBytes.get() + length > RECEIVE_CAPACITY) {
                     return;
                 }
                 byte[] data = ByteBufUtil.getBytes(packet.content());

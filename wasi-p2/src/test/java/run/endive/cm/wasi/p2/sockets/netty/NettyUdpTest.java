@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -167,6 +168,33 @@ class NettyUdpTest {
         assertEquals(a.localAddress(), received.remoteAddress());
     }
 
+    /** Java offers NIO no way to set {@code IPV6_V6ONLY}, so the socket drops them itself. */
+    @Test
+    void anIpv6SocketDropsIpv4DatagramsOnNio() throws IOException {
+        assumeTrue(NettyTcpTest.hasIpv6Loopback());
+        UdpSocket socket = bound(IpAddressFamily.IPV6, address(new InetSocketAddress("::", 0)));
+        IncomingDatagramStream in = socket.stream(null).f0();
+        int port = IpAddresses.toInet(socket.localAddress()).getPort();
+
+        try (DatagramSocket ipv4 = new DatagramSocket(0, InetAddress.getByName("127.0.0.1"));
+                DatagramSocket ipv6 = new DatagramSocket(0, InetAddress.getByName("::1"))) {
+            ipv4.send(datagram("four", new InetSocketAddress("127.0.0.1", port)));
+            ipv6.send(datagram("six", new InetSocketAddress("::1", port)));
+        }
+
+        assertEquals("six", text(receiveOne(in)));
+        assertTrue(in.receive(BigInteger.ONE).isEmpty());
+    }
+
+    /** Java offers NIO no way to read or set the hop limit of a UDP socket. */
+    @Test
+    void theHopLimitIsNotSupportedOnNio() {
+        UdpSocket socket = create(IpAddressFamily.IPV4);
+
+        assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(socket::unicastHopLimit));
+        assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(() -> socket.setUnicastHopLimit((short) 64)));
+    }
+
     @Test
     void bufferSizesAreSetOnTheChannel() {
         UdpSocket socket = create(IpAddressFamily.IPV4);
@@ -234,6 +262,11 @@ class NettyUdpTest {
             }
             poll.poll(List.of(in.subscribe()));
         }
+    }
+
+    private static DatagramPacket datagram(String data, InetSocketAddress to) {
+        byte[] bytes = data.getBytes(UTF_8);
+        return new DatagramPacket(bytes, bytes.length, to);
     }
 
     private static String text(IncomingDatagram datagram) {

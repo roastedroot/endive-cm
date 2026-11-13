@@ -31,6 +31,7 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.OutgoingDatagram;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.OutgoingDatagramStream;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 import run.endive.cm.wasi.p2.sockets.network.HostNetwork;
 import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
 import run.endive.runtime.TrapException;
@@ -361,11 +362,36 @@ class HostUdpSocketTest {
     }
 
     @Test
-    void theHopLimitIsNotSupported() {
-        assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(socket::unicastHopLimit));
+    void theHopLimitIsReadAndWrittenOnTheChannel() {
+        socket.setUnicastHopLimit((short) 255);
+
+        assertEquals((short) 255, socket.unicastHopLimit());
+        assertEquals(255, channel.options.get(HopLimits.OPTION));
         assertEquals(
                 ErrorCode.INVALID_ARGUMENT, errorOf(() -> socket.setUnicastHopLimit((short) 0)));
+    }
+
+    @Test
+    void aHopLimitTheHostLeftUnsetIsItsDefault() {
+        channel.options.put(HopLimits.OPTION, -1);
+
+        assertEquals(HopLimits.DEFAULT, socket.unicastHopLimit());
+    }
+
+    @Test
+    void aHopLimitTheHostLacksIsNotSupported() {
+        channel.options.remove(HopLimits.OPTION);
+
+        assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(socket::unicastHopLimit));
         assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(() -> socket.setUnicastHopLimit((short) 64)));
+    }
+
+    @Test
+    void theHopLimitOfADroppedSocketIsInvalid() {
+        socket.drop();
+
+        assertEquals(ErrorCode.INVALID_STATE, errorOf(socket::unicastHopLimit));
+        assertEquals(ErrorCode.INVALID_STATE, errorOf(() -> socket.setUnicastHopLimit((short) 64)));
     }
 
     private void bind() {

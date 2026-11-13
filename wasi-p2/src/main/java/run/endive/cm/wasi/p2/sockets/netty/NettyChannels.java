@@ -41,7 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
-import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 
 /**
  * The Netty channels from which the network creates its sockets, and the Netty options standing
@@ -55,12 +55,13 @@ import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
  *
  * <p>WASI's IPv6 sockets take no IPv4 traffic, so the native transports set {@code IPV6_V6ONLY} on
  * them. Java offers NIO no way to set it, so on NIO an IPv6 socket still takes a port from IPv4's
- * wildcard address, and a listening one closes each IPv4 connection it accepts. Netty's io_uring
- * channels are IPv6 wherever the host has IPv6, so an IPv4 socket on io_uring is an IPv6 one used
- * only with IPv4 addresses. Linux then refuses to bind it to a port an IPv6 socket holds on the
- * wildcard address.
+ * wildcard address. A listening one closes each IPv4 connection it accepts, and a UDP one drops
+ * each IPv4 datagram it receives. Netty's io_uring TCP channels are IPv6 wherever the host has
+ * IPv6, so an IPv4 TCP socket on io_uring is an IPv6 one used only with IPv4 addresses. Linux then
+ * refuses to bind it to a port an IPv6 socket holds on the wildcard address.
  *
  * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp-create-socket.wit">wasi:sockets/tcp-create-socket, create-tcp-socket</a>
+ * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp-create-socket.wit">wasi:sockets/udp-create-socket, create-udp-socket</a>
  */
 final class NettyChannels {
 
@@ -179,7 +180,7 @@ final class NettyChannels {
      */
     @SuppressWarnings("unchecked")
     <T> ChannelOption<T> option(SocketOption<T> option, SocketProtocolFamily family) {
-        if (option == TcpChannel.HOP_LIMIT) {
+        if (option == HopLimits.OPTION) {
             return (ChannelOption<T>) hopLimits.get(family);
         }
         return (ChannelOption<T>) options.get(option);
@@ -361,7 +362,10 @@ final class NettyChannels {
                         family ->
                                 family == null
                                         ? new EpollDatagramChannel()
-                                        : new EpollDatagramChannel(family),
+                                        : ipv6Only(
+                                                new EpollDatagramChannel(family),
+                                                family,
+                                                Unix.LINUX_V6_ONLY),
                         Unix::bind,
                         (channel, backlog) ->
                                 new EpollServerSocketChannel(Unix.listen(channel, backlog)),
@@ -379,8 +383,8 @@ final class NettyChannels {
     }
 
     /**
-     * Netty's io_uring channels take over no socket opened elsewhere, and are IPv6 wherever the host
-     * has IPv6.
+     * Netty's io_uring channels take over no socket opened elsewhere. Its TCP channels are IPv6
+     * wherever the host has IPv6.
      */
     private static final class IoUring {
 
@@ -399,7 +403,10 @@ final class NettyChannels {
                         family ->
                                 family == null
                                         ? new IoUringDatagramChannel()
-                                        : new IoUringDatagramChannel(family),
+                                        : ipv6Only(
+                                                new IoUringDatagramChannel(family),
+                                                family,
+                                                Unix.LINUX_V6_ONLY),
                         Unix::bind,
                         (channel, backlog) -> null,
                         withKeepAlive(
@@ -440,7 +447,10 @@ final class NettyChannels {
                         family ->
                                 family == null
                                         ? new KQueueDatagramChannel()
-                                        : new KQueueDatagramChannel(family),
+                                        : ipv6Only(
+                                                new KQueueDatagramChannel(family),
+                                                family,
+                                                Unix.BSD_V6_ONLY),
                         Unix::bind,
                         (channel, backlog) ->
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),

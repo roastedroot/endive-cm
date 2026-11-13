@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 
 /**
  * A channel whose operations complete only when a test completes them, recording what the socket
@@ -36,6 +37,7 @@ final class TestUdpChannel implements UdpChannel {
     TestUdpChannel() {
         options.put(StandardSocketOptions.SO_RCVBUF, 65536);
         options.put(StandardSocketOptions.SO_SNDBUF, 65536);
+        options.put(HopLimits.OPTION, 64);
     }
 
     /** Queues a datagram from {@code sender} to be received. */

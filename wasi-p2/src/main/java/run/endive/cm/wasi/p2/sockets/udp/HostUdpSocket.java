@@ -21,6 +21,7 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.UdpSocket;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
 import run.endive.cm.wasi.p2.sockets.network.ErrorCodes;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 import run.endive.cm.wasi.p2.sockets.network.HostNetwork;
 import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
 import run.endive.runtime.TrapException;
@@ -151,19 +152,25 @@ public class HostUdpSocket implements UdpSocket {
         return family;
     }
 
-    /** Java offers no way to read the hop limit of a UDP socket. */
+    /**
+     * Not supported where the host offers no way to read it, as on NIO.
+     *
+     * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp.wit">wasi:sockets/udp, unicast-hop-limit</a>
+     */
     @Override
     public Short unicastHopLimit() {
-        requireOpen();
-        throw ErrorCodes.error(ErrorCode.NOT_SUPPORTED);
+        return HopLimits.of(option(HopLimits.OPTION));
     }
 
-    /** Java offers no way to set the hop limit of a UDP socket. */
+    /**
+     * Not supported where the host offers no way to set it, as on NIO.
+     *
+     * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp.wit">wasi:sockets/udp, set-unicast-hop-limit</a>
+     */
     @Override
     public void setUnicastHopLimit(Short value) {
         requirePositive(value);
-        requireOpen();
-        throw ErrorCodes.error(ErrorCode.NOT_SUPPORTED);
+        setOption(HopLimits.OPTION, value.intValue());
     }
 
     @Override
