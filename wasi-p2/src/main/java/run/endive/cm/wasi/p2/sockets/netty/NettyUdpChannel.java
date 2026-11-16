@@ -1,6 +1,5 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
-import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.closeOnceRegistered;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completeWith;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isOfTheOtherFamily;
@@ -11,6 +10,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelException;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
@@ -59,6 +59,10 @@ final class NettyUdpChannel implements UdpChannel {
     private final AtomicInteger sending = new AtomicInteger();
     private volatile CompletableFuture<Void> sendReadiness =
             CompletableFuture.completedFuture(null);
+
+    /** The datagram handed to Netty last, which only the event loop touches. */
+    private ChannelFuture lastSent;
+
     private volatile Throwable sendFailure;
     private volatile boolean closed;
 
@@ -66,6 +70,7 @@ final class NettyUdpChannel implements UdpChannel {
         this.udp = udp;
         this.family = family;
         this.channel = channel;
+        this.lastSent = channel.newSucceededFuture();
         channel.pipeline().addLast(new Receiver());
         this.registered = completable(udp.group().register(channel));
         udp.track(this);
@@ -159,9 +164,10 @@ final class NettyUdpChannel implements UdpChannel {
         try {
             channel.eventLoop()
                     .execute(
-                            () ->
-                                    channel.writeAndFlush(outgoing(content, recipient))
-                                            .addListener(written -> sent(written.cause())));
+                            () -> {
+                                lastSent = channel.writeAndFlush(outgoing(content, recipient));
+                                lastSent.addListener(written -> sent(written.cause()));
+                            });
         } catch (IllegalStateException | RejectedExecutionException e) {
             content.release();
             sent(e);
@@ -205,7 +211,19 @@ final class NettyUdpChannel implements UdpChannel {
         }
         closed = true;
         udp.forget(this);
-        closeOnceRegistered(channel, registered);
+        registered.whenComplete(
+                (ignored, failure) -> {
+                    if (failure != null) {
+                        channel.unsafe().closeForcibly();
+                        return;
+                    }
+                    try {
+                        channel.eventLoop()
+                                .execute(() -> lastSent.addListener(sent -> channel.close()));
+                    } catch (IllegalStateException | RejectedExecutionException e) {
+                        channel.unsafe().closeForcibly();
+                    }
+                });
     }
 
     /**

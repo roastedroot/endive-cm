@@ -29,12 +29,14 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import run.endive.cm.runtime.Tuple2;
 import run.endive.cm.wasi.p2.WasiPreview2;
 import run.endive.cm.wasi.p2.bindings.wasi.io.poll.Pollable;
@@ -59,6 +61,7 @@ import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
  * The network runs on a scheduler using one of Netty's native transports, with the channels that
  * transport needs. Each test runs only where its transport is available.
  */
+@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class NativeTransportTest {
 
     private static final IpSocketAddress LOOPBACK =
@@ -78,6 +81,7 @@ class NativeTransportTest {
         freesADroppedListenersAddressOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
         sendsDatagramsOn(EpollIoHandler.newFactory());
+        sendsWhatADroppedSocketQueuedOn(EpollIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(EpollIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(EpollIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(EpollIoHandler.newFactory());
@@ -98,6 +102,7 @@ class NativeTransportTest {
         readsBackBufferSizesOn(IoUringIoHandler.newFactory());
         freesADroppedListenersAddressOn(IoUringIoHandler.newFactory());
         sendsDatagramsOn(IoUringIoHandler.newFactory());
+        sendsWhatADroppedSocketQueuedOn(IoUringIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(IoUringIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(IoUringIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(IoUringIoHandler.newFactory());
@@ -119,6 +124,7 @@ class NativeTransportTest {
         freesADroppedListenersAddressOn(KQueueIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
         sendsDatagramsOn(KQueueIoHandler.newFactory());
+        sendsWhatADroppedSocketQueuedOn(KQueueIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(KQueueIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(KQueueIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(KQueueIoHandler.newFactory());
@@ -523,6 +529,36 @@ class NativeTransportTest {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /** A socket dropped right after sending still hands every datagram to the host. */
+    private static void sendsWhatADroppedSocketQueuedOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket receiver = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            IncomingDatagramStream in = receiver.stream(null).f0();
+            UdpSocket sender = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            OutgoingDatagramStream out = sender.stream(receiver.localAddress()).f1();
+            int count = out.checkSend().intValueExact();
+            List<OutgoingDatagram> datagrams = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                datagrams.add(new OutgoingDatagram(new byte[] {(byte) i}, null));
+            }
+
+            out.send(datagrams);
+            out.drop();
+            sender.drop();
+
+            for (int i = 0; i < count; i++) {
+                receiveOne(wasi, in);
+            }
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }
     }
 

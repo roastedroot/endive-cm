@@ -78,6 +78,6 @@ public interface UdpChannel {
      */
     <T> void setOption(SocketOption<T> option, T value) throws IOException;
 
-    /** Closes the channel, discarding what it has not sent. */
+    /** Closes the channel once the datagrams it was asked to send are handed to the host. */
     void close();
 }
