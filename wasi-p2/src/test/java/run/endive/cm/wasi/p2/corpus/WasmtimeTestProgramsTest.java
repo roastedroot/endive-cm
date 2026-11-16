@@ -2,6 +2,7 @@ package run.endive.cm.wasi.p2.corpus;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.netty.channel.EventLoopGroup;
@@ -36,11 +37,12 @@ import run.endive.cm.runtime.ComponentStore;
 import run.endive.cm.types.WasmComponent;
 import run.endive.cm.wasi.p2.WasiPreview2;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
+import run.endive.runtime.TrapException;
 
 /**
  * Wasmtime's own tests of WASI 0.2 sockets, each run as a command on every Netty transport
  * available here. The host is set up as wasmtime's test harness sets up its own, and a program
- * passes when it exits with success.
+ * passes when it exits with success, or traps where wasmtime's harness expects it to.
  *
  * @see <a href="https://github.com/bytecodealliance/wasmtime/tree/v50.0.1/crates/test-programs/src/bin">wasmtime's test programs</a>
  * @see <a href="https://github.com/bytecodealliance/wasmtime/blob/v50.0.1/crates/wasi/tests/all/store.rs">wasmtime's test harness</a>
@@ -51,23 +53,46 @@ class WasmtimeTestProgramsTest {
     private static final String DIRECTORY = "wasmtime/";
     private static final String WASM = ".wasm";
 
-    /** Programs that fail on every transport, with the reason. */
-    private static final Map<String, String> KNOWN_FAILURES =
-            Map.ofEntries(
-                    Map.entry("p2_udp_bind", "UDP is not implemented"),
-                    Map.entry("p2_udp_connect", "UDP is not implemented"),
-                    Map.entry("p2_udp_sample_application", "UDP is not implemented"),
-                    Map.entry("p2_udp_send_to_closed_receiver", "UDP is not implemented"),
-                    Map.entry("p2_udp_send_too_much", "UDP is not implemented"),
-                    Map.entry("p2_udp_sockopts", "UDP is not implemented"),
-                    Map.entry("p2_udp_states", "UDP is not implemented"),
-                    Map.entry("p2_udp_stream", "UDP is not implemented"));
+    private static final String NO_HOP_LIMIT_ON_NIO =
+            "Java offers NIO no way to read or set the hop limit";
 
-    /** Programs that fail on NIO only, with the reason. */
-    private static final Map<String, String> KNOWN_NIO_FAILURES =
+    /** Programs that fail on a transport, with the reason. */
+    private static final Map<Transport, Map<String, String>> KNOWN_FAILURES =
             Map.of(
-                    "p2_tcp_sockopts", "Java offers NIO no way to read or set the hop limit",
-                    "p2_tcp_states", "Java offers NIO no way to read or set the hop limit");
+                    Transport.NIO,
+                    Map.of(
+                            "p2_tcp_sockopts", NO_HOP_LIMIT_ON_NIO,
+                            "p2_tcp_states", NO_HOP_LIMIT_ON_NIO,
+                            "p2_udp_sockopts", NO_HOP_LIMIT_ON_NIO,
+                            "p2_udp_states", NO_HOP_LIMIT_ON_NIO,
+                            "p2_udp_sample_application",
+                                    "Java's NIO sends no empty datagram on a connected channel",
+                            "p2_udp_stream",
+                                    "The JDK discards the datagrams waiting as it connects a"
+                                            + " channel"),
+                    Transport.IO_URING,
+                    Map.of(
+                            "p2_udp_stream",
+                            "Netty's io_uring reads each datagram as it arrives, so one"
+                                    + " receive may take only some of those sent together,"
+                                    + " which wasmtime notes the spec allows"),
+                    Transport.KQUEUE,
+                    Map.of(
+                            "p2_tcp_sockopts", "Netty offers no keep-alive timing for kqueue",
+                            "p2_tcp_states", "Netty offers no keep-alive timing for kqueue",
+                            "p2_udp_stream",
+                                    "Netty's kqueue takes every datagram a connected channel"
+                                            + " receives to come from its remote"));
+
+    /** Programs wasmtime skips on macOS, with the reason. */
+    private static final Map<String, String> SKIPPED_ON_MACOS =
+            Map.of(
+                    "p2_udp_send_to_closed_receiver",
+                    "macOS limits the rate of the ICMP messages the program waits for");
+
+    /** Programs that pass by trapping as wasmtime's harness expects, with what the trap says. */
+    private static final Map<String, String> TRAPS =
+            Map.of("p2_udp_send_too_much", "check-send permitted");
 
     /** The Netty transports a network can run on. */
     enum Transport {
@@ -106,9 +131,9 @@ class WasmtimeTestProgramsTest {
     @ParameterizedTest(name = "{0} on {1}")
     @MethodSource("programs")
     void passes(String program, Transport transport) {
-        String knownFailure = KNOWN_FAILURES.get(program);
-        if (knownFailure == null && transport == Transport.NIO) {
-            knownFailure = KNOWN_NIO_FAILURES.get(program);
+        String knownFailure = KNOWN_FAILURES.getOrDefault(transport, Map.of()).get(program);
+        if (knownFailure == null && isMacOs()) {
+            knownFailure = SKIPPED_ON_MACOS.get(program);
         }
         assumeTrue(knownFailure == null, knownFailure);
         WasmComponent component = parse(ComponentCorpus.readBytes(DIRECTORY + program + WASM));
@@ -135,6 +160,9 @@ class WasmtimeTestProgramsTest {
         try (WasiPreview2 wasi = builder.build()) {
             exitCode = wasi.run(new ComponentStore(), component);
         } catch (RuntimeException e) {
+            if (TRAPS.containsKey(program) && isTrap(e, TRAPS.get(program))) {
+                return;
+            }
             throw new AssertionError("The program trapped." + output(stdout, stderr), e);
         } finally {
             if (group != null) {
@@ -142,7 +170,22 @@ class WasmtimeTestProgramsTest {
             }
         }
 
+        assertFalse(
+                TRAPS.containsKey(program), "The program did not trap." + output(stdout, stderr));
         assertEquals(0, exitCode, output(stdout, stderr));
+    }
+
+    private static boolean isTrap(Throwable e, String says) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof TrapException && cause.getMessage().contains(says)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isMacOs() {
+        return System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("mac");
     }
 
     private static String output(ByteArrayOutputStream stdout, ByteArrayOutputStream stderr) {

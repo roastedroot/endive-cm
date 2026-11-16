@@ -96,7 +96,8 @@ in `WasmtimeTestProgramsTest`.
 They are built from a pinned wasmtime release and committed in `component-corpus`, so the build needs no Rust toolchain.
 [component-corpus/README.md](component-corpus/README.md#wasmtimes-socket-tests) explains how to rebuild them
 and how to move to another wasmtime release.
-A program that fails for a known reason is listed in `WasmtimeTestProgramsTest` with that reason, and skipped.
+A program that fails on a transport for a known reason is listed in `WasmtimeTestProgramsTest` with that reason,
+and skipped there.
 
 ## General
 

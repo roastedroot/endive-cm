@@ -108,10 +108,11 @@ cd component-corpus/src/main/resources
 every `p2_tcp_*`, `p2_udp_*`, `p2_ip_name_lookup` and `p2_cli_no_*` program.
 `wasmtime.sh` builds them as wasmtime does, for wasm32-wasip1 with the release's command adapter,
 except in release mode to keep them small.
-A program passes when it exits with success, so none has a spec.
+A program passes when it exits with success, or traps where wasmtime's harness expects it to,
+so none has a spec.
 `WasmtimeTestProgramsTest` in `wasi-p2` runs each on every Netty transport available,
 with the host set up as wasmtime's test harness sets up its own.
-It skips a program that fails for a known reason, which it lists with that reason.
+It skips a program on a transport where it fails for a known reason, which it lists with that reason.
 
 `wasmtime.Dockerfile` pins wasmtime by tag and commit, and the adapter, wasm-tools and Rust by checksum.
 
