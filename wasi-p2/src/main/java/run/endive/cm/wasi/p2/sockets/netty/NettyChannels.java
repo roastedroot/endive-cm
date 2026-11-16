@@ -1,6 +1,7 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelException;
 import io.netty.channel.ChannelFactory;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.IoEventLoopGroup;
@@ -412,10 +413,11 @@ final class NettyChannels {
                                 family == null
                                         ? new EpollDatagramChannel()
                                         : activeWhileOpen(
-                                                ipv6Only(
-                                                        new EpollDatagramChannel(family),
-                                                        family,
-                                                        Unix.LINUX_V6_ONLY)),
+                                                readingSenders(
+                                                        ipv6Only(
+                                                                new EpollDatagramChannel(family),
+                                                                family,
+                                                                Unix.LINUX_V6_ONLY))),
                         Unix::bind,
                         (channel, backlog) ->
                                 new EpollServerSocketChannel(Unix.listen(channel, backlog)),
@@ -428,6 +430,20 @@ final class NettyChannels {
                         true);
 
         private Epoll() {}
+
+        /**
+         * {@code channel} with {@code UDP_GRO} on, so that Netty's epoll transport reads the sender
+         * of each datagram once the channel is connected too, instead of taking the remote for it.
+         * A kernel without {@code UDP_GRO} leaves the channel as it was.
+         */
+        private static EpollDatagramChannel readingSenders(EpollDatagramChannel channel) {
+            try {
+                channel.config().setOption(EpollChannelOption.UDP_GRO, true);
+            } catch (ChannelException e) {
+                // The kernel predates UDP_GRO.
+            }
+            return channel;
+        }
 
         static boolean runs(IoEventLoopGroup group) {
             return group.isIoType(EpollIoHandler.class);

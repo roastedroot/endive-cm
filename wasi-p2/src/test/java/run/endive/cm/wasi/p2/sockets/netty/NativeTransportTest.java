@@ -81,6 +81,7 @@ class NativeTransportTest {
         freesADroppedListenersAddressOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
         sendsDatagramsOn(EpollIoHandler.newFactory());
+        limitsToTheDatagramsOfItsRemoteOn(EpollIoHandler.newFactory());
         sendsWhatADroppedSocketQueuedOn(EpollIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(EpollIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(EpollIoHandler.newFactory());
@@ -103,6 +104,7 @@ class NativeTransportTest {
         readsBackBufferSizesOn(IoUringIoHandler.newFactory());
         freesADroppedListenersAddressOn(IoUringIoHandler.newFactory());
         sendsDatagramsOn(IoUringIoHandler.newFactory());
+        limitsToTheDatagramsOfItsRemoteOn(IoUringIoHandler.newFactory());
         sendsWhatADroppedSocketQueuedOn(IoUringIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(IoUringIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(IoUringIoHandler.newFactory());
@@ -532,6 +534,43 @@ class NativeTransportTest {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * A socket limited to a remote receives only what that remote sent, even among datagrams that
+     * arrived before the limit. The event loop is kept busy so that it limits the socket before it
+     * reads them.
+     */
+    private static void limitsToTheDatagramsOfItsRemoteOn(IoHandlerFactory transport)
+            throws IOException {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        CountDownLatch busy = new CountDownLatch(1);
+        try (var wasi =
+                        WasiPreview2.builder()
+                                .withScheduler(group)
+                                .withNetworkPolicy(NetworkPolicy.allowAll())
+                                .build();
+                DatagramSocket other = new DatagramSocket(0, InetAddress.getLoopbackAddress());
+                DatagramSocket remote = new DatagramSocket(0, InetAddress.getLoopbackAddress())) {
+            UdpSocket socket = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            InetSocketAddress to = IpAddresses.toInet(socket.localAddress());
+            group.execute(busy::countDown);
+            group.execute(() -> sleep(200));
+            busy.await();
+            other.send(new DatagramPacket(new byte[] {'A'}, 1, to));
+            remote.send(new DatagramPacket(new byte[] {'B'}, 1, to));
+            IncomingDatagramStream in =
+                    socket.stream(
+                                    IpAddresses.fromInet(
+                                            (InetSocketAddress) remote.getLocalSocketAddress()))
+                            .f0();
+
+            assertEquals("B", new String(receiveOne(wasi, in).data(), UTF_8));
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }
     }
 
