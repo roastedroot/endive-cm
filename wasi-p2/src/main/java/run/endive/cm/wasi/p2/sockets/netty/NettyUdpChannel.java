@@ -1,5 +1,6 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.awaitClosed;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completeWith;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isOfTheOtherFamily;
@@ -233,6 +234,7 @@ final class NettyUdpChannel implements UdpChannel {
                         channel.unsafe().closeForcibly();
                     }
                 });
+        awaitClosed(channel);
     }
 
     /**
