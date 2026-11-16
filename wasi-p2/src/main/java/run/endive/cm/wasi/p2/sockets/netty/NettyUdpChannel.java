@@ -31,8 +31,9 @@ import run.endive.cm.wasi.p2.sockets.udp.UdpChannel;
 /**
  * A UDP socket on a Netty datagram channel of the network's transport.
  *
- * <p>The socket keeps up to {@value #RECEIVE_CAPACITY} bytes of datagrams for the guest, and drops
- * those arriving while it is full, as a full receive buffer of the host would. Each datagram the
+ * <p>The socket keeps up to {@value #RECEIVE_CAPACITY} bytes of datagrams for the guest, counting
+ * {@value #DATAGRAM_OVERHEAD} for each besides its payload. It drops those arriving while it is
+ * full, as a full receive buffer of the host would. Each datagram the
  * guest sends is handed to Netty on the event loop, and up to {@value #SEND_CAPACITY} may wait to
  * be sent.
  */
@@ -40,6 +41,9 @@ final class NettyUdpChannel implements UdpChannel {
 
     /** How many bytes of datagrams the socket keeps for the guest. */
     static final int RECEIVE_CAPACITY = 1024 * 1024;
+
+    /** The bytes a datagram costs besides its payload, so that empty ones fill the socket too. */
+    static final int DATAGRAM_OVERHEAD = 256;
 
     /** How many datagrams may wait to be sent. */
     static final int SEND_CAPACITY = 256;
@@ -116,7 +120,7 @@ final class NettyUdpChannel implements UdpChannel {
         }
         DatagramPacket datagram = (DatagramPacket) next;
         if (datagram != null) {
-            receivedBytes.addAndGet(-datagram.getLength());
+            receivedBytes.addAndGet(-(datagram.getLength() + DATAGRAM_OVERHEAD));
         }
         return datagram;
     }
@@ -283,11 +287,11 @@ final class NettyUdpChannel implements UdpChannel {
             try {
                 int length = packet.content().readableBytes();
                 if (isIpv4OnIpv6(family, packet.sender())
-                        || receivedBytes.get() + length > RECEIVE_CAPACITY) {
+                        || receivedBytes.get() + length + DATAGRAM_OVERHEAD > RECEIVE_CAPACITY) {
                     return;
                 }
                 byte[] data = ByteBufUtil.getBytes(packet.content());
-                receivedBytes.addAndGet(length);
+                receivedBytes.addAndGet(length + DATAGRAM_OVERHEAD);
                 received.add(new DatagramPacket(data, length, inFamily(packet.sender())));
                 receiveReadiness.complete(null);
             } finally {

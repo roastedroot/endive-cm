@@ -187,6 +187,28 @@ class NettyUdpTest {
         }
     }
 
+    /** Empty datagrams fill the socket too, so a flood of them cannot grow it without bound. */
+    @Test
+    void aSocketKeepsABoundedNumberOfEmptyDatagrams() throws Exception {
+        UdpSocket socket = bound(IpAddressFamily.IPV4, LOOPBACK);
+        IncomingDatagramStream in = socket.stream(null).f0();
+        int most = NettyUdpChannel.RECEIVE_CAPACITY / NettyUdpChannel.DATAGRAM_OVERHEAD;
+        InetSocketAddress to = IpAddresses.toInet(socket.localAddress());
+        try (DatagramSocket host = new DatagramSocket(0, InetAddress.getLoopbackAddress())) {
+            for (int i = 0; i < most * 2; i++) {
+                host.send(new DatagramPacket(new byte[0], 0, to));
+                if (i % 64 == 0) {
+                    Thread.sleep(1);
+                }
+            }
+        }
+        Thread.sleep(500);
+
+        int received = in.receive(BigInteger.valueOf(most * 2L)).size();
+
+        assertTrue(received <= most, received + " datagrams kept");
+    }
+
     @Test
     void anIpv6SocketExchangesOverIpv6Loopback() {
         IpSocketAddress loopback = address(new InetSocketAddress("::1", 0));
