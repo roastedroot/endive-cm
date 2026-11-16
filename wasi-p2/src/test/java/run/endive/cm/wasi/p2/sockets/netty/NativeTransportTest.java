@@ -86,6 +86,7 @@ class NativeTransportTest {
         sendsDatagramsOnceUnlimitedOn(EpollIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(EpollIoHandler.newFactory());
         setsTheUnicastHopLimitOn(EpollIoHandler.newFactory());
+        readsBackUdpBufferSizesOn(EpollIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
 
@@ -107,6 +108,7 @@ class NativeTransportTest {
         sendsDatagramsOnceUnlimitedOn(IoUringIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(IoUringIoHandler.newFactory());
         setsTheUnicastHopLimitOn(IoUringIoHandler.newFactory());
+        readsBackUdpBufferSizesOn(IoUringIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(IoUringIoHandler.newFactory());
     }
 
@@ -129,6 +131,7 @@ class NativeTransportTest {
         sendsDatagramsOnceUnlimitedOn(KQueueIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(KQueueIoHandler.newFactory());
         setsTheUnicastHopLimitOn(KQueueIoHandler.newFactory());
+        readsBackUdpBufferSizesOn(KQueueIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
 
@@ -557,6 +560,24 @@ class NativeTransportTest {
             for (int i = 0; i < count; i++) {
                 receiveOne(wasi, in);
             }
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    private static void readsBackUdpBufferSizesOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket socket = wasi.udpCreateSocket().createUdpSocket(IpAddressFamily.IPV4);
+            socket.setReceiveBufferSize(BigInteger.valueOf(0x10000));
+            socket.setSendBufferSize(BigInteger.valueOf(0x10000));
+
+            assertEquals(BigInteger.valueOf(0x10000), socket.receiveBufferSize());
+            assertEquals(BigInteger.valueOf(0x10000), socket.sendBufferSize());
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }

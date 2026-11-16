@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetSocketAddress;
 import java.net.SocketOption;
+import java.net.StandardSocketOptions;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -47,6 +49,9 @@ final class NettyUdpChannel implements UdpChannel {
 
     /** How many datagrams may wait to be sent. */
     static final int SEND_CAPACITY = 256;
+
+    private static final List<SocketOption<?>> BUFFER_SIZES =
+            List.of(StandardSocketOptions.SO_RCVBUF, StandardSocketOptions.SO_SNDBUF);
 
     private final NettyUdp udp;
     private final IpAddressFamily family;
@@ -174,6 +179,7 @@ final class NettyUdpChannel implements UdpChannel {
         }
     }
 
+    /** A buffer size is halved where the transport reports twice the size it was given. */
     @Override
     @SuppressWarnings("unchecked")
     public <T> T getOption(SocketOption<T> option) throws IOException {
@@ -186,6 +192,9 @@ final class NettyUdpChannel implements UdpChannel {
         }
         if (value == null) {
             throw new UnsupportedOperationException(option.name());
+        }
+        if (BUFFER_SIZES.contains(option) && udp.channels().reportsDoubledBufferSizes()) {
+            return (T) Integer.valueOf((Integer) value / 2);
         }
         return value;
     }
