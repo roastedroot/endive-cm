@@ -322,9 +322,16 @@ final class NettyUdpChannel implements UdpChannel {
                 byte[] data = ByteBufUtil.getBytes(packet.content());
                 receivedBytes.addAndGet(length + DATAGRAM_OVERHEAD);
                 received.add(new DatagramPacket(data, length, inFamily(packet.sender())));
-                receiveReadiness.complete(null);
             } finally {
                 packet.release();
+            }
+        }
+
+        /** Wakes the guest once the datagrams Netty read together are all waiting. */
+        @Override
+        public void channelReadComplete(ChannelHandlerContext ctx) {
+            if (!received.isEmpty()) {
+                receiveReadiness.complete(null);
             }
         }
 
