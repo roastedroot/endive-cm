@@ -192,8 +192,7 @@ public class HostUdpSocket implements UdpSocket {
      */
     @Override
     public void setReceiveBufferSize(BigInteger value) {
-        requirePositive(value.signum());
-        setOption(StandardSocketOptions.SO_RCVBUF, clampToInt(value));
+        setBufferSize(StandardSocketOptions.SO_RCVBUF, value);
     }
 
     @Override
@@ -208,8 +207,7 @@ public class HostUdpSocket implements UdpSocket {
      */
     @Override
     public void setSendBufferSize(BigInteger value) {
-        requirePositive(value.signum());
-        setOption(StandardSocketOptions.SO_SNDBUF, clampToInt(value));
+        setBufferSize(StandardSocketOptions.SO_SNDBUF, value);
     }
 
     /** Ready once a bind in progress completes. */
@@ -311,6 +309,22 @@ public class HostUdpSocket implements UdpSocket {
             channel.setOption(option, value);
         } catch (IOException | UnsupportedOperationException e) {
             throw ErrorCodes.failed(e);
+        }
+    }
+
+    /**
+     * A host refusing a size as too large, as macOS does with {@code ENOBUFS}, keeps the size it had.
+     * The guest sees no error, since a size other than zero may be clamped.
+     */
+    private void setBufferSize(SocketOption<Integer> option, BigInteger value) {
+        requirePositive(value.signum());
+        requireOpen();
+        try {
+            channel.setOption(option, clampToInt(value));
+        } catch (IOException | UnsupportedOperationException e) {
+            if (ErrorCodes.codeOf(e) != ErrorCode.OUT_OF_MEMORY) {
+                throw ErrorCodes.failed(e);
+            }
         }
     }
 

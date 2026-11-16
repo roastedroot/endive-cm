@@ -29,6 +29,7 @@ final class TestUdpChannel implements UdpChannel {
     CompletableFuture<Void> nextConnect = CompletableFuture.completedFuture(null);
     int capacity = 1000;
     IOException sendFailure;
+    IOException refusal;
     boolean closed;
 
     private final Queue<Object> received = new ArrayDeque<>();
@@ -119,9 +120,12 @@ final class TestUdpChannel implements UdpChannel {
     }
 
     @Override
-    public <T> void setOption(SocketOption<T> option, T value) {
+    public <T> void setOption(SocketOption<T> option, T value) throws IOException {
         if (!options.containsKey(option)) {
             throw new UnsupportedOperationException(option.name());
+        }
+        if (refusal != null) {
+            throw refusal;
         }
         options.put(option, value);
     }
