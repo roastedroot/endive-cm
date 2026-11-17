@@ -74,6 +74,7 @@ class NativeTransportTest {
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
         sendsDatagramsOn(EpollIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(EpollIoHandler.newFactory());
+        sendsDatagramsOnceUnlimitedOn(EpollIoHandler.newFactory());
         setsTheUnicastHopLimitOn(EpollIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
@@ -89,6 +90,7 @@ class NativeTransportTest {
         setsTheHopLimitOn(IoUringIoHandler.newFactory());
         sendsDatagramsOn(IoUringIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(IoUringIoHandler.newFactory());
+        sendsDatagramsOnceUnlimitedOn(IoUringIoHandler.newFactory());
         setsTheUnicastHopLimitOn(IoUringIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(IoUringIoHandler.newFactory());
     }
@@ -105,6 +107,7 @@ class NativeTransportTest {
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
         sendsDatagramsOn(KQueueIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(KQueueIoHandler.newFactory());
+        sendsDatagramsOnceUnlimitedOn(KQueueIoHandler.newFactory());
         setsTheUnicastHopLimitOn(KQueueIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
@@ -306,6 +309,38 @@ class NativeTransportTest {
 
             assertEquals("native", new String(received.data(), UTF_8));
             assertEquals(sender.localAddress(), received.remoteAddress());
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** A socket limited to one remote and then to none sends and receives anywhere again. */
+    private static void sendsDatagramsOnceUnlimitedOn(IoHandlerFactory transport)
+            throws IOException {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket socket = bound(wasi, IpAddressFamily.IPV4, freeLoopbackPort());
+            UdpSocket first = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            UdpSocket second = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            Tuple2<IncomingDatagramStream, OutgoingDatagramStream> limited =
+                    socket.stream(first.localAddress());
+            send(wasi, limited.f1(), "limited", null);
+            limited.f0().drop();
+            limited.f1().drop();
+            Tuple2<IncomingDatagramStream, OutgoingDatagramStream> unlimited = socket.stream(null);
+            send(wasi, unlimited.f1(), "unlimited", second.localAddress());
+
+            Tuple2<IncomingDatagramStream, OutgoingDatagramStream> secondStreams =
+                    second.stream(null);
+            IncomingDatagram received = receiveOne(wasi, secondStreams.f0());
+            send(wasi, secondStreams.f1(), "reply", received.remoteAddress());
+
+            assertEquals("unlimited", new String(received.data(), UTF_8));
+            assertEquals("reply", new String(receiveOne(wasi, unlimited.f0()).data(), UTF_8));
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }

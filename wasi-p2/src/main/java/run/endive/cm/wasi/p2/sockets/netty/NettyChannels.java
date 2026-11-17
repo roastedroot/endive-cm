@@ -241,6 +241,15 @@ final class NettyChannels {
         return channel;
     }
 
+    /**
+     * {@code channel} kept active from its registration until it closes. Netty's native transports
+     * otherwise end a datagram channel's activity, and with it its writes, once it disconnects.
+     */
+    private static <C extends DatagramChannel> C activeWhileOpen(C channel) {
+        channel.config().setOption(ChannelOption.DATAGRAM_CHANNEL_ACTIVE_ON_REGISTRATION, true);
+        return channel;
+    }
+
     /** The standard options, with those for keep-alive timing a transport adds. */
     private static Map<SocketOption<?>, ChannelOption<?>> withKeepAlive(
             ChannelOption<Integer> idle,
@@ -362,10 +371,11 @@ final class NettyChannels {
                         family ->
                                 family == null
                                         ? new EpollDatagramChannel()
-                                        : ipv6Only(
-                                                new EpollDatagramChannel(family),
-                                                family,
-                                                Unix.LINUX_V6_ONLY),
+                                        : activeWhileOpen(
+                                                ipv6Only(
+                                                        new EpollDatagramChannel(family),
+                                                        family,
+                                                        Unix.LINUX_V6_ONLY)),
                         Unix::bind,
                         (channel, backlog) ->
                                 new EpollServerSocketChannel(Unix.listen(channel, backlog)),
@@ -403,10 +413,11 @@ final class NettyChannels {
                         family ->
                                 family == null
                                         ? new IoUringDatagramChannel()
-                                        : ipv6Only(
-                                                new IoUringDatagramChannel(family),
-                                                family,
-                                                Unix.LINUX_V6_ONLY),
+                                        : activeWhileOpen(
+                                                ipv6Only(
+                                                        new IoUringDatagramChannel(family),
+                                                        family,
+                                                        Unix.LINUX_V6_ONLY)),
                         Unix::bind,
                         (channel, backlog) -> null,
                         withKeepAlive(
@@ -447,10 +458,11 @@ final class NettyChannels {
                         family ->
                                 family == null
                                         ? new KQueueDatagramChannel()
-                                        : ipv6Only(
-                                                new KQueueDatagramChannel(family),
-                                                family,
-                                                Unix.BSD_V6_ONLY),
+                                        : activeWhileOpen(
+                                                ipv6Only(
+                                                        new KQueueDatagramChannel(family),
+                                                        family,
+                                                        Unix.BSD_V6_ONLY)),
                         Unix::bind,
                         (channel, backlog) ->
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
