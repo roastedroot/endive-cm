@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetSocketAddress;
 import java.net.SocketOption;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.IpAddressFamily;
 
@@ -63,10 +64,11 @@ public interface UdpChannel {
     CompletableFuture<?> sendReadiness();
 
     /**
-     * Queues {@code datagram} to be sent to its address. The channel keeps the datagram's array,
-     * which the caller must not change afterwards. A failure is reported by {@link #sendCapacity}.
+     * Queues {@code datagrams} to be sent in order, each to its address. The channel keeps their
+     * arrays, which the caller must not change afterwards. A failure is reported by {@link
+     * #sendCapacity}.
      */
-    void send(DatagramPacket datagram);
+    void send(List<DatagramPacket> datagrams);
 
     /**
      * @throws UnsupportedOperationException when the host does not support {@code option}

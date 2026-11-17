@@ -160,23 +160,22 @@ final class NettyUdpChannel implements UdpChannel {
         return sendReadiness;
     }
 
+    /** Writes the datagrams in one task, so a peer on the same event loop reads them together. */
     @Override
-    public void send(DatagramPacket datagram) {
-        sending.incrementAndGet();
-        ByteBuf content =
-                Unpooled.wrappedBuffer(
-                        datagram.getData(), datagram.getOffset(), datagram.getLength());
-        InetSocketAddress recipient = (InetSocketAddress) datagram.getSocketAddress();
+    public void send(List<DatagramPacket> datagrams) {
+        sending.addAndGet(datagrams.size());
         try {
             channel.eventLoop()
                     .execute(
                             () -> {
-                                lastSent = channel.writeAndFlush(outgoing(content, recipient));
-                                lastSent.addListener(written -> sent(written.cause()));
+                                for (DatagramPacket datagram : datagrams) {
+                                    lastSent = channel.write(outgoing(datagram));
+                                    lastSent.addListener(written -> sent(written.cause()));
+                                }
+                                channel.flush();
                             });
         } catch (IllegalStateException | RejectedExecutionException e) {
-            content.release();
-            sent(e);
+            datagrams.forEach(datagram -> sent(e));
         }
     }
 
@@ -253,13 +252,17 @@ final class NettyUdpChannel implements UdpChannel {
     }
 
     /**
-     * What the channel writes to send {@code content}, which the event loop has to call. A channel
+     * What the channel writes to send {@code datagram}, which the event loop has to call. A channel
      * limited to a remote sends only to it.
      */
-    private Object outgoing(ByteBuf content, InetSocketAddress recipient) {
+    private Object outgoing(DatagramPacket datagram) {
+        ByteBuf content =
+                Unpooled.wrappedBuffer(
+                        datagram.getData(), datagram.getOffset(), datagram.getLength());
         return channel.isConnected()
                 ? content
-                : new io.netty.channel.socket.DatagramPacket(content, recipient);
+                : new io.netty.channel.socket.DatagramPacket(
+                        content, (InetSocketAddress) datagram.getSocketAddress());
     }
 
     /** Counts a datagram as no longer waiting, keeping a failure for the next check. */

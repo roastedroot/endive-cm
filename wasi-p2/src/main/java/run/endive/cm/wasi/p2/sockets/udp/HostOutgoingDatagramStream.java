@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.net.DatagramPacket;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import run.endive.cm.wasi.p2.bindings.wasi.io.poll.Pollable;
@@ -89,21 +90,19 @@ final class HostOutgoingDatagramStream implements OutgoingDatagramStream {
                             + " check-send permitted");
         }
         permitted = 0;
-        int sent = 0;
+        List<DatagramPacket> packets = new ArrayList<>(datagrams.size());
         for (OutgoingDatagram datagram : datagrams) {
-            DatagramPacket packet;
             try {
-                packet = packet(datagram);
+                packets.add(packet(datagram));
             } catch (ErrorCodeException e) {
-                if (sent == 0) {
+                if (packets.isEmpty()) {
                     throw e;
                 }
                 break;
             }
-            socket.channel().send(packet);
-            sent++;
         }
-        return BigInteger.valueOf(sent);
+        socket.channel().send(packets);
+        return BigInteger.valueOf(packets.size());
     }
 
     /** Ready once {@link #checkSend} would permit a datagram or fail. */
