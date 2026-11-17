@@ -27,18 +27,14 @@ final class HostIncomingDatagramStream implements IncomingDatagramStream {
 
     private final HostUdpSocket socket;
     private final InetSocketAddress remote;
-    private final CompletableFuture<Void> association;
     private IOException failure;
 
     /**
      * @param remote the only address datagrams are taken from, or {@code null} for any
-     * @param association completes once the socket's channel is limited to {@code remote}
      */
-    HostIncomingDatagramStream(
-            HostUdpSocket socket, InetSocketAddress remote, CompletableFuture<Void> association) {
+    HostIncomingDatagramStream(HostUdpSocket socket, InetSocketAddress remote) {
         this.socket = socket;
         this.remote = remote;
-        this.association = association;
     }
 
     /**
@@ -49,7 +45,9 @@ final class HostIncomingDatagramStream implements IncomingDatagramStream {
      */
     @Override
     public List<IncomingDatagram> receive(BigInteger maxResults) {
-        requireAssociated();
+        if (socket.isClosed()) {
+            throw ErrorCodes.error(ErrorCode.INVALID_STATE);
+        }
         if (failure != null) {
             IOException reported = failure;
             failure = null;
@@ -97,25 +95,9 @@ final class HostIncomingDatagramStream implements IncomingDatagramStream {
     }
 
     private CompletableFuture<?> readiness() {
-        if (socket.isClosed() || failure != null || association.isCompletedExceptionally()) {
+        if (socket.isClosed() || failure != null) {
             return DONE;
         }
-        return association.isDone() ? socket.channel().receiveReadiness() : association;
-    }
-
-    /**
-     * Refuses a closed socket with {@code invalid-state}, and reports the failure to limit it to
-     * the remote. Nothing is received until it is limited.
-     */
-    private void requireAssociated() {
-        if (socket.isClosed()) {
-            throw ErrorCodes.error(ErrorCode.INVALID_STATE);
-        }
-        if (association.isDone()) {
-            Throwable failed = HostUdpSocket.failureOf(association);
-            if (failed != null) {
-                throw ErrorCodes.failed(failed);
-            }
-        }
+        return socket.channel().receiveReadiness();
     }
 }

@@ -27,10 +27,13 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
+import run.endive.cm.runtime.Tuple2;
 import run.endive.cm.wasi.p2.WasiPreview2;
 import run.endive.cm.wasi.p2.bindings.wasi.io.poll.Pollable;
 import run.endive.cm.wasi.p2.bindings.wasi.io.streams.InputStream;
@@ -60,7 +63,7 @@ class NativeTransportTest {
             IpAddresses.fromInet(new InetSocketAddress("127.0.0.1", 0));
 
     @Test
-    void theNetworkRunsOnEpoll() {
+    void theNetworkRunsOnEpoll() throws IOException {
         assumeTrue(Epoll.isAvailable(), "epoll is not available here");
 
         resolvesLocalhostOn(EpollIoHandler.newFactory());
@@ -70,12 +73,13 @@ class NativeTransportTest {
         setsTheHopLimitOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
         sendsDatagramsOn(EpollIoHandler.newFactory());
+        limitsADatagramSocketAnewAtOnceOn(EpollIoHandler.newFactory());
         setsTheUnicastHopLimitOn(EpollIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
 
     @Test
-    void theNetworkRunsOnIoUring() {
+    void theNetworkRunsOnIoUring() throws IOException {
         assumeTrue(IoUring.isAvailable(), "io_uring is not available here");
 
         resolvesLocalhostOn(IoUringIoHandler.newFactory());
@@ -84,12 +88,13 @@ class NativeTransportTest {
         refusesIpv4OnIpv6On(IoUringIoHandler.newFactory());
         setsTheHopLimitOn(IoUringIoHandler.newFactory());
         sendsDatagramsOn(IoUringIoHandler.newFactory());
+        limitsADatagramSocketAnewAtOnceOn(IoUringIoHandler.newFactory());
         setsTheUnicastHopLimitOn(IoUringIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(IoUringIoHandler.newFactory());
     }
 
     @Test
-    void theNetworkRunsOnKQueue() {
+    void theNetworkRunsOnKQueue() throws IOException {
         assumeTrue(KQueue.isAvailable(), "kqueue is not available here");
 
         resolvesLocalhostOn(KQueueIoHandler.newFactory());
@@ -99,6 +104,7 @@ class NativeTransportTest {
         setsTheHopLimitOn(KQueueIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
         sendsDatagramsOn(KQueueIoHandler.newFactory());
+        limitsADatagramSocketAnewAtOnceOn(KQueueIoHandler.newFactory());
         setsTheUnicastHopLimitOn(KQueueIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
@@ -305,6 +311,54 @@ class NativeTransportTest {
         }
     }
 
+    /**
+     * A socket limited anew while the event loop is still busy is limited as last asked. io_uring
+     * connects a datagram channel asynchronously.
+     */
+    private static void limitsADatagramSocketAnewAtOnceOn(IoHandlerFactory transport)
+            throws IOException {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        CountDownLatch busy = new CountDownLatch(1);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket socket = bound(wasi, IpAddressFamily.IPV4, freeLoopbackPort());
+            UdpSocket peer = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            group.execute(busy::countDown);
+            group.execute(() -> sleep(100));
+            busy.await();
+            for (IpSocketAddress remote :
+                    Arrays.asList(peer.localAddress(), null, peer.localAddress())) {
+                Tuple2<IncomingDatagramStream, OutgoingDatagramStream> streams =
+                        socket.stream(remote);
+                streams.f0().drop();
+                streams.f1().drop();
+            }
+            Tuple2<IncomingDatagramStream, OutgoingDatagramStream> limited =
+                    socket.stream(peer.localAddress());
+            Tuple2<IncomingDatagramStream, OutgoingDatagramStream> peerStreams = peer.stream(null);
+            send(wasi, limited.f1(), "hello", null);
+            IncomingDatagram hello = receiveOne(wasi, peerStreams.f0());
+            send(wasi, peerStreams.f1(), "reply", hello.remoteAddress());
+
+            assertEquals("reply", new String(receiveOne(wasi, limited.f0()).data(), UTF_8));
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private static void setsTheUnicastHopLimitOn(IoHandlerFactory transport) {
         EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
         try (var wasi =
@@ -368,6 +422,21 @@ class NativeTransportTest {
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }
+    }
+
+    /** A loopback address no socket holds. Linux unbinds a socket bound to port 0 as it disconnects. */
+    private static IpSocketAddress freeLoopbackPort() throws IOException {
+        try (DatagramSocket probe = new DatagramSocket(0, InetAddress.getLoopbackAddress())) {
+            return IpAddresses.fromInet((InetSocketAddress) probe.getLocalSocketAddress());
+        }
+    }
+
+    private static void send(
+            WasiPreview2 wasi, OutgoingDatagramStream out, String data, IpSocketAddress to) {
+        while (out.checkSend().signum() == 0) {
+            wasi.poll().poll(List.of(out.subscribe()));
+        }
+        out.send(List.of(new OutgoingDatagram(data.getBytes(UTF_8), to)));
     }
 
     private static IncomingDatagram receiveOne(WasiPreview2 wasi, IncomingDatagramStream in) {

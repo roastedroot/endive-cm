@@ -40,23 +40,18 @@ final class HostOutgoingDatagramStream implements OutgoingDatagramStream {
 
     private final HostUdpSocket socket;
     private final InetSocketAddress remote;
-    private final CompletableFuture<Void> association;
     private int permitted;
 
     /**
      * @param remote the only address datagrams are sent to, or {@code null} for any
-     * @param association completes once the socket's channel is limited to {@code remote}
      */
-    HostOutgoingDatagramStream(
-            HostUdpSocket socket, InetSocketAddress remote, CompletableFuture<Void> association) {
+    HostOutgoingDatagramStream(HostUdpSocket socket, InetSocketAddress remote) {
         this.socket = socket;
         this.remote = remote;
-        this.association = association;
     }
 
     /**
-     * Permits as many datagrams as the channel takes now, up to {@value #MAX_PERMITS}. Nothing is
-     * permitted until the socket is limited to its remote.
+     * Permits as many datagrams as the channel takes now, up to {@value #MAX_PERMITS}.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp.wit">wasi:sockets/udp, check-send</a>
      */
@@ -66,13 +61,6 @@ final class HostOutgoingDatagramStream implements OutgoingDatagramStream {
             throw ErrorCodes.error(ErrorCode.INVALID_STATE);
         }
         permitted = 0;
-        if (!association.isDone()) {
-            return BigInteger.ZERO;
-        }
-        Throwable failed = HostUdpSocket.failureOf(association);
-        if (failed != null) {
-            throw ErrorCodes.failed(failed);
-        }
         try {
             permitted = Math.min(socket.channel().sendCapacity(), MAX_PERMITS);
         } catch (IOException e) {
@@ -130,10 +118,7 @@ final class HostOutgoingDatagramStream implements OutgoingDatagramStream {
     }
 
     private CompletableFuture<?> readiness() {
-        if (socket.isClosed() || association.isCompletedExceptionally()) {
-            return DONE;
-        }
-        return association.isDone() ? socket.channel().sendReadiness() : association;
+        return socket.isClosed() ? DONE : socket.channel().sendReadiness();
     }
 
     /** {@code datagram} as a packet addressed to where it may be sent. */

@@ -18,6 +18,7 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.network.Network;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.IncomingDatagramStream;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.OutgoingDatagramStream;
 import run.endive.cm.wasi.p2.bindings.wasi.sockets.udp.UdpSocket;
+import run.endive.cm.wasi.p2.io.Blocking;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
 import run.endive.cm.wasi.p2.sockets.network.ErrorCodes;
@@ -102,9 +103,9 @@ public class HostUdpSocket implements UdpSocket {
     }
 
     /**
-     * Hands the guest a new pair of streams, limited to {@code remoteAddress} unless it is {@code
-     * null}. Datagrams flow once the channel is limited, and a failure to limit it is reported by
-     * the streams. The streams of an earlier call have to be dropped first, or the guest traps.
+     * Hands the guest a new pair of streams once the channel is limited to {@code remoteAddress},
+     * or to no remote when it is {@code null}. Limiting sends nothing, so the wait is only for the
+     * transport. The streams of an earlier call have to be dropped first, or the guest traps.
      *
      * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp.wit">wasi:sockets/udp, stream</a>
      */
@@ -121,12 +122,18 @@ public class HostUdpSocket implements UdpSocket {
             throw new TrapException(
                     "stream was called before the streams it returned earlier were dropped");
         }
-        CompletableFuture<Void> association = channel.connect(limit);
+        remote = null;
+        CompletableFuture<Void> limited = channel.connect(limit);
+        Blocking.await(limited);
+        Throwable failure = failureOf(limited);
+        if (failure != null) {
+            throw ErrorCodes.failed(failure);
+        }
         remote = limit;
         openStreams = 2;
         return Tuple2.of(
-                new HostIncomingDatagramStream(this, limit, association),
-                new HostOutgoingDatagramStream(this, limit, association));
+                new HostIncomingDatagramStream(this, limit),
+                new HostOutgoingDatagramStream(this, limit));
     }
 
     /**
@@ -253,7 +260,7 @@ public class HostUdpSocket implements UdpSocket {
     }
 
     /** The failure {@code future} completed with, or {@code null} once it succeeded. */
-    static Throwable failureOf(CompletableFuture<?> future) {
+    private static Throwable failureOf(CompletableFuture<?> future) {
         try {
             future.join();
             return null;

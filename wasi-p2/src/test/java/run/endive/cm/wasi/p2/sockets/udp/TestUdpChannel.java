@@ -16,17 +16,17 @@ import java.util.concurrent.CompletableFuture;
 import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 
 /**
- * A channel whose operations complete only when a test completes them, recording what the socket
- * asked of it.
+ * A channel recording what the socket asked of it. A bind completes only when a test completes it,
+ * and each connect completes as {@link #nextConnect} does.
  */
 final class TestUdpChannel implements UdpChannel {
 
     final CompletableFuture<Void> bound = new CompletableFuture<>();
-    final List<CompletableFuture<Void>> connects = new ArrayList<>();
     final List<InetSocketAddress> connectedTo = new ArrayList<>();
     final List<DatagramPacket> sent = new ArrayList<>();
     final Map<SocketOption<?>, Object> options = new HashMap<>();
     InetSocketAddress local;
+    CompletableFuture<Void> nextConnect = CompletableFuture.completedFuture(null);
     int capacity = 1000;
     IOException sendFailure;
     boolean closed;
@@ -61,10 +61,8 @@ final class TestUdpChannel implements UdpChannel {
 
     @Override
     public CompletableFuture<Void> connect(InetSocketAddress remote) {
-        CompletableFuture<Void> connected = new CompletableFuture<>();
-        connects.add(connected);
         connectedTo.add(remote);
-        return connected;
+        return nextConnect;
     }
 
     @Override

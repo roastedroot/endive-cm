@@ -96,6 +96,26 @@ class NettyUdpTest {
         assertEquals(peer.localAddress(), limited.remoteAddress());
     }
 
+    /** A socket sends as soon as stream returns. */
+    @Test
+    void aSocketStreamingToARemoteSendsAtOnce() {
+        UdpSocket socket = bound(IpAddressFamily.IPV4, LOOPBACK);
+        UdpSocket peer = bound(IpAddressFamily.IPV4, LOOPBACK);
+        OutgoingDatagramStream out = socket.stream(peer.localAddress()).f1();
+
+        assertTrue(out.checkSend().compareTo(BigInteger.TWO) >= 0);
+        BigInteger sent =
+                out.send(
+                        List.of(
+                                new OutgoingDatagram("1".getBytes(UTF_8), null),
+                                new OutgoingDatagram("2".getBytes(UTF_8), null)));
+
+        IncomingDatagramStream in = peer.stream(null).f0();
+        assertEquals(BigInteger.TWO, sent);
+        assertEquals("1", text(receiveOne(in)));
+        assertEquals("2", text(receiveOne(in)));
+    }
+
     @Test
     void aSocketIsLimitedAnewEachTimeItStreams() {
         UdpSocket socket = bound(IpAddressFamily.IPV4, LOOPBACK);

@@ -14,6 +14,8 @@ import java.net.PortUnreachableException;
 import java.net.StandardSocketOptions;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -123,7 +125,6 @@ class HostUdpSocketTest {
     void streamsWithoutARemoteSendAndReceiveAnywhere() {
         bind();
         Tuple2<IncomingDatagramStream, OutgoingDatagramStream> streams = socket.stream(null);
-        channel.connects.get(0).complete(null);
 
         assertEquals(ErrorCode.INVALID_STATE, errorOf(socket::remoteAddress));
         permit(streams.f1());
@@ -142,7 +143,6 @@ class HostUdpSocketTest {
         bind();
         Tuple2<IncomingDatagramStream, OutgoingDatagramStream> streams =
                 socket.stream(address(PEER));
-        channel.connects.get(0).complete(null);
 
         assertEquals(address(PEER), socket.remoteAddress());
         assertEquals(List.of(PEER), channel.connectedTo);
@@ -162,41 +162,43 @@ class HostUdpSocketTest {
         assertEquals(List.of("a -> " + PEER, "b -> " + PEER), sent());
     }
 
+    /** The addresses, and the streams, reflect the limit as soon as stream returns. */
     @Test
-    void streamsWaitUntilTheChannelIsLimited() {
+    void streamReturnsOnceTheChannelIsLimited() throws Exception {
         bind();
+        channel.nextConnect = new CompletableFuture<>();
+        CompletableFuture<Tuple2<IncomingDatagramStream, OutgoingDatagramStream>> streaming =
+                CompletableFuture.supplyAsync(() -> socket.stream(address(PEER)));
+        Thread.sleep(100);
+        assertFalse(streaming.isDone());
+
+        InetSocketAddress picked = new InetSocketAddress("127.0.0.2", LOCAL.getPort());
+        channel.local = picked;
+        channel.nextConnect.complete(null);
         Tuple2<IncomingDatagramStream, OutgoingDatagramStream> streams =
-                socket.stream(address(PEER));
+                streaming.get(5, TimeUnit.SECONDS);
+
+        assertEquals(address(PEER), socket.remoteAddress());
+        assertEquals(address(picked), socket.localAddress());
+        assertTrue(streams.f1().subscribe().ready());
+        assertEquals(HostOutgoingDatagramStream.MAX_PERMITS, permit(streams.f1()));
         Pollable incoming = streams.f0().subscribe();
-        Pollable outgoing = streams.f1().subscribe();
-
-        assertFalse(incoming.ready());
-        assertFalse(outgoing.ready());
-        assertEquals(BigInteger.ZERO, streams.f1().checkSend());
-
-        channel.connects.get(0).complete(null);
-
-        assertTrue(outgoing.ready());
-        assertEquals(
-                BigInteger.valueOf(HostOutgoingDatagramStream.MAX_PERMITS),
-                streams.f1().checkSend());
         assertFalse(incoming.ready());
         channel.arrive("hello", PEER);
         assertTrue(incoming.ready());
     }
 
     @Test
-    void aFailureToLimitTheChannelReachesTheStreams() {
+    void aFailureToLimitTheChannelFailsStream() {
         bind();
-        Tuple2<IncomingDatagramStream, OutgoingDatagramStream> streams =
-                socket.stream(address(PEER));
+        channel.nextConnect = CompletableFuture.failedFuture(new NoRouteToHostException());
 
-        channel.connects.get(0).completeExceptionally(new NoRouteToHostException());
+        assertEquals(ErrorCode.REMOTE_UNREACHABLE, errorOf(() -> socket.stream(address(PEER))));
+        assertEquals(ErrorCode.INVALID_STATE, errorOf(socket::remoteAddress));
 
-        assertTrue(streams.f0().subscribe().ready());
-        assertEquals(
-                ErrorCode.REMOTE_UNREACHABLE, errorOf(() -> streams.f0().receive(BigInteger.ONE)));
-        assertEquals(ErrorCode.REMOTE_UNREACHABLE, errorOf(streams.f1()::checkSend));
+        channel.nextConnect = CompletableFuture.completedFuture(null);
+        socket.stream(null);
+        assertEquals(Arrays.asList(PEER, null), channel.connectedTo);
     }
 
     @Test
@@ -231,7 +233,6 @@ class HostUdpSocketTest {
         assertEquals(ErrorCode.ACCESS_DENIED, errorOf(() -> socket.stream(address(PEER))));
 
         Tuple2<IncomingDatagramStream, OutgoingDatagramStream> streams = socket.stream(null);
-        channel.connects.get(0).complete(null);
         permit(streams.f1());
 
         assertEquals(
@@ -403,9 +404,7 @@ class HostUdpSocketTest {
     /** Streams with no remote, ready to use. */
     private Tuple2<IncomingDatagramStream, OutgoingDatagramStream> streams() {
         bind();
-        Tuple2<IncomingDatagramStream, OutgoingDatagramStream> streams = socket.stream(null);
-        channel.connects.get(0).complete(null);
-        return streams;
+        return socket.stream(null);
     }
 
     private static int permit(OutgoingDatagramStream out) {

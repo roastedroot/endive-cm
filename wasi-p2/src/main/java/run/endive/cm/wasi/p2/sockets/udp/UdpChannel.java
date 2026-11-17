@@ -33,6 +33,7 @@ public interface UdpChannel {
     /**
      * Starts limiting a bound channel to {@code remote}, or lifting any limit when {@code remote}
      * is {@code null}. It completes once the channel sends to and receives from only that address.
+     * {@link HostUdpSocket} starts one only once the last has completed.
      */
     CompletableFuture<Void> connect(InetSocketAddress remote);
 
