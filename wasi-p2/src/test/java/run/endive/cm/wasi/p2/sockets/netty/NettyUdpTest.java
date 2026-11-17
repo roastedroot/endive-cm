@@ -116,6 +116,19 @@ class NettyUdpTest {
         assertEquals("2", text(receiveOne(in)));
     }
 
+    /** Limiting a socket bound to the wildcard address picks its source address. */
+    @Test
+    void limitingASocketPicksItsLocalAddress() {
+        UdpSocket socket =
+                bound(IpAddressFamily.IPV4, address(new InetSocketAddress("0.0.0.0", 0)));
+        UdpSocket peer = bound(IpAddressFamily.IPV4, LOOPBACK);
+        int port = IpAddresses.toInet(socket.localAddress()).getPort();
+
+        socket.stream(peer.localAddress());
+
+        assertEquals(address(new InetSocketAddress("127.0.0.1", port)), socket.localAddress());
+    }
+
     @Test
     void aSocketIsLimitedAnewEachTimeItStreams() {
         UdpSocket socket = bound(IpAddressFamily.IPV4, LOOPBACK);

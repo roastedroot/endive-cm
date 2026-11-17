@@ -33,6 +33,7 @@ import io.netty.channel.uring.IoUringServerSocketChannel;
 import io.netty.channel.uring.IoUringSocketChannel;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.channels.spi.SelectorProvider;
@@ -98,6 +99,7 @@ final class NettyChannels {
     private final Listener listener;
     private final Map<SocketOption<?>, ChannelOption<?>> options;
     private final Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits;
+    private final Function<Channel, SocketAddress> localAddresses;
 
     private NettyChannels(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
@@ -106,7 +108,8 @@ final class NettyChannels {
             Binder binder,
             Listener listener,
             Map<SocketOption<?>, ChannelOption<?>> options,
-            Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits) {
+            Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits,
+            Function<Channel, SocketAddress> localAddresses) {
         this.socket = Objects.requireNonNull(socket, "socket");
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         this.datagram = Objects.requireNonNull(datagram, "datagram");
@@ -114,6 +117,7 @@ final class NettyChannels {
         this.listener = listener;
         this.options = options;
         this.hopLimits = hopLimits;
+        this.localAddresses = localAddresses;
     }
 
     /**
@@ -130,7 +134,14 @@ final class NettyChannels {
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
             Function<SocketProtocolFamily, ? extends DatagramChannel> datagram) {
         return new NettyChannels(
-                socket, serverSocket, datagram, Nio::bind, Nio::listen, STANDARD_OPTIONS, Map.of());
+                socket,
+                serverSocket,
+                datagram,
+                Nio::bind,
+                Nio::listen,
+                STANDARD_OPTIONS,
+                Map.of(),
+                Nio::localAddress);
     }
 
     /** Creates the channel of a TCP connection of the host's default family. */
@@ -172,6 +183,11 @@ final class NettyChannels {
      */
     ServerSocketChannel listen(SocketChannel channel, int backlog) throws IOException {
         return listener.listen(channel, backlog);
+    }
+
+    /** The address {@code channel} is bound to now, which Netty's io_uring reads only once. */
+    InetSocketAddress localAddress(Channel channel) {
+        return (InetSocketAddress) localAddresses.apply(channel);
     }
 
     /**
@@ -282,9 +298,14 @@ final class NettyChannels {
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT)),
-                        Map.of());
+                        Map.of(),
+                        Nio::localAddress);
 
         private Nio() {}
+
+        static SocketAddress localAddress(Channel channel) {
+            return channel.unsafe().localAddress();
+        }
 
         static InetSocketAddress bind(SocketChannel channel, InetSocketAddress local)
                 throws IOException {
@@ -340,6 +361,10 @@ final class NettyChannels {
             return socket.localAddress();
         }
 
+        static SocketAddress localAddress(Channel channel) {
+            return socketOf(channel).localAddress();
+        }
+
         /** Listens on the socket, returning its descriptor. */
         static int listen(SocketChannel channel, int backlog) throws IOException {
             Socket socket = socketOf(channel);
@@ -383,7 +408,8 @@ final class NettyChannels {
                                 EpollChannelOption.TCP_KEEPIDLE,
                                 EpollChannelOption.TCP_KEEPINTVL,
                                 EpollChannelOption.TCP_KEEPCNT),
-                        Unix.LINUX_HOP_LIMITS);
+                        Unix.LINUX_HOP_LIMITS,
+                        Unix::localAddress);
 
         private Epoll() {}
 
@@ -424,7 +450,8 @@ final class NettyChannels {
                                 IoUringChannelOption.TCP_KEEPIDLE,
                                 IoUringChannelOption.TCP_KEEPINTVL,
                                 IoUringChannelOption.TCP_KEEPCNT),
-                        Unix.LINUX_HOP_LIMITS);
+                        Unix.LINUX_HOP_LIMITS,
+                        Unix::localAddress);
 
         private IoUring() {}
 
@@ -467,7 +494,8 @@ final class NettyChannels {
                         (channel, backlog) ->
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
                         STANDARD_OPTIONS,
-                        Unix.BSD_HOP_LIMITS);
+                        Unix.BSD_HOP_LIMITS,
+                        Unix::localAddress);
 
         private KQueue() {}
 

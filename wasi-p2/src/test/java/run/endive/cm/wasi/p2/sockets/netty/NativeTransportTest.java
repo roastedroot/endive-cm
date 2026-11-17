@@ -75,6 +75,7 @@ class NativeTransportTest {
         sendsDatagramsOn(EpollIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(EpollIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(EpollIoHandler.newFactory());
+        picksTheLocalAddressALimitUsesOn(EpollIoHandler.newFactory());
         setsTheUnicastHopLimitOn(EpollIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
@@ -91,6 +92,7 @@ class NativeTransportTest {
         sendsDatagramsOn(IoUringIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(IoUringIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(IoUringIoHandler.newFactory());
+        picksTheLocalAddressALimitUsesOn(IoUringIoHandler.newFactory());
         setsTheUnicastHopLimitOn(IoUringIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(IoUringIoHandler.newFactory());
     }
@@ -108,6 +110,7 @@ class NativeTransportTest {
         sendsDatagramsOn(KQueueIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(KQueueIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(KQueueIoHandler.newFactory());
+        picksTheLocalAddressALimitUsesOn(KQueueIoHandler.newFactory());
         setsTheUnicastHopLimitOn(KQueueIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
@@ -309,6 +312,32 @@ class NativeTransportTest {
 
             assertEquals("native", new String(received.data(), UTF_8));
             assertEquals(sender.localAddress(), received.remoteAddress());
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** Limiting a socket bound to the wildcard address picks its source address. */
+    private static void picksTheLocalAddressALimitUsesOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket socket =
+                    bound(
+                            wasi,
+                            IpAddressFamily.IPV4,
+                            IpAddresses.fromInet(new InetSocketAddress("0.0.0.0", 0)));
+            UdpSocket peer = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            int port = IpAddresses.toInet(socket.localAddress()).getPort();
+
+            socket.stream(peer.localAddress());
+
+            assertEquals(
+                    IpAddresses.fromInet(new InetSocketAddress("127.0.0.1", port)),
+                    socket.localAddress());
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }

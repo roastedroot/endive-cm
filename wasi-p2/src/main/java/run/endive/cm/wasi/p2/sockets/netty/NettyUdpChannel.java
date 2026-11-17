@@ -98,9 +98,10 @@ final class NettyUdpChannel implements UdpChannel {
         return connected;
     }
 
+    /** Read anew each time, since limiting the channel may pick its address. */
     @Override
     public InetSocketAddress localAddress() {
-        return inFamily((InetSocketAddress) channel.localAddress());
+        return inFamily(udp.channels().localAddress(channel));
     }
 
     @Override
