@@ -4,7 +4,7 @@
 
   <groupId>io.roastedroot</groupId>
   <artifactId>typewire-parent</artifactId>
-  <version>0.0.1</version>
+  <version>999-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Typewire</name>
   <description>WebAssembly Component Model for the JVM, running on Endive</description>
