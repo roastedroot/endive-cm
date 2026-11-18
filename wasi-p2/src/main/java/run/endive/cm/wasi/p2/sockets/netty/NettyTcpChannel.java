@@ -1,8 +1,9 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.awaitClosed;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.closeOnceRegistered;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
-import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isIpv4OnIpv6;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isOfTheOtherFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.protocolFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.unwrapped;
 
@@ -70,6 +71,9 @@ final class NettyTcpChannel implements TcpChannel {
                     StandardSocketOptions.SO_RCVBUF,
                     StandardSocketOptions.SO_SNDBUF,
                     HopLimits.OPTION);
+
+    private static final List<SocketOption<?>> BUFFER_SIZES =
+            List.of(StandardSocketOptions.SO_RCVBUF, StandardSocketOptions.SO_SNDBUF);
 
     private final NettyTcp tcp;
     private final IpAddressFamily family;
@@ -347,6 +351,7 @@ final class NettyTcpChannel implements TcpChannel {
                     connection = waiting.poll()) {
                 connection.close(deliverFirst);
             }
+            awaitClosed(listener);
             return;
         }
         CompletableFuture<Void> registration = registered;
@@ -458,10 +463,20 @@ final class NettyTcpChannel implements TcpChannel {
         return address == null ? null : IpAddresses.inFamily(address, family);
     }
 
+    /**
+     * The value of {@code option} on {@code channel}, with a buffer size halved where the transport
+     * reports twice the size it was given.
+     */
     @SuppressWarnings("unchecked")
     private <T> T read(Channel channel, SocketOption<T> option) {
         ChannelOption<T> netty = tcp.channels().option(option, protocolFamily(family));
-        return netty == null ? null : channel.config().getOption(netty);
+        T value = netty == null ? null : channel.config().getOption(netty);
+        if (value != null
+                && BUFFER_SIZES.contains(option)
+                && tcp.channels().reportsDoubledBufferSizes()) {
+            return (T) Integer.valueOf((Integer) value / 2);
+        }
+        return value;
     }
 
     /** Moves what a connection receives into its input stream, and ends its streams. */
@@ -510,7 +525,7 @@ final class NettyTcpChannel implements TcpChannel {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
             SocketChannel child = (SocketChannel) msg;
-            if (isIpv4OnIpv6(family, child.remoteAddress())) {
+            if (isOfTheOtherFamily(family, child.remoteAddress())) {
                 child.unsafe().closeForcibly();
                 return;
             }

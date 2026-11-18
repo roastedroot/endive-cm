@@ -1,9 +1,9 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
-import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.closeOnceRegistered;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.awaitClosed;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completable;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.completeWith;
-import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isIpv4OnIpv6;
+import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.isOfTheOtherFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.protocolFamily;
 import static run.endive.cm.wasi.p2.sockets.netty.NettyChannelSupport.unwrapped;
 
@@ -11,6 +11,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelException;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
@@ -19,6 +20,8 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetSocketAddress;
 import java.net.SocketOption;
+import java.net.StandardSocketOptions;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -48,6 +51,9 @@ final class NettyUdpChannel implements UdpChannel {
     /** How many datagrams may wait to be sent. */
     static final int SEND_CAPACITY = 256;
 
+    private static final List<SocketOption<?>> BUFFER_SIZES =
+            List.of(StandardSocketOptions.SO_RCVBUF, StandardSocketOptions.SO_SNDBUF);
+
     private final NettyUdp udp;
     private final IpAddressFamily family;
     private final DatagramChannel channel;
@@ -59,6 +65,10 @@ final class NettyUdpChannel implements UdpChannel {
     private final AtomicInteger sending = new AtomicInteger();
     private volatile CompletableFuture<Void> sendReadiness =
             CompletableFuture.completedFuture(null);
+
+    /** The datagram handed to Netty last, which only the event loop touches. */
+    private ChannelFuture lastSent;
+
     private volatile Throwable sendFailure;
     private volatile boolean closed;
 
@@ -66,6 +76,7 @@ final class NettyUdpChannel implements UdpChannel {
         this.udp = udp;
         this.family = family;
         this.channel = channel;
+        this.lastSent = channel.newSucceededFuture();
         channel.pipeline().addLast(new Receiver());
         this.registered = completable(udp.group().register(channel));
         udp.track(this);
@@ -149,25 +160,26 @@ final class NettyUdpChannel implements UdpChannel {
         return sendReadiness;
     }
 
+    /** Writes the datagrams in one task, so a peer on the same event loop reads them together. */
     @Override
-    public void send(DatagramPacket datagram) {
-        sending.incrementAndGet();
-        ByteBuf content =
-                Unpooled.wrappedBuffer(
-                        datagram.getData(), datagram.getOffset(), datagram.getLength());
-        InetSocketAddress recipient = (InetSocketAddress) datagram.getSocketAddress();
+    public void send(List<DatagramPacket> datagrams) {
+        sending.addAndGet(datagrams.size());
         try {
             channel.eventLoop()
                     .execute(
-                            () ->
-                                    channel.writeAndFlush(outgoing(content, recipient))
-                                            .addListener(written -> sent(written.cause())));
+                            () -> {
+                                for (DatagramPacket datagram : datagrams) {
+                                    lastSent = channel.write(outgoing(datagram));
+                                    lastSent.addListener(written -> sent(written.cause()));
+                                }
+                                channel.flush();
+                            });
         } catch (IllegalStateException | RejectedExecutionException e) {
-            content.release();
-            sent(e);
+            datagrams.forEach(datagram -> sent(e));
         }
     }
 
+    /** A buffer size is halved where the transport reports twice the size it was given. */
     @Override
     @SuppressWarnings("unchecked")
     public <T> T getOption(SocketOption<T> option) throws IOException {
@@ -180,6 +192,9 @@ final class NettyUdpChannel implements UdpChannel {
         }
         if (value == null) {
             throw new UnsupportedOperationException(option.name());
+        }
+        if (BUFFER_SIZES.contains(option) && udp.channels().reportsDoubledBufferSizes()) {
+            return (T) Integer.valueOf((Integer) value / 2);
         }
         return value;
     }
@@ -205,7 +220,20 @@ final class NettyUdpChannel implements UdpChannel {
         }
         closed = true;
         udp.forget(this);
-        closeOnceRegistered(channel, registered);
+        registered.whenComplete(
+                (ignored, failure) -> {
+                    if (failure != null) {
+                        channel.unsafe().closeForcibly();
+                        return;
+                    }
+                    try {
+                        channel.eventLoop()
+                                .execute(() -> lastSent.addListener(sent -> channel.close()));
+                    } catch (IllegalStateException | RejectedExecutionException e) {
+                        channel.unsafe().closeForcibly();
+                    }
+                });
+        awaitClosed(channel);
     }
 
     /**
@@ -224,13 +252,17 @@ final class NettyUdpChannel implements UdpChannel {
     }
 
     /**
-     * What the channel writes to send {@code content}, which the event loop has to call. A channel
+     * What the channel writes to send {@code datagram}, which the event loop has to call. A channel
      * limited to a remote sends only to it.
      */
-    private Object outgoing(ByteBuf content, InetSocketAddress recipient) {
+    private Object outgoing(DatagramPacket datagram) {
+        ByteBuf content =
+                Unpooled.wrappedBuffer(
+                        datagram.getData(), datagram.getOffset(), datagram.getLength());
         return channel.isConnected()
                 ? content
-                : new io.netty.channel.socket.DatagramPacket(content, recipient);
+                : new io.netty.channel.socket.DatagramPacket(
+                        content, (InetSocketAddress) datagram.getSocketAddress());
     }
 
     /** Counts a datagram as no longer waiting, keeping a failure for the next check. */
@@ -286,16 +318,23 @@ final class NettyUdpChannel implements UdpChannel {
                     (io.netty.channel.socket.DatagramPacket) msg;
             try {
                 int length = packet.content().readableBytes();
-                if (isIpv4OnIpv6(family, packet.sender())
+                if (isOfTheOtherFamily(family, packet.sender())
                         || receivedBytes.get() + length + DATAGRAM_OVERHEAD > RECEIVE_CAPACITY) {
                     return;
                 }
                 byte[] data = ByteBufUtil.getBytes(packet.content());
                 receivedBytes.addAndGet(length + DATAGRAM_OVERHEAD);
                 received.add(new DatagramPacket(data, length, inFamily(packet.sender())));
-                receiveReadiness.complete(null);
             } finally {
                 packet.release();
+            }
+        }
+
+        /** Wakes the guest once the datagrams Netty read together are all waiting. */
+        @Override
+        public void channelReadComplete(ChannelHandlerContext ctx) {
+            if (!received.isEmpty()) {
+                receiveReadiness.complete(null);
             }
         }
 

@@ -257,6 +257,18 @@ class HostUdpSocketTest {
         assertEquals(Arrays.asList(PEER, null), channel.connectedTo);
     }
 
+    /** One send reaches the channel as one batch, so a peer reads its datagrams together. */
+    @Test
+    void aSendHandsItsDatagramsToTheChannelTogether() {
+        OutgoingDatagramStream out = streams().f1();
+
+        permit(out);
+        out.send(List.of(datagram("a", PEER), datagram("b", PEER), datagram("c", PEER)));
+
+        assertEquals(1, channel.sends);
+        assertEquals(List.of("a -> " + PEER, "b -> " + PEER, "c -> " + PEER), sent());
+    }
+
     @Test
     void sendingNeedsAPermitForEachDatagram() {
         OutgoingDatagramStream out = streams().f1();

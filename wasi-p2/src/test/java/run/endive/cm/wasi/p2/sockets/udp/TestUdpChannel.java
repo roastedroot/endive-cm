@@ -28,6 +28,7 @@ final class TestUdpChannel implements UdpChannel {
     InetSocketAddress local;
     CompletableFuture<Void> nextConnect = CompletableFuture.completedFuture(null);
     int capacity = 1000;
+    int sends;
     IOException sendFailure;
     IOException refusal;
     boolean closed;
@@ -106,8 +107,9 @@ final class TestUdpChannel implements UdpChannel {
     }
 
     @Override
-    public void send(DatagramPacket datagram) {
-        sent.add(datagram);
+    public void send(List<DatagramPacket> datagrams) {
+        sends++;
+        sent.addAll(datagrams);
     }
 
     @Override

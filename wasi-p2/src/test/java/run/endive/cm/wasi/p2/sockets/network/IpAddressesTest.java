@@ -126,4 +126,15 @@ class IpAddressesTest {
         assertEquals(ipv4, IpAddresses.inFamily(ipv4, IpAddressFamily.IPV4));
         assertEquals(mapped, IpAddresses.inFamily(mapped, IpAddressFamily.IPV6));
     }
+
+    /** Netty's io_uring binds a channel of both families there when given IPv4's wildcard. */
+    @Test
+    void ipv6sWildcardAddressIsIpv4sForAnIpv4Socket() throws UnknownHostException {
+        InetSocketAddress any = new InetSocketAddress(InetAddress.getByName("::"), 80);
+
+        assertEquals(
+                new InetSocketAddress(InetAddress.getByName("0.0.0.0"), 80),
+                IpAddresses.inFamily(any, IpAddressFamily.IPV4));
+        assertEquals(any, IpAddresses.inFamily(any, IpAddressFamily.IPV6));
+    }
 }

@@ -28,7 +28,7 @@ final class NettyUdp implements UdpChannel.Factory, AutoCloseable {
         return NettyUdpChannel.open(this, family);
     }
 
-    /** Closes every socket the guest left open, discarding what they have not sent. */
+    /** Closes every socket the guest left open. */
     @Override
     public void close() {
         for (NettyUdpChannel channel : List.copyOf(open)) {

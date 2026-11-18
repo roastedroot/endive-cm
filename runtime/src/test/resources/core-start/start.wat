@@ -1,0 +1,15 @@
+(component
+  (core module $m
+    (global $start-ran (mut i32) (i32.const 0))
+    (global $underscore-start-ran (mut i32) (i32.const 0))
+    (func $start (global.set $start-ran (i32.const 1)))
+    (start $start)
+    (func (export "_start") (global.set $underscore-start-ran (i32.const 1)))
+    (func (export "start-ran") (result i32) (global.get $start-ran))
+    (func (export "underscore-start-ran") (result i32) (global.get $underscore-start-ran))
+  )
+  (core instance $i (instantiate $m))
+  (func (export "start-ran") (result u32) (canon lift (core func $i "start-ran")))
+  (func (export "underscore-start-ran") (result u32)
+    (canon lift (core func $i "underscore-start-ran")))
+)

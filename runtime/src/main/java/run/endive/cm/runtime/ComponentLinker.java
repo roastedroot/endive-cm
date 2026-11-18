@@ -464,8 +464,12 @@ public final class ComponentLinker {
         }
 
         var store = builder.instance().store();
+        // Otherwise Endive runs a "_start" export, which is for the component's caller to run.
         run.endive.runtime.Instance core =
-                store.coreInstanceBuilder(module).withImportValues(importValues).build();
+                store.coreInstanceBuilder(module)
+                        .withImportValues(importValues)
+                        .withStart(false)
+                        .build();
         store.registerCore(core);
         builder.addCoreInstance(new CoreEndiveInstance(core));
     }

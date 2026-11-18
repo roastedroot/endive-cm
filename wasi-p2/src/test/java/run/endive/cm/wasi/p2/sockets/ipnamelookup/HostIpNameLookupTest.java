@@ -188,8 +188,9 @@ class HostIpNameLookupTest {
         }
     }
 
+    /** The interface lists no {@code access-denied}, so wasmtime reports a permanent failure. */
     @Test
-    void aNetworkWithoutNameLookupIsAccessDenied() {
+    void aNetworkWithoutNameLookupFailsPermanently() {
         HostNetwork tcpOnly = new HostNetwork(NetworkPolicy.builder().allowTcp().build());
 
         ErrorCodeException e =
@@ -197,7 +198,7 @@ class HostIpNameLookupTest {
                         ErrorCodeException.class,
                         () -> lookup(TestResolver.unused()).resolveAddresses(tcpOnly, "192.0.2.1"));
 
-        assertEquals(ErrorCode.ACCESS_DENIED, e.error());
+        assertEquals(ErrorCode.PERMANENT_RESOLVER_FAILURE, e.error());
     }
 
     private static HostIpNameLookup lookup(TestResolver resolver) {

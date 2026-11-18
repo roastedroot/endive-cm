@@ -2,6 +2,7 @@ package run.endive.cm.wasi.p2.sockets.netty;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,12 +28,15 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import run.endive.cm.runtime.Tuple2;
 import run.endive.cm.wasi.p2.WasiPreview2;
 import run.endive.cm.wasi.p2.bindings.wasi.io.poll.Pollable;
@@ -57,6 +61,7 @@ import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
  * The network runs on a scheduler using one of Netty's native transports, with the channels that
  * transport needs. Each test runs only where its transport is available.
  */
+@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class NativeTransportTest {
 
     private static final IpSocketAddress LOOPBACK =
@@ -70,13 +75,20 @@ class NativeTransportTest {
         exchangesBytesOn(EpollIoHandler.newFactory());
         reportsAnAddressInUseOn(EpollIoHandler.newFactory());
         refusesIpv4OnIpv6On(EpollIoHandler.newFactory());
+        keepsIpv4ApartFromIpv6On(EpollIoHandler.newFactory());
         setsTheHopLimitOn(EpollIoHandler.newFactory());
+        readsBackBufferSizesOn(EpollIoHandler.newFactory());
+        freesADroppedListenersAddressOn(EpollIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
         sendsDatagramsOn(EpollIoHandler.newFactory());
+        wakesOnceTheDatagramsReadTogetherWaitOn(EpollIoHandler.newFactory());
+        limitsToTheDatagramsOfItsRemoteOn(EpollIoHandler.newFactory());
+        sendsWhatADroppedSocketQueuedOn(EpollIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(EpollIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(EpollIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(EpollIoHandler.newFactory());
         setsTheUnicastHopLimitOn(EpollIoHandler.newFactory());
+        readsBackUdpBufferSizesOn(EpollIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(EpollIoHandler.newFactory());
     }
 
@@ -88,12 +100,18 @@ class NativeTransportTest {
         exchangesBytesOn(IoUringIoHandler.newFactory());
         reportsAnAddressInUseOn(IoUringIoHandler.newFactory());
         refusesIpv4OnIpv6On(IoUringIoHandler.newFactory());
+        keepsIpv4ApartFromIpv6On(IoUringIoHandler.newFactory());
         setsTheHopLimitOn(IoUringIoHandler.newFactory());
+        readsBackBufferSizesOn(IoUringIoHandler.newFactory());
+        freesADroppedListenersAddressOn(IoUringIoHandler.newFactory());
         sendsDatagramsOn(IoUringIoHandler.newFactory());
+        limitsToTheDatagramsOfItsRemoteOn(IoUringIoHandler.newFactory());
+        sendsWhatADroppedSocketQueuedOn(IoUringIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(IoUringIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(IoUringIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(IoUringIoHandler.newFactory());
         setsTheUnicastHopLimitOn(IoUringIoHandler.newFactory());
+        readsBackUdpBufferSizesOn(IoUringIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(IoUringIoHandler.newFactory());
     }
 
@@ -105,13 +123,19 @@ class NativeTransportTest {
         exchangesBytesOn(KQueueIoHandler.newFactory());
         reportsAnAddressInUseOn(KQueueIoHandler.newFactory());
         refusesIpv4OnIpv6On(KQueueIoHandler.newFactory());
+        keepsIpv4ApartFromIpv6On(KQueueIoHandler.newFactory());
         setsTheHopLimitOn(KQueueIoHandler.newFactory());
+        readsBackBufferSizesOn(KQueueIoHandler.newFactory());
+        freesADroppedListenersAddressOn(KQueueIoHandler.newFactory());
         keepsIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
         sendsDatagramsOn(KQueueIoHandler.newFactory());
+        wakesOnceTheDatagramsReadTogetherWaitOn(KQueueIoHandler.newFactory());
+        sendsWhatADroppedSocketQueuedOn(KQueueIoHandler.newFactory());
         limitsADatagramSocketAnewAtOnceOn(KQueueIoHandler.newFactory());
         sendsDatagramsOnceUnlimitedOn(KQueueIoHandler.newFactory());
         picksTheLocalAddressALimitUsesOn(KQueueIoHandler.newFactory());
         setsTheUnicastHopLimitOn(KQueueIoHandler.newFactory());
+        readsBackUdpBufferSizesOn(KQueueIoHandler.newFactory());
         keepsUdpIpv6ApartFromIpv4On(KQueueIoHandler.newFactory());
     }
 
@@ -190,6 +214,98 @@ class NativeTransportTest {
             assertEquals(ErrorCode.ADDRESS_IN_USE, e.error());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** An IPv4 socket on the wildcard address stays IPv4, and its guest sees no IPv6 peer. */
+    private static void keepsIpv4ApartFromIpv6On(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            TcpSocket listener = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            IpSocketAddress wildcard = IpAddresses.fromInet(new InetSocketAddress("0.0.0.0", 0));
+            listener.startBind(wasi.instanceNetwork().instanceNetwork(), wildcard);
+            finish(wasi, listener, listener::finishBind);
+            listener.startListen();
+            finish(wasi, listener, listener::finishListen);
+            InetSocketAddress bound = IpAddresses.toInet(listener.localAddress());
+            assertEquals(new InetSocketAddress("0.0.0.0", bound.getPort()), bound);
+
+            if (NettyTcpTest.hasIpv6Loopback()) {
+                try (Socket ipv6 = new Socket("::1", bound.getPort())) {
+                    assertEquals(-1, ipv6.getInputStream().read());
+                } catch (IOException e) {
+                    assertInstanceOf(SocketException.class, e);
+                }
+            }
+            try (Socket ipv4 = new Socket("127.0.0.1", bound.getPort())) {
+                TcpSocket accepted = finish(wasi, listener, listener::accept).f0();
+                assertEquals(
+                        new InetSocketAddress("127.0.0.1", ipv4.getLocalPort()),
+                        IpAddresses.toInet(accepted.remoteAddress()));
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** A buffer size reads back as it was set, on the listener and the connections it accepts. */
+    private static void readsBackBufferSizesOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            Network network = wasi.instanceNetwork().instanceNetwork();
+            TcpSocket listener = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            listener.setReceiveBufferSize(BigInteger.valueOf(0x10000));
+            assertEquals(BigInteger.valueOf(0x10000), listener.receiveBufferSize());
+            listener.startBind(network, LOOPBACK);
+            finish(wasi, listener, listener::finishBind);
+            listener.startListen();
+            finish(wasi, listener, listener::finishListen);
+            listener.setSendBufferSize(BigInteger.valueOf(0x10000));
+
+            TcpSocket client = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+            client.startConnect(network, listener.localAddress());
+            finish(wasi, client, client::finishConnect);
+            TcpSocket accepted = finish(wasi, listener, listener::accept).f0();
+
+            assertEquals(BigInteger.valueOf(0x10000), listener.receiveBufferSize());
+            assertEquals(BigInteger.valueOf(0x10000), accepted.receiveBufferSize());
+            assertEquals(BigInteger.valueOf(0x10000), accepted.sendBufferSize());
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** Dropping a listener frees its address at once, so the guest may bind it again. */
+    private static void freesADroppedListenersAddressOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            Network network = wasi.instanceNetwork().instanceNetwork();
+            IpSocketAddress bound = LOOPBACK;
+            for (int i = 0; i < 20; i++) {
+                TcpSocket listener = wasi.tcpCreateSocket().createTcpSocket(IpAddressFamily.IPV4);
+                listener.startBind(network, bound);
+                finish(wasi, listener, listener::finishBind);
+                listener.startListen();
+                finish(wasi, listener, listener::finishListen);
+                bound = listener.localAddress();
+                listener.drop();
+            }
         } finally {
             group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }
@@ -420,6 +536,125 @@ class NativeTransportTest {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * A poll wakes once every datagram the transport read together waits, so that one receive takes
+     * them all. The event loop is kept busy so that both arrive before it reads. io_uring reads
+     * each datagram on its own, as one arrives.
+     */
+    private static void wakesOnceTheDatagramsReadTogetherWaitOn(IoHandlerFactory transport)
+            throws IOException {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        CountDownLatch busy = new CountDownLatch(1);
+        try (var wasi =
+                        WasiPreview2.builder()
+                                .withScheduler(group)
+                                .withNetworkPolicy(NetworkPolicy.allowAll())
+                                .build();
+                DatagramSocket host = new DatagramSocket(0, InetAddress.getLoopbackAddress())) {
+            UdpSocket socket = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            IncomingDatagramStream in = socket.stream(null).f0();
+            InetSocketAddress to = IpAddresses.toInet(socket.localAddress());
+            group.execute(busy::countDown);
+            group.execute(() -> sleep(200));
+            busy.await();
+            host.send(new DatagramPacket(new byte[] {'1'}, 1, to));
+            host.send(new DatagramPacket(new byte[] {'2'}, 1, to));
+
+            wasi.poll().poll(List.of(in.subscribe()));
+
+            assertEquals(2, in.receive(BigInteger.TWO).size());
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * A socket limited to a remote receives only what that remote sent, even among datagrams that
+     * arrived before the limit. The event loop is kept busy so that it limits the socket before it
+     * reads them.
+     */
+    private static void limitsToTheDatagramsOfItsRemoteOn(IoHandlerFactory transport)
+            throws IOException {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        CountDownLatch busy = new CountDownLatch(1);
+        try (var wasi =
+                        WasiPreview2.builder()
+                                .withScheduler(group)
+                                .withNetworkPolicy(NetworkPolicy.allowAll())
+                                .build();
+                DatagramSocket other = new DatagramSocket(0, InetAddress.getLoopbackAddress());
+                DatagramSocket remote = new DatagramSocket(0, InetAddress.getLoopbackAddress())) {
+            UdpSocket socket = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            InetSocketAddress to = IpAddresses.toInet(socket.localAddress());
+            group.execute(busy::countDown);
+            group.execute(() -> sleep(200));
+            busy.await();
+            other.send(new DatagramPacket(new byte[] {'A'}, 1, to));
+            remote.send(new DatagramPacket(new byte[] {'B'}, 1, to));
+            IncomingDatagramStream in =
+                    socket.stream(
+                                    IpAddresses.fromInet(
+                                            (InetSocketAddress) remote.getLocalSocketAddress()))
+                            .f0();
+
+            assertEquals("B", new String(receiveOne(wasi, in).data(), UTF_8));
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** A socket dropped right after sending still hands every datagram to the host. */
+    private static void sendsWhatADroppedSocketQueuedOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket receiver = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            IncomingDatagramStream in = receiver.stream(null).f0();
+            UdpSocket sender = bound(wasi, IpAddressFamily.IPV4, LOOPBACK);
+            OutgoingDatagramStream out = sender.stream(receiver.localAddress()).f1();
+            int count = out.checkSend().intValueExact();
+            List<OutgoingDatagram> datagrams = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                datagrams.add(new OutgoingDatagram(new byte[] {(byte) i}, null));
+            }
+
+            out.send(datagrams);
+            out.drop();
+            sender.drop();
+
+            for (int i = 0; i < count; i++) {
+                receiveOne(wasi, in);
+            }
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    private static void readsBackUdpBufferSizesOn(IoHandlerFactory transport) {
+        EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, transport);
+        try (var wasi =
+                WasiPreview2.builder()
+                        .withScheduler(group)
+                        .withNetworkPolicy(NetworkPolicy.allowAll())
+                        .build()) {
+            UdpSocket socket = wasi.udpCreateSocket().createUdpSocket(IpAddressFamily.IPV4);
+            socket.setReceiveBufferSize(BigInteger.valueOf(0x10000));
+            socket.setSendBufferSize(BigInteger.valueOf(0x10000));
+
+            assertEquals(BigInteger.valueOf(0x10000), socket.receiveBufferSize());
+            assertEquals(BigInteger.valueOf(0x10000), socket.sendBufferSize());
+        } finally {
+            group.shutdownGracefully(0, 1, TimeUnit.SECONDS);
         }
     }
 

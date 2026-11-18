@@ -209,6 +209,17 @@ class NettyUdpTest {
         assertTrue(received <= most, received + " datagrams kept");
     }
 
+    /** Dropping a socket frees its address at once, so the guest may bind it again. */
+    @Test
+    void aDroppedSocketsAddressIsFreeAtOnce() {
+        IpSocketAddress address = LOOPBACK;
+        for (int i = 0; i < 20; i++) {
+            UdpSocket socket = bound(IpAddressFamily.IPV4, address);
+            address = socket.localAddress();
+            socket.drop();
+        }
+    }
+
     @Test
     void anIpv6SocketExchangesOverIpv6Loopback() {
         IpSocketAddress loopback = address(new InetSocketAddress("::1", 0));

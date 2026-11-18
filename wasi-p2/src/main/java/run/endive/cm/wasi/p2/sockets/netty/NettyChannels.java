@@ -1,6 +1,7 @@
 package run.endive.cm.wasi.p2.sockets.netty;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelException;
 import io.netty.channel.ChannelFactory;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.IoEventLoopGroup;
@@ -58,8 +59,9 @@ import run.endive.cm.wasi.p2.sockets.network.HopLimits;
  * them. Java offers NIO no way to set it, so on NIO an IPv6 socket still takes a port from IPv4's
  * wildcard address. A listening one closes each IPv4 connection it accepts, and a UDP one drops
  * each IPv4 datagram it receives. Netty's io_uring TCP channels are IPv6 wherever the host has
- * IPv6, so an IPv4 TCP socket on io_uring is an IPv6 one used only with IPv4 addresses. Linux then
- * refuses to bind it to a port an IPv6 socket holds on the wildcard address.
+ * IPv6, so an IPv4 TCP socket on io_uring is an IPv6 one used only with IPv4 addresses. Netty binds
+ * it to IPv6's wildcard address when given IPv4's, so there it takes the port from IPv6 too, and a
+ * listening one closes each IPv6 connection it accepts.
  *
  * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp-create-socket.wit">wasi:sockets/tcp-create-socket, create-tcp-socket</a>
  * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp-create-socket.wit">wasi:sockets/udp-create-socket, create-udp-socket</a>
@@ -100,6 +102,7 @@ final class NettyChannels {
     private final Map<SocketOption<?>, ChannelOption<?>> options;
     private final Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits;
     private final Function<Channel, SocketAddress> localAddresses;
+    private final boolean reportsDoubledBufferSizes;
 
     private NettyChannels(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
@@ -109,7 +112,8 @@ final class NettyChannels {
             Listener listener,
             Map<SocketOption<?>, ChannelOption<?>> options,
             Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits,
-            Function<Channel, SocketAddress> localAddresses) {
+            Function<Channel, SocketAddress> localAddresses,
+            boolean reportsDoubledBufferSizes) {
         this.socket = Objects.requireNonNull(socket, "socket");
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         this.datagram = Objects.requireNonNull(datagram, "datagram");
@@ -118,6 +122,7 @@ final class NettyChannels {
         this.options = options;
         this.hopLimits = hopLimits;
         this.localAddresses = localAddresses;
+        this.reportsDoubledBufferSizes = reportsDoubledBufferSizes;
     }
 
     /**
@@ -141,7 +146,8 @@ final class NettyChannels {
                 Nio::listen,
                 STANDARD_OPTIONS,
                 Map.of(),
-                Nio::localAddress);
+                Nio::localAddress,
+                false);
     }
 
     /** Creates the channel of a TCP connection of the host's default family. */
@@ -188,6 +194,15 @@ final class NettyChannels {
     /** The address {@code channel} is bound to now, which Netty's io_uring reads only once. */
     InetSocketAddress localAddress(Channel channel) {
         return (InetSocketAddress) localAddresses.apply(channel);
+    }
+
+    /**
+     * Whether the transport reports twice the buffer size a socket was given. Linux doubles it to
+     * leave room for its own bookkeeping, and the JDK halves what it reports for NIO, so only
+     * Netty's Linux transports report it doubled.
+     */
+    boolean reportsDoubledBufferSizes() {
+        return reportsDoubledBufferSizes;
     }
 
     /**
@@ -299,7 +314,8 @@ final class NettyChannels {
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT)),
                         Map.of(),
-                        Nio::localAddress);
+                        Nio::localAddress,
+                        false);
 
         private Nio() {}
 
@@ -397,10 +413,11 @@ final class NettyChannels {
                                 family == null
                                         ? new EpollDatagramChannel()
                                         : activeWhileOpen(
-                                                ipv6Only(
-                                                        new EpollDatagramChannel(family),
-                                                        family,
-                                                        Unix.LINUX_V6_ONLY)),
+                                                readingSenders(
+                                                        ipv6Only(
+                                                                new EpollDatagramChannel(family),
+                                                                family,
+                                                                Unix.LINUX_V6_ONLY))),
                         Unix::bind,
                         (channel, backlog) ->
                                 new EpollServerSocketChannel(Unix.listen(channel, backlog)),
@@ -409,9 +426,24 @@ final class NettyChannels {
                                 EpollChannelOption.TCP_KEEPINTVL,
                                 EpollChannelOption.TCP_KEEPCNT),
                         Unix.LINUX_HOP_LIMITS,
-                        Unix::localAddress);
+                        Unix::localAddress,
+                        true);
 
         private Epoll() {}
+
+        /**
+         * {@code channel} with {@code UDP_GRO} on, so that Netty's epoll transport reads the sender
+         * of each datagram once the channel is connected too, instead of taking the remote for it.
+         * A kernel without {@code UDP_GRO} leaves the channel as it was.
+         */
+        private static EpollDatagramChannel readingSenders(EpollDatagramChannel channel) {
+            try {
+                channel.config().setOption(EpollChannelOption.UDP_GRO, true);
+            } catch (ChannelException e) {
+                // The kernel predates UDP_GRO.
+            }
+            return channel;
+        }
 
         static boolean runs(IoEventLoopGroup group) {
             return group.isIoType(EpollIoHandler.class);
@@ -451,7 +483,8 @@ final class NettyChannels {
                                 IoUringChannelOption.TCP_KEEPINTVL,
                                 IoUringChannelOption.TCP_KEEPCNT),
                         Unix.LINUX_HOP_LIMITS,
-                        Unix::localAddress);
+                        Unix::localAddress,
+                        true);
 
         private IoUring() {}
 
@@ -495,7 +528,8 @@ final class NettyChannels {
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
                         STANDARD_OPTIONS,
                         Unix.BSD_HOP_LIMITS,
-                        Unix::localAddress);
+                        Unix::localAddress,
+                        false);
 
         private KQueue() {}
 
