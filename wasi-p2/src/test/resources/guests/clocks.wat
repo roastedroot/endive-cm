@@ -1,4 +1,4 @@
-;; Implements endive:wasi-test/clocks, which exports run alongside every import
+;; Implements typewire:wasi-test/clocks, which exports run alongside every import
 ;; the host world provides.
 ;;
 ;; wall-clock now is handed a return area for its datetime, a record whose

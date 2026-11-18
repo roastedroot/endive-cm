@@ -2,18 +2,22 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>run.endive.cm</groupId>
-    <artifactId>endive-cm</artifactId>
+    <groupId>io.roastedroot</groupId>
+    <artifactId>typewire-parent</artifactId>
     <version>999-SNAPSHOT</version>
   </parent>
 
-  <artifactId>canonical-abi</artifactId>
+  <artifactId>typewire-canonical-abi</artifactId>
   <packaging>jar</packaging>
 
-  <name>Endive CM - Canonical ABI</name>
+  <name>Typewire - Canonical ABI</name>
   <description>Implementation of the lifting and lowering contracts of the Component Model's Canonical ABI</description>
 
   <dependencies>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-types</artifactId>
+    </dependency>
     <dependency>
       <groupId>run.endive</groupId>
       <artifactId>runtime</artifactId>
@@ -21,10 +25,6 @@
     <dependency>
       <groupId>run.endive</groupId>
       <artifactId>wasm</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>types</artifactId>
     </dependency>
     <dependency>
       <groupId>org.assertj</groupId>

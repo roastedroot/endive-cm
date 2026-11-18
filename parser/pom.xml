@@ -2,24 +2,24 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>run.endive.cm</groupId>
-    <artifactId>endive-cm</artifactId>
+    <groupId>io.roastedroot</groupId>
+    <artifactId>typewire-parent</artifactId>
     <version>999-SNAPSHOT</version>
   </parent>
-  <artifactId>parser</artifactId>
+  <artifactId>typewire-parser</artifactId>
   <packaging>jar</packaging>
 
-  <name>Endive CM - Binary Component Model Parser</name>
-  <description>Binary parser for Endive Component Model</description>
+  <name>Typewire - Binary Component Model Parser</name>
+  <description>Binary parser for WebAssembly components</description>
 
   <dependencies>
     <dependency>
-      <groupId>run.endive</groupId>
-      <artifactId>wasm</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-types</artifactId>
     </dependency>
     <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>types</artifactId>
+      <groupId>run.endive</groupId>
+      <artifactId>wasm</artifactId>
     </dependency>
   </dependencies>
   <build>

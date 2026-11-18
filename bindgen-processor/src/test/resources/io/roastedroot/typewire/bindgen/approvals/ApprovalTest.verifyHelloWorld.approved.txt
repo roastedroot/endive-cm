@@ -1,0 +1,63 @@
+// typewire.testing.HelloWorldWorld
+
+package typewire.testing;
+
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.ComponentLinker;
+import io.roastedroot.typewire.runtime.ComponentStore;
+import io.roastedroot.typewire.runtime.HostFunction;
+import io.roastedroot.typewire.runtime.VoidHostTypeDescriptor;
+import io.roastedroot.typewire.types.FuncType;
+import io.roastedroot.typewire.types.PrimValType;
+import io.roastedroot.typewire.types.ValType;
+import io.roastedroot.typewire.types.WasmComponent;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+
+/**
+ * Bindings for the WIT world {@code my:project/hello-world}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class HelloWorldWorld {
+
+    private static final FuncType NAME_FUNC = FuncType.builder().withResult(ValType.builder().withPrimValType(PrimValType.STRING).build()).build();
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        String name();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction greet;
+
+    private HelloWorldWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.greet = instance.export("greet").typed(VoidHostTypeDescriptor.instance());
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static HelloWorldWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("name", HostFunction.of(store, NAME_FUNC, args -> new Object[] { imports.name() }));
+        return new HelloWorldWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public void greet() {
+        this.greet.apply();
+    }
+}

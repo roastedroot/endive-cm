@@ -1,0 +1,105 @@
+// typewire.testing.TupleTypesWorld
+
+package typewire.testing;
+
+import io.roastedroot.typewire.abi.ByteList;
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.ComponentLinker;
+import io.roastedroot.typewire.runtime.ComponentStore;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.PrimitiveHostTypeDescriptor;
+import io.roastedroot.typewire.runtime.RecordHostTypeDescriptor;
+import io.roastedroot.typewire.runtime.Tuple2;
+import io.roastedroot.typewire.runtime.VoidHostTypeDescriptor;
+import io.roastedroot.typewire.types.FuncType;
+import io.roastedroot.typewire.types.LabelValType;
+import io.roastedroot.typewire.types.ListType;
+import io.roastedroot.typewire.types.PrimValType;
+import io.roastedroot.typewire.types.TupleType;
+import io.roastedroot.typewire.types.Type;
+import io.roastedroot.typewire.types.ValType;
+import io.roastedroot.typewire.types.WasmComponent;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+
+/**
+ * Bindings for the WIT world {@code example:tuples/tuple-types}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class TupleTypesWorld {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:tuples/points}.
+         */
+        typewire.testing.example.tuples.points.Host points();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction shift;
+
+    private final ComponentFunction checkReverse;
+
+    private TupleTypesWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.shift = instance.export("shift").typed(RecordHostTypeDescriptor.instance(), RecordHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Long.class));
+        this.checkReverse = instance.export("check-reverse").typed(VoidHostTypeDescriptor.instance());
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static TupleTypesWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        typewire.testing.example.tuples.points.Host points = imports.points();
+        HostInstance.Builder pointsBuilder = HostInstance.builder(store);
+        ValType pointsType0 = pointsBuilder.declareType(Type.of(TupleType.builder().addElementType(ValType.builder().withPrimValType(PrimValType.STRING).build()).addElementType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()));
+        ValType pointsType1 = pointsBuilder.declareType(Type.of(TupleType.builder().addElementType(ValType.builder().withPrimValType(PrimValType.U32).build()).addElementType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()));
+        ValType pointsType3 = pointsBuilder.declareType(Type.of(ListType.builder().withElementType(ValType.builder().withPrimValType(PrimValType.U8).build()).build()));
+        ValType pointsType4 = pointsBuilder.declareType(Type.of(TupleType.builder().addElementType(pointsType3).addElementType(ValType.builder().withPrimValType(PrimValType.BOOL).build()).build()));
+        pointsBuilder.addFunction("describe", FuncType.builder().addParam(LabelValType.builder().withLabel("point").withValType(pointsType0).build()).withResult(pointsType1).build(), args -> new Object[] { points.describe(Tuple2.fromComponent(args[0], String.class, Long.class)).toComponent() });
+        pointsBuilder.addFunction("reverse", FuncType.builder().addParam(LabelValType.builder().withLabel("chunk").withValType(pointsType4).build()).withResult(pointsType4).build(), args -> new Object[] { points.reverse(Tuple2.fromComponent(args[0], element -> ByteList.toBytes(element), element -> (Boolean) element)).toComponent() });
+        values.put("example:tuples/points", pointsBuilder.build());
+        return new TupleTypesWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public Tuple2<String, Long> shift(Tuple2<Long, Long> point, Long by) {
+        return Tuple2.fromComponent(this.shift.apply(point.toComponent(), by)[0], String.class, Long.class);
+    }
+
+    public void checkReverse() {
+        this.checkReverse.apply();
+    }
+}
+
+// typewire.testing.example.tuples.points.Host
+
+package typewire.testing.example.tuples.points;
+
+import io.roastedroot.typewire.runtime.Tuple2;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:tuples/points}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    Tuple2<Long, Long> describe(Tuple2<String, Long> point);
+
+    Tuple2<byte[], Boolean> reverse(Tuple2<byte[], Boolean> chunk);
+}

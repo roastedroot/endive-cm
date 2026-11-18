@@ -2,17 +2,25 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>run.endive.cm</groupId>
-    <artifactId>endive-cm</artifactId>
+    <groupId>io.roastedroot</groupId>
+    <artifactId>typewire-parent</artifactId>
     <version>999-SNAPSHOT</version>
   </parent>
-  <artifactId>runtime</artifactId>
+  <artifactId>typewire-runtime</artifactId>
   <packaging>jar</packaging>
 
-  <name>Endive CM - Component Model Runtime</name>
+  <name>Typewire - Component Model Runtime</name>
   <description>Component Model instantiation and linking for Endive</description>
 
   <dependencies>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-canonical-abi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-types</artifactId>
+    </dependency>
     <dependency>
       <groupId>run.endive</groupId>
       <artifactId>runtime</artifactId>
@@ -22,12 +30,19 @@
       <artifactId>wasm</artifactId>
     </dependency>
     <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>canonical-abi</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-component-corpus</artifactId>
+      <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>types</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-parser</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-wasm-tools</artifactId>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.assertj</groupId>
@@ -44,27 +59,12 @@
       <artifactId>junit-jupiter-params</artifactId>
       <scope>test</scope>
     </dependency>
-    <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>component-corpus</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>parser</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>wasm-tools</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
   <build>
     <plugins>
       <plugin>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>cm-test-gen-plugin</artifactId>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-cm-test-gen-plugin</artifactId>
         <version>${project.version}</version>
         <configuration>
           <testSuiteRepoRef>706074c96bc14cfc58469e1bdc452bb4d91921c7</testSuiteRepoRef>

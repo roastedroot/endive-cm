@@ -1,4 +1,4 @@
-;; Implements endive:wasi-test/tcp, whose exports use wasi:sockets/tcp on the
+;; Implements typewire:wasi-test/tcp, whose exports use wasi:sockets/tcp on the
 ;; instance network, always over IPv4 loopback.
 ;;
 ;; listen binds a socket to an ephemeral port, listens on it, and returns the port.

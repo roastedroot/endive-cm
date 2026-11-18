@@ -26,9 +26,9 @@ Everything else parses into, generates from, and instantiates with these types.
 
 ## Module
 
-`types` (`run.endive.cm:types`)
+`types` (`io.roastedroot:typewire-types`)
 
-**Package**: `run.endive.cm.types`
+**Package**: `io.roastedroot.typewire.types`
 
 ## Deliverables
 

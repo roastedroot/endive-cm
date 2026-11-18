@@ -2,14 +2,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>run.endive.cm</groupId>
-    <artifactId>endive-cm</artifactId>
+    <groupId>io.roastedroot</groupId>
+    <artifactId>typewire-parent</artifactId>
     <version>999-SNAPSHOT</version>
   </parent>
-  <artifactId>wasi-p2-loom-tests</artifactId>
+  <artifactId>typewire-wasi-p2-loom-tests</artifactId>
   <packaging>jar</packaging>
 
-  <name>Endive CM - WASI p2 Virtual Thread Tests</name>
+  <name>Typewire - WASI p2 Virtual Thread Tests</name>
   <description>WASI p2 host tests that run guests on virtual threads, built only on Java 21 and later.</description>
 
   <dependencies>
@@ -25,34 +25,34 @@
     </dependency>
     <dependency>
       <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-parser</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-wasi-p2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-wasi-p2</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-wasm-tools</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
       <artifactId>zerofs</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>parser</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>wasi-p2</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>wasi-p2</artifactId>
-      <version>${project.version}</version>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>wasm-tools</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

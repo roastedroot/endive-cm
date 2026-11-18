@@ -21,9 +21,9 @@ Model interfaces (WIT), so it requires everything from Phases 0--5.
 
 ## Module
 
-`wasi-p2` (`run.endive.cm:wasi-p2`)
+`wasi-p2` (`io.roastedroot:typewire-wasi-p2`)
 
-**Package**: `run.endive.cm.wasi`
+**Package**: `io.roastedroot.typewire.wasi`
 
 ## Deliverables
 

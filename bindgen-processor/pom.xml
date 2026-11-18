@@ -2,14 +2,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>run.endive.cm</groupId>
-    <artifactId>endive-cm</artifactId>
+    <groupId>io.roastedroot</groupId>
+    <artifactId>typewire-parent</artifactId>
     <version>999-SNAPSHOT</version>
   </parent>
-  <artifactId>bindgen-processor</artifactId>
+  <artifactId>typewire-bindgen-processor</artifactId>
   <packaging>jar</packaging>
 
-  <name>Endive CM - Bindgen Annotation Processor</name>
+  <name>Typewire - Bindgen Annotation Processor</name>
   <description>An annotation processor library to generate host-side bindings for WIT worlds.</description>
 
   <dependencies>
@@ -18,16 +18,16 @@
       <artifactId>javaparser-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>parser</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-parser</artifactId>
     </dependency>
     <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>runtime</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-runtime</artifactId>
     </dependency>
     <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>wasm-tools</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-wasm-tools</artifactId>
     </dependency>
     <dependency>
       <groupId>com.approvaltests</groupId>

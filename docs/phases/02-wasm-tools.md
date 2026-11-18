@@ -22,9 +22,9 @@ the existing `WitParser` (which wraps `wasm-tools component wit`).
 
 ## Module
 
-`wasm-tools` (`run.endive.cm:wasm-tools`)
+`wasm-tools` (`io.roastedroot:typewire-wasm-tools`)
 
-**Package**: `run.endive.cm.tools`
+**Package**: `io.roastedroot.typewire.tools`
 
 ## Deliverables
 

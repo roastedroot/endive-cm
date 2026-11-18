@@ -23,9 +23,9 @@ link nested components, and manage resource lifetimes.
 
 ## Module
 
-`runtime` (`run.endive.cm:runtime`)
+`runtime` (`io.roastedroot:typewire-runtime`)
 
-**Package**: `run.endive.cm.runtime`
+**Package**: `io.roastedroot.typewire.runtime`
 
 ## Deliverables
 

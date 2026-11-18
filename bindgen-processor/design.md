@@ -822,7 +822,7 @@ it.
 
 ## What the Runtime Gained
 
-Generating bindings needed public API the runtime did not have. All of it is in `run.endive.cm.runtime`.
+Generating bindings needed public API the runtime did not have. All of it is in `io.roastedroot.typewire.runtime`.
 
 | Type | For |
 |---|---|
