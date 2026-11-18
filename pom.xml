@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" child.project.url.inherit.append.path="false" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.roastedroot</groupId>
@@ -8,6 +8,7 @@
   <packaging>pom</packaging>
   <name>Typewire</name>
   <description>WebAssembly Component Model for the JVM, running on Endive</description>
+  <url>https://github.com/roastedroot/typewire</url>
 
   <licenses>
     <license>
@@ -16,6 +17,21 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
+
+  <developers>
+    <developer>
+      <id>andreaTP</id>
+      <name>Andrea Peruffo</name>
+      <email>andrea.peruffo1982@gmail.com</email>
+      <url>https://github.com/andreaTP</url>
+    </developer>
+    <developer>
+      <id>jeremyg484</id>
+      <name>Jeremy Grelle</name>
+      <email>jeremy.grelle@gmail.com</email>
+      <url>https://github.com/jeremyg484</url>
+    </developer>
+  </developers>
 
   <modules>
     <module>bindgen-processor</module>
@@ -31,6 +47,12 @@
     <module>wasm-tools</module>
   </modules>
 
+  <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
+    <connection>scm:git:https://github.com/roastedroot/typewire.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/roastedroot/typewire.git</developerConnection>
+    <url>https://github.com/roastedroot/typewire/tree/main</url>
+  </scm>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -38,13 +60,17 @@
     <maven.compiler.failOnWarning>true</maven.compiler.failOnWarning>
     <maven.dependency.failOnWarning>true</maven.dependency.failOnWarning>
 
+    <central-publishing-maven-plugin.version>0.12.0</central-publishing-maven-plugin.version>
     <checkstyle.version>14.4.0</checkstyle.version>
     <javaparser.version>3.28.2</javaparser.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
+    <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
+    <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
     <maven-plugin-annotations.version>3.16.0</maven-plugin-annotations.version>
     <maven-plugin-api.version>3.10.1</maven-plugin-api.version>
     <maven-plugin-plugin.version>3.16.0</maven-plugin-plugin.version>
+    <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
     <spotless-maven-plugin.version>3.11.0</spotless-maven-plugin.version>
     <surefire-plugin.version>3.5.2</surefire-plugin.version>
     <zip4j.version>2.11.6</zip4j.version>
@@ -527,6 +553,75 @@
                 <phase>validate</phase>
               </execution>
             </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>${maven-gpg-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <phase>verify</phase>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>${maven-javadoc-plugin.version}</version>
+            <configuration>
+              <doclint>none</doclint>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${maven-source-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${central-publishing-maven-plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+              <waitUntil>published</waitUntil>
+              <excludeArtifacts>
+                <excludeArtifact>typewire-bindgen-processor-tests</excludeArtifact>
+                <excludeArtifact>typewire-cm-test-gen-lib</excludeArtifact>
+                <excludeArtifact>typewire-cm-test-gen-plugin</excludeArtifact>
+                <excludeArtifact>typewire-component-corpus</excludeArtifact>
+                <excludeArtifact>typewire-wasi-p2-loom-tests</excludeArtifact>
+              </excludeArtifacts>
+            </configuration>
           </plugin>
         </plugins>
       </build>
