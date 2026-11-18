@@ -2,14 +2,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>run.endive.cm</groupId>
-    <artifactId>endive-cm</artifactId>
+    <groupId>io.roastedroot</groupId>
+    <artifactId>typewire-parent</artifactId>
     <version>999-SNAPSHOT</version>
   </parent>
-  <artifactId>cm-test-gen-plugin</artifactId>
+  <artifactId>typewire-cm-test-gen-plugin</artifactId>
   <packaging>maven-plugin</packaging>
 
-  <name>Endive CM - Test Gen Maven Plugin</name>
+  <name>Typewire - Test Gen Maven Plugin</name>
   <description>A Maven Plugin to generate tests from the WebAssembly component model testsuite</description>
 
   <dependencies>
@@ -18,8 +18,8 @@
       <artifactId>javaparser-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>run.endive.cm</groupId>
-      <artifactId>cm-test-gen-lib</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>typewire-cm-test-gen-lib</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.maven</groupId>

@@ -31,9 +31,9 @@ Required for both code generation (Phase 4) and component instantiation
 
 ## Module
 
-`canonical-abi` (`run.endive.cm:canonical-abi`)
+`canonical-abi` (`io.roastedroot:typewire-canonical-abi`)
 
-**Package**: `run.endive.cm.abi`
+**Package**: `io.roastedroot.typewire.abi`
 
 ## Deliverables
 

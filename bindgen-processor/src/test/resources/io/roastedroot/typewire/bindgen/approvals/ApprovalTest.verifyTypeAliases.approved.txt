@@ -1,0 +1,230 @@
+// typewire.testing.TypeAliasesWorld
+
+package typewire.testing;
+
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.ComponentLinker;
+import io.roastedroot.typewire.runtime.ComponentStore;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.PrimitiveHostTypeDescriptor;
+import io.roastedroot.typewire.types.FuncType;
+import io.roastedroot.typewire.types.LabelValType;
+import io.roastedroot.typewire.types.ListType;
+import io.roastedroot.typewire.types.PrimValType;
+import io.roastedroot.typewire.types.RecordType;
+import io.roastedroot.typewire.types.Type;
+import io.roastedroot.typewire.types.ValType;
+import io.roastedroot.typewire.types.WasmComponent;
+import java.math.BigInteger;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+
+/**
+ * Bindings for the WIT world {@code example:type-aliases/type-aliases}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class TypeAliasesWorld {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:type-aliases/clock}.
+         */
+        typewire.testing.example.typealiases.clock.Host clock();
+
+        /**
+         * The imported interface {@code example:type-aliases/timer}.
+         */
+        typewire.testing.example.typealiases.timer.Host timer();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction run;
+
+    private TypeAliasesWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.run = instance.export("run").typed(PrimitiveHostTypeDescriptor.forClass(BigInteger.class));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static TypeAliasesWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        typewire.testing.example.typealiases.clock.Host clock = imports.clock();
+        HostInstance.Builder clockBuilder = HostInstance.builder(store);
+        ValType clockInstant = clockBuilder.declareType(Type.of(PrimValType.U64));
+        clockBuilder.addType("instant", clockInstant);
+        ValType clockDuration = clockBuilder.declareType(Type.of(PrimValType.U64));
+        clockBuilder.addType("duration", clockDuration);
+        ValType clockLabel = clockBuilder.declareType(Type.of(PrimValType.STRING));
+        clockBuilder.addType("label", clockLabel);
+        ValType clockStamp = clockBuilder.declareType(Type.of(RecordType.builder().addField(LabelValType.builder().withLabel("at").withValType(clockInstant).build()).addField(LabelValType.builder().withLabel("seq").withValType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()).build()));
+        clockBuilder.addType("stamp", clockStamp);
+        ValType clockType12 = clockBuilder.declareType(Type.of(ListType.builder().withElementType(clockInstant).build()));
+        clockBuilder.addFunction("now", FuncType.builder().withResult(clockInstant).build(), args -> new Object[] { clock.now() });
+        clockBuilder.addFunction("elapsed", FuncType.builder().addParam(LabelValType.builder().withLabel("since").withValType(clockInstant).build()).withResult(clockDuration).build(), args -> new Object[] { clock.elapsed((BigInteger) args[0]) });
+        clockBuilder.addFunction("latest", FuncType.builder().withResult(clockStamp).build(), args -> new Object[] { clock.latest() });
+        clockBuilder.addFunction("describe", FuncType.builder().addParam(LabelValType.builder().withLabel("at").withValType(clockInstant).build()).withResult(clockLabel).build(), args -> new Object[] { clock.describe((BigInteger) args[0]) });
+        clockBuilder.addFunction("history", FuncType.builder().withResult(clockType12).build(), args -> new Object[] { clock.history() });
+        values.put("example:type-aliases/clock", clockBuilder.build());
+        typewire.testing.example.typealiases.timer.Host timer = imports.timer();
+        HostInstance.Builder timerBuilder = HostInstance.builder(store);
+        ValType timerInstant = timerBuilder.declareType(Type.of(PrimValType.U64));
+        timerBuilder.addType("instant", timerInstant);
+        ValType timerDuration = timerBuilder.declareType(Type.of(PrimValType.U64));
+        timerBuilder.addType("duration", timerDuration);
+        timerBuilder.addFunction("deadline", FuncType.builder().addParam(LabelValType.builder().withLabel("after").withValType(timerDuration).build()).withResult(timerInstant).build(), args -> new Object[] { timer.deadline((BigInteger) args[0]) });
+        values.put("example:type-aliases/timer", timerBuilder.build());
+        return new TypeAliasesWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public BigInteger run() {
+        return (BigInteger) this.run.apply()[0];
+    }
+}
+
+// typewire.testing.example.typealiases.clock.Host
+
+package typewire.testing.example.typealiases.clock;
+
+import java.math.BigInteger;
+import java.util.List;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:type-aliases/clock}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    BigInteger now();
+
+    BigInteger elapsed(BigInteger since);
+
+    Stamp latest();
+
+    String describe(BigInteger at);
+
+    List<BigInteger> history();
+}
+
+// typewire.testing.example.typealiases.clock.Stamp
+
+package typewire.testing.example.typealiases.clock;
+
+import io.roastedroot.typewire.abi.FlatRecordValue;
+import java.math.BigInteger;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import javax.annotation.processing.Generated;
+import run.endive.runtime.Memory;
+
+/**
+ * The WIT record {@code stamp}, declared by {@code example:type-aliases/clock}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Stamp implements FlatRecordValue {
+
+    private final BigInteger at;
+
+    private final Long seq;
+
+    public Stamp(BigInteger at, Long seq) {
+        this.at = at;
+        this.seq = seq;
+    }
+
+    public BigInteger at() {
+        return at;
+    }
+
+    public Long seq() {
+        return seq;
+    }
+
+    /**
+     * This record as the ABI carries it, which is a map keyed by field label.
+     */
+    public Map<String, Object> toComponent() {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("at", at);
+        fields.put("seq", seq);
+        return fields;
+    }
+
+    /**
+     * The record a lifted value carries.
+     */
+    public static Stamp fromComponent(Object value) {
+        Map<?, ?> fields = (Map<?, ?>) value;
+        return new Stamp((BigInteger) fields.get("at"), (Long) fields.get("seq"));
+    }
+
+    @Override
+    public Object field(int index) {
+        switch(index) {
+            case 0:
+                return at;
+            case 1:
+                return seq;
+            default:
+                throw new IndexOutOfBoundsException("record stamp has 2 fields, not " + index);
+        }
+    }
+
+    @Override
+    public void store(Memory memory, int pointer) {
+        memory.writeLong(pointer, this.at.longValue());
+        memory.writeI32(pointer + 8, this.seq.intValue());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Stamp)) {
+            return false;
+        }
+        Stamp that = (Stamp) o;
+        return Objects.equals(at, that.at) && Objects.equals(seq, that.seq);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(at, seq);
+    }
+
+    @Override
+    public String toString() {
+        return "Stamp{" + "at=" + at + ", seq=" + seq + "}";
+    }
+}
+
+// typewire.testing.example.typealiases.timer.Host
+
+package typewire.testing.example.typealiases.timer;
+
+import java.math.BigInteger;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:type-aliases/timer}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    BigInteger deadline(BigInteger after);
+}

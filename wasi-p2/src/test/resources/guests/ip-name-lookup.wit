@@ -1,7 +1,7 @@
-package endive:wasi-test;
+package typewire:wasi-test;
 
 world ip-name-lookup {
-  include endive:wasi/imports@0.2.12;
+  include typewire:wasi/imports@0.2.12;
 
   export count: func(name: string) -> u32;
   export first-ipv4: func(name: string) -> u32;

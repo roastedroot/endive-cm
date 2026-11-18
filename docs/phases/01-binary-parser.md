@@ -26,9 +26,9 @@ round-tripped through the parser.
 
 ## Module
 
-`parser` (`run.endive.cm:parser`)
+`parser` (`io.roastedroot:typewire-parser`)
 
-**Package**: `run.endive.cm.parser`
+**Package**: `io.roastedroot.typewire.parser`
 
 ## Deliverables
 

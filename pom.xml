@@ -2,12 +2,12 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>run.endive.cm</groupId>
-  <artifactId>endive-cm</artifactId>
+  <groupId>io.roastedroot</groupId>
+  <artifactId>typewire-parent</artifactId>
   <version>999-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <name>Endive Component Model</name>
-  <description>WebAssembly Component Model support for Endive</description>
+  <name>Typewire</name>
+  <description>WebAssembly Component Model for the JVM, running on Endive</description>
 
   <licenses>
     <license>
@@ -113,6 +113,51 @@
       </dependency>
       <dependency>
         <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-bindgen-processor</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-canonical-abi</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-cm-test-gen-lib</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-component-corpus</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-parser</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-runtime</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-types</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-wasi-p2</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>typewire-wasm-tools</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.roastedroot</groupId>
         <artifactId>zerofs</artifactId>
         <version>${zerofs.version}</version>
       </dependency>
@@ -145,51 +190,6 @@
         <groupId>run.endive</groupId>
         <artifactId>wasm-tools</artifactId>
         <version>${endive.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>bindgen-processor</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>canonical-abi</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>cm-test-gen-lib</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>component-corpus</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>parser</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>runtime</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>types</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>wasi-p2</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>run.endive.cm</groupId>
-        <artifactId>wasm-tools</artifactId>
-        <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.maven</groupId>

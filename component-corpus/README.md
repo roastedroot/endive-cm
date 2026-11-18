@@ -140,8 +140,8 @@ Add the module as a test dependency.
 
 ```xml
 <dependency>
-  <groupId>run.endive.cm</groupId>
-  <artifactId>component-corpus</artifactId>
+  <groupId>io.roastedroot</groupId>
+  <artifactId>typewire-component-corpus</artifactId>
   <scope>test</scope>
 </dependency>
 ```

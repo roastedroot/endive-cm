@@ -1,0 +1,296 @@
+// typewire.testing.ResourceHandlesWorld
+
+package typewire.testing;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.ComponentLinker;
+import io.roastedroot.typewire.runtime.ComponentStore;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.HostResource;
+import io.roastedroot.typewire.runtime.PrimitiveHostTypeDescriptor;
+import io.roastedroot.typewire.types.FuncType;
+import io.roastedroot.typewire.types.LabelValType;
+import io.roastedroot.typewire.types.ListType;
+import io.roastedroot.typewire.types.PrimValType;
+import io.roastedroot.typewire.types.Type;
+import io.roastedroot.typewire.types.ValType;
+import io.roastedroot.typewire.types.WasmComponent;
+import java.math.BigInteger;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import javax.annotation.processing.Generated;
+
+/**
+ * Bindings for the WIT world {@code example:resource-handles/resource-handles}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+@SuppressWarnings("unchecked")
+public final class ResourceHandlesWorld {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:resource-handles/streams}.
+         */
+        typewire.testing.example.resourcehandles.streams.Host streams();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction run;
+
+    private ResourceHandlesWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.run = instance.export("run").typed(PrimitiveHostTypeDescriptor.forClass(BigInteger.class));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static ResourceHandlesWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        typewire.testing.example.resourcehandles.streams.Host streams = imports.streams();
+        HostInstance.Builder streamsBuilder = HostInstance.builder(store);
+        typewire.testing.example.resourcehandles.streams.Handles streamsHandles = new typewire.testing.example.resourcehandles.streams.Handles(streamsBuilder);
+        HostResource streamsPollable = streamsHandles.pollableResourceType();
+        streamsBuilder.addResource("pollable", streamsPollable);
+        HostResource streamsInputStream = streamsHandles.inputStreamResourceType();
+        streamsBuilder.addResource("input-stream", streamsInputStream);
+        HostResource streamsOutputStream = streamsHandles.outputStreamResourceType();
+        streamsBuilder.addResource("output-stream", streamsOutputStream);
+        ValType streamsType14 = streamsBuilder.declareType(Type.of(ListType.builder().withElementType(streamsPollable.borrow()).build()));
+        ValType streamsType15 = streamsBuilder.declareType(Type.of(ListType.builder().withElementType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()));
+        streamsBuilder.addFunction("[method]pollable.ready", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(streamsPollable.borrow()).build()).withResult(ValType.builder().withPrimValType(PrimValType.BOOL).build()).build(), args -> new Object[] { streamsHandles.getPollable((ResourceValue) args[0]).ready() });
+        streamsBuilder.addFunction("[method]input-stream.subscribe", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(streamsInputStream.borrow()).build()).withResult(streamsPollable.own()).build(), args -> new Object[] { streamsHandles.ownPollable(streamsHandles.getInputStream((ResourceValue) args[0]).subscribe()) });
+        streamsBuilder.addFunction("[method]output-stream.splice", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(streamsOutputStream.borrow()).build()).addParam(LabelValType.builder().withLabel("src").withValType(streamsInputStream.borrow()).build()).addParam(LabelValType.builder().withLabel("len").withValType(ValType.builder().withPrimValType(PrimValType.U64).build()).build()).withResult(ValType.builder().withPrimValType(PrimValType.U64).build()).build(), args -> new Object[] { streamsHandles.getOutputStream((ResourceValue) args[0]).splice(streamsHandles.getInputStream((ResourceValue) args[1]), (BigInteger) args[2]) });
+        streamsBuilder.addFunction("open-input", FuncType.builder().withResult(streamsInputStream.own()).build(), args -> new Object[] { streamsHandles.ownInputStream(streams.openInput()) });
+        streamsBuilder.addFunction("open-output", FuncType.builder().withResult(streamsOutputStream.own()).build(), args -> new Object[] { streamsHandles.ownOutputStream(streams.openOutput()) });
+        streamsBuilder.addFunction("poll", FuncType.builder().addParam(LabelValType.builder().withLabel("in").withValType(streamsType14).build()).withResult(streamsType15).build(), args -> new Object[] { streams.poll(((List<Object>) args[0]).stream().map(element -> streamsHandles.getPollable((ResourceValue) element)).collect(Collectors.toList())) });
+        values.put("example:resource-handles/streams", streamsBuilder.build());
+        return new ResourceHandlesWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public BigInteger run() {
+        return (BigInteger) this.run.apply()[0];
+    }
+}
+
+// typewire.testing.example.resourcehandles.streams.Handles
+
+package typewire.testing.example.resourcehandles.streams;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.HostResource;
+import io.roastedroot.typewire.runtime.HostResourceTable;
+import javax.annotation.processing.Generated;
+
+/**
+ * The resources {@code example:resource-handles/streams} declares, and the objects the handles to them stand for.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Handles {
+
+    private final HostResource pollable;
+
+    private final HostResourceTable<Pollable> pollableTable = new HostResourceTable<>();
+
+    private final HostResource inputStream;
+
+    private final HostResourceTable<InputStream> inputStreamTable = new HostResourceTable<>();
+
+    private final HostResource outputStream;
+
+    private final HostResourceTable<OutputStream> outputStreamTable = new HostResourceTable<>();
+
+    /**
+     * Declares each resource into {@code builder}.
+     */
+    public Handles(HostInstance.Builder builder) {
+        this.pollable = builder.declareResource(rep -> pollableTable.drop(rep, Pollable::drop));
+        this.inputStream = builder.declareResource(rep -> inputStreamTable.drop(rep, InputStream::drop));
+        this.outputStream = builder.declareResource(rep -> outputStreamTable.drop(rep, OutputStream::drop));
+    }
+
+    /**
+     * The resource type {@code pollable}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource pollableResourceType() {
+        return pollable;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code pollable}.
+     */
+    public ResourceValue ownPollable(Pollable value) {
+        return ResourceValue.owned(pollable.type(), pollableTable.add(value));
+    }
+
+    /**
+     * The {@code pollable} a handle stands for.
+     */
+    public Pollable getPollable(ResourceValue handle) {
+        return pollableTable.get(handle);
+    }
+
+    /**
+     * The {@code pollable} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public Pollable takePollable(ResourceValue handle) {
+        return pollableTable.take(handle);
+    }
+
+    /**
+     * The resource type {@code input-stream}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource inputStreamResourceType() {
+        return inputStream;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code input-stream}.
+     */
+    public ResourceValue ownInputStream(InputStream value) {
+        return ResourceValue.owned(inputStream.type(), inputStreamTable.add(value));
+    }
+
+    /**
+     * The {@code input-stream} a handle stands for.
+     */
+    public InputStream getInputStream(ResourceValue handle) {
+        return inputStreamTable.get(handle);
+    }
+
+    /**
+     * The {@code input-stream} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public InputStream takeInputStream(ResourceValue handle) {
+        return inputStreamTable.take(handle);
+    }
+
+    /**
+     * The resource type {@code output-stream}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource outputStreamResourceType() {
+        return outputStream;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code output-stream}.
+     */
+    public ResourceValue ownOutputStream(OutputStream value) {
+        return ResourceValue.owned(outputStream.type(), outputStreamTable.add(value));
+    }
+
+    /**
+     * The {@code output-stream} a handle stands for.
+     */
+    public OutputStream getOutputStream(ResourceValue handle) {
+        return outputStreamTable.get(handle);
+    }
+
+    /**
+     * The {@code output-stream} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public OutputStream takeOutputStream(ResourceValue handle) {
+        return outputStreamTable.take(handle);
+    }
+}
+
+// typewire.testing.example.resourcehandles.streams.Host
+
+package typewire.testing.example.resourcehandles.streams;
+
+import java.util.List;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:resource-handles/streams}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    InputStream openInput();
+
+    OutputStream openOutput();
+
+    List<Long> poll(List<Pollable> in);
+}
+
+// typewire.testing.example.resourcehandles.streams.InputStream
+
+package typewire.testing.example.resourcehandles.streams;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code input-stream}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface InputStream {
+
+    Pollable subscribe();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}
+
+// typewire.testing.example.resourcehandles.streams.OutputStream
+
+package typewire.testing.example.resourcehandles.streams;
+
+import java.math.BigInteger;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code output-stream}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface OutputStream {
+
+    BigInteger splice(InputStream src, BigInteger len);
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}
+
+// typewire.testing.example.resourcehandles.streams.Pollable
+
+package typewire.testing.example.resourcehandles.streams;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code pollable}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Pollable {
+
+    Boolean ready();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}

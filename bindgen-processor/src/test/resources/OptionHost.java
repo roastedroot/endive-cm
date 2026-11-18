@@ -1,6 +1,6 @@
-package endive.testing;
+package typewire.testing;
 
-import run.endive.cm.runtime.Bindgen;
+import io.roastedroot.typewire.runtime.Bindgen;
 
 @Bindgen(world = "option-types")
 public class OptionHost {}

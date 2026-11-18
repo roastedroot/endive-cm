@@ -1,0 +1,372 @@
+// typewire.testing.UseResourcesWorld
+
+package typewire.testing;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.ComponentLinker;
+import io.roastedroot.typewire.runtime.ComponentStore;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.HostResource;
+import io.roastedroot.typewire.runtime.PrimitiveHostTypeDescriptor;
+import io.roastedroot.typewire.types.FuncType;
+import io.roastedroot.typewire.types.LabelValType;
+import io.roastedroot.typewire.types.ListType;
+import io.roastedroot.typewire.types.PrimValType;
+import io.roastedroot.typewire.types.Type;
+import io.roastedroot.typewire.types.ValType;
+import io.roastedroot.typewire.types.WasmComponent;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import javax.annotation.processing.Generated;
+
+/**
+ * Bindings for the WIT world {@code example:use-resources/use-resources}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+@SuppressWarnings("unchecked")
+public final class UseResourcesWorld {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:use-resources/poll}.
+         */
+        typewire.testing.example.useresources.poll.Host poll();
+
+        /**
+         * The imported interface {@code example:use-resources/streams}.
+         */
+        typewire.testing.example.useresources.streams.Host streams();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction run;
+
+    private UseResourcesWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.run = instance.export("run").typed(PrimitiveHostTypeDescriptor.forClass(Long.class));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static UseResourcesWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        HostInstance.Builder errorBuilder = HostInstance.builder(store);
+        typewire.testing.example.useresources.error.Handles errorHandles = new typewire.testing.example.useresources.error.Handles(errorBuilder);
+        HostResource errorError = errorHandles.errorResourceType();
+        errorBuilder.addResource("error", errorError);
+        errorBuilder.addFunction("[method]error.to-debug-string", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(errorError.borrow()).build()).withResult(ValType.builder().withPrimValType(PrimValType.STRING).build()).build(), args -> new Object[] { errorHandles.getError((ResourceValue) args[0]).toDebugString() });
+        values.put("example:use-resources/error", errorBuilder.build());
+        typewire.testing.example.useresources.poll.Host poll = imports.poll();
+        HostInstance.Builder pollBuilder = HostInstance.builder(store);
+        typewire.testing.example.useresources.poll.Handles pollHandles = new typewire.testing.example.useresources.poll.Handles(pollBuilder);
+        HostResource pollPollable = pollHandles.pollableResourceType();
+        pollBuilder.addResource("pollable", pollPollable);
+        ValType pollType3 = pollBuilder.declareType(Type.of(ListType.builder().withElementType(pollPollable.borrow()).build()));
+        ValType pollType4 = pollBuilder.declareType(Type.of(ListType.builder().withElementType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()));
+        pollBuilder.addFunction("[method]pollable.ready", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(pollPollable.borrow()).build()).withResult(ValType.builder().withPrimValType(PrimValType.BOOL).build()).build(), args -> new Object[] { pollHandles.getPollable((ResourceValue) args[0]).ready() });
+        pollBuilder.addFunction("poll", FuncType.builder().addParam(LabelValType.builder().withLabel("in").withValType(pollType3).build()).withResult(pollType4).build(), args -> new Object[] { poll.poll(((List<Object>) args[0]).stream().map(element -> pollHandles.getPollable((ResourceValue) element)).collect(Collectors.toList())) });
+        values.put("example:use-resources/poll", pollBuilder.build());
+        typewire.testing.example.useresources.streams.Host streams = imports.streams();
+        HostInstance.Builder streamsBuilder = HostInstance.builder(store);
+        typewire.testing.example.useresources.streams.Handles streamsHandles = new typewire.testing.example.useresources.streams.Handles(streamsBuilder);
+        HostResource streamsInputStream = streamsHandles.inputStreamResourceType();
+        streamsBuilder.addResource("input-stream", streamsInputStream);
+        HostResource streamsError = streamsBuilder.useResource(errorHandles.errorResourceType());
+        streamsBuilder.addResource("error", streamsError);
+        HostResource streamsPollable = streamsBuilder.useResource(pollHandles.pollableResourceType());
+        streamsBuilder.addResource("pollable", streamsPollable);
+        streamsBuilder.addFunction("[method]input-stream.subscribe", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(streamsInputStream.borrow()).build()).withResult(streamsPollable.own()).build(), args -> new Object[] { pollHandles.ownPollable(streamsHandles.getInputStream((ResourceValue) args[0]).subscribe()) });
+        streamsBuilder.addFunction("open-input", FuncType.builder().withResult(streamsInputStream.own()).build(), args -> new Object[] { streamsHandles.ownInputStream(streams.openInput()) });
+        streamsBuilder.addFunction("last-error", FuncType.builder().withResult(streamsError.own()).build(), args -> new Object[] { errorHandles.ownError(streams.lastError()) });
+        streamsBuilder.addFunction("recorded", FuncType.builder().addParam(LabelValType.builder().withLabel("e").withValType(streamsError.borrow()).build()).withResult(ValType.builder().withPrimValType(PrimValType.BOOL).build()).build(), args -> new Object[] { streams.recorded(errorHandles.getError((ResourceValue) args[0])) });
+        values.put("example:use-resources/streams", streamsBuilder.build());
+        return new UseResourcesWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public Long run() {
+        return (Long) this.run.apply()[0];
+    }
+}
+
+// typewire.testing.example.useresources.error.Error
+
+package typewire.testing.example.useresources.error;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code error}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Error {
+
+    String toDebugString();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}
+
+// typewire.testing.example.useresources.error.Handles
+
+package typewire.testing.example.useresources.error;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.HostResource;
+import io.roastedroot.typewire.runtime.HostResourceTable;
+import javax.annotation.processing.Generated;
+
+/**
+ * The resources {@code example:use-resources/error} declares, and the objects the handles to them stand for.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Handles {
+
+    private final HostResource error;
+
+    private final HostResourceTable<Error> errorTable = new HostResourceTable<>();
+
+    /**
+     * Declares each resource into {@code builder}.
+     */
+    public Handles(HostInstance.Builder builder) {
+        this.error = builder.declareResource(rep -> errorTable.drop(rep, Error::drop));
+    }
+
+    /**
+     * The resource type {@code error}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource errorResourceType() {
+        return error;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code error}.
+     */
+    public ResourceValue ownError(Error value) {
+        return ResourceValue.owned(error.type(), errorTable.add(value));
+    }
+
+    /**
+     * The {@code error} a handle stands for.
+     */
+    public Error getError(ResourceValue handle) {
+        return errorTable.get(handle);
+    }
+
+    /**
+     * The {@code error} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public Error takeError(ResourceValue handle) {
+        return errorTable.take(handle);
+    }
+}
+
+// typewire.testing.example.useresources.poll.Handles
+
+package typewire.testing.example.useresources.poll;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.HostResource;
+import io.roastedroot.typewire.runtime.HostResourceTable;
+import javax.annotation.processing.Generated;
+
+/**
+ * The resources {@code example:use-resources/poll} declares, and the objects the handles to them stand for.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Handles {
+
+    private final HostResource pollable;
+
+    private final HostResourceTable<Pollable> pollableTable = new HostResourceTable<>();
+
+    /**
+     * Declares each resource into {@code builder}.
+     */
+    public Handles(HostInstance.Builder builder) {
+        this.pollable = builder.declareResource(rep -> pollableTable.drop(rep, Pollable::drop));
+    }
+
+    /**
+     * The resource type {@code pollable}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource pollableResourceType() {
+        return pollable;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code pollable}.
+     */
+    public ResourceValue ownPollable(Pollable value) {
+        return ResourceValue.owned(pollable.type(), pollableTable.add(value));
+    }
+
+    /**
+     * The {@code pollable} a handle stands for.
+     */
+    public Pollable getPollable(ResourceValue handle) {
+        return pollableTable.get(handle);
+    }
+
+    /**
+     * The {@code pollable} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public Pollable takePollable(ResourceValue handle) {
+        return pollableTable.take(handle);
+    }
+}
+
+// typewire.testing.example.useresources.poll.Host
+
+package typewire.testing.example.useresources.poll;
+
+import java.util.List;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:use-resources/poll}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    List<Long> poll(List<Pollable> in);
+}
+
+// typewire.testing.example.useresources.poll.Pollable
+
+package typewire.testing.example.useresources.poll;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code pollable}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Pollable {
+
+    Boolean ready();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}
+
+// typewire.testing.example.useresources.streams.Handles
+
+package typewire.testing.example.useresources.streams;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.HostResource;
+import io.roastedroot.typewire.runtime.HostResourceTable;
+import javax.annotation.processing.Generated;
+
+/**
+ * The resources {@code example:use-resources/streams} declares, and the objects the handles to them stand for.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Handles {
+
+    private final HostResource inputStream;
+
+    private final HostResourceTable<InputStream> inputStreamTable = new HostResourceTable<>();
+
+    /**
+     * Declares each resource into {@code builder}.
+     */
+    public Handles(HostInstance.Builder builder) {
+        this.inputStream = builder.declareResource(rep -> inputStreamTable.drop(rep, InputStream::drop));
+    }
+
+    /**
+     * The resource type {@code input-stream}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource inputStreamResourceType() {
+        return inputStream;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code input-stream}.
+     */
+    public ResourceValue ownInputStream(InputStream value) {
+        return ResourceValue.owned(inputStream.type(), inputStreamTable.add(value));
+    }
+
+    /**
+     * The {@code input-stream} a handle stands for.
+     */
+    public InputStream getInputStream(ResourceValue handle) {
+        return inputStreamTable.get(handle);
+    }
+
+    /**
+     * The {@code input-stream} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public InputStream takeInputStream(ResourceValue handle) {
+        return inputStreamTable.take(handle);
+    }
+}
+
+// typewire.testing.example.useresources.streams.Host
+
+package typewire.testing.example.useresources.streams;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:use-resources/streams}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    InputStream openInput();
+
+    typewire.testing.example.useresources.error.Error lastError();
+
+    Boolean recorded(typewire.testing.example.useresources.error.Error e);
+}
+
+// typewire.testing.example.useresources.streams.InputStream
+
+package typewire.testing.example.useresources.streams;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code input-stream}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface InputStream {
+
+    typewire.testing.example.useresources.poll.Pollable subscribe();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}

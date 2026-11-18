@@ -1,15 +1,16 @@
-# Endive Component Model
+# Typewire
 
-[![Test Results](https://raw.githubusercontent.com/roastedroot/endive-cm/badges/badge-tests.svg)](https://github.com/roastedroot/endive-cm/actions)
+[![Maven Central](https://img.shields.io/maven-central/v/io.roastedroot/typewire-runtime)](https://central.sonatype.com/artifact/io.roastedroot/typewire-runtime)
+[![Test Results](https://raw.githubusercontent.com/roastedroot/typewire/badges/badge-tests.svg)](https://github.com/roastedroot/typewire/actions)
 
-This repository is a collaborative space to design and implement
-[WebAssembly Component Model](https://github.com/WebAssembly/component-model) support
-for the [Endive](https://github.com/bytecodealliance/endive) runtime.
+Typewire implements the
+[WebAssembly Component Model](https://github.com/WebAssembly/component-model)
+for the JVM, on top of the [Endive](https://github.com/bytecodealliance/endive) runtime.
 
 The Component Model defines how Wasm modules compose through
 [WIT](https://component-model.bytecodealliance.org/design/wit.html) interfaces
 and the [Canonical ABI](https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md).
-Bringing this to Endive means JVM applications will be able to instantiate, link,
+Typewire lets JVM applications instantiate, link,
 and interact with Wasm components using idiomatic Java APIs, with zero native dependencies.
 
 ## Prior Work
@@ -31,7 +32,7 @@ This effort builds on earlier exploration in the ecosystem:
 
 ## Vision
 
-The long-term goal is to bring full Component Model support to Endive:
+The long-term goal is full Component Model support on the JVM:
 
 - **WIT parsing**: spec-compliant parsing of WIT definitions (available now via the `wasm-tools` module)
 - **Canonical ABI**: encoding and decoding of Component Model types for Java
@@ -52,6 +53,28 @@ Updating the wasm-tools version automatically updates the parser.
 
 ## Getting Started
 
+### Installation
+
+Typewire is published to Maven Central under the `io.roastedroot` group:
+
+```xml
+<dependency>
+  <groupId>io.roastedroot</groupId>
+  <artifactId>typewire-runtime</artifactId>
+  <version>${typewire.version}</version>
+</dependency>
+```
+
+| Artifact | Purpose |
+|----------|---------|
+| `typewire-runtime` | Component instantiation and linking |
+| `typewire-bindgen-processor` | Annotation processor that generates Java bindings from WIT |
+| `typewire-wasi-p2` | WASI 0.2 host implementation |
+| `typewire-wasm-tools` | WIT parsing and `wasm-tools component` commands |
+| `typewire-parser` | Binary component parser |
+| `typewire-types` | Component Model type model |
+| `typewire-canonical-abi` | Canonical ABI lifting and lowering |
+
 ### Prerequisites
 
 - Java 11+
@@ -71,7 +94,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details on adding new test coverage.
 ### Usage
 
 ```java
-import run.endive.cm.tools.WitParser;
+import io.roastedroot.typewire.tools.WitParser;
 
 String output = WitParser.parse("package example:hello;\n"
         + "world hello {\n"

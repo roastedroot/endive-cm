@@ -1,0 +1,120 @@
+// typewire.testing.HelloWorldWorld
+
+package typewire.testing;
+
+import io.roastedroot.typewire.abi.ByteList;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.ComponentLinker;
+import io.roastedroot.typewire.runtime.ComponentStore;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.types.FuncType;
+import io.roastedroot.typewire.types.LabelValType;
+import io.roastedroot.typewire.types.ListType;
+import io.roastedroot.typewire.types.PrimValType;
+import io.roastedroot.typewire.types.Type;
+import io.roastedroot.typewire.types.ValType;
+import io.roastedroot.typewire.types.WasmComponent;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+
+/**
+ * Bindings for the WIT world {@code my:project/hello-world}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class HelloWorldWorld {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code my:project/host}.
+         */
+        typewire.testing.my.project.host.Host host();
+    }
+
+    private final ComponentInstance instance;
+
+    private final typewire.testing.exports.demo.Guest demo;
+
+    private HelloWorldWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.demo = new typewire.testing.exports.demo.Guest(instance.exportedInstance("demo"));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static HelloWorldWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        typewire.testing.my.project.host.Host host = imports.host();
+        HostInstance.Builder hostBuilder = HostInstance.builder(store);
+        ValType hostType1 = hostBuilder.declareType(Type.of(ListType.builder().withElementType(ValType.builder().withPrimValType(PrimValType.U8).build()).build()));
+        hostBuilder.addFunction("gen-random-integer", FuncType.builder().withResult(ValType.builder().withPrimValType(PrimValType.U32).build()).build(), args -> new Object[] { host.genRandomInteger() });
+        hostBuilder.addFunction("sha256", FuncType.builder().addParam(LabelValType.builder().withLabel("bytes").withValType(hostType1).build()).withResult(ValType.builder().withPrimValType(PrimValType.STRING).build()).build(), args -> new Object[] { host.sha256(ByteList.toBytes(args[0])) });
+        values.put("my:project/host", hostBuilder.build());
+        return new HelloWorldWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    /**
+     * The exported interface {@code demo}.
+     */
+    public typewire.testing.exports.demo.Guest demo() {
+        return demo;
+    }
+}
+
+// typewire.testing.exports.demo.Guest
+
+package typewire.testing.exports.demo;
+
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.VoidHostTypeDescriptor;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code demo}, as the component exports it.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Guest {
+
+    private final ComponentFunction run;
+
+    /**
+     * Built by the world's bindings. Public only because they are another package.
+     */
+    public Guest(ComponentInstance instance) {
+        this.run = instance.export("run").typed(VoidHostTypeDescriptor.instance());
+    }
+
+    public void run() {
+        this.run.apply();
+    }
+}
+
+// typewire.testing.my.project.host.Host
+
+package typewire.testing.my.project.host;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code my:project/host}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    Long genRandomInteger();
+
+    String sha256(byte[] bytes);
+}

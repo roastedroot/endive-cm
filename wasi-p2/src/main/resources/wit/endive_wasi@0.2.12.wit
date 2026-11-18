@@ -1,5 +1,0 @@
-package endive:wasi@0.2.12;
-
-world imports {
-  include wasi:cli/imports@0.2.12;
-}

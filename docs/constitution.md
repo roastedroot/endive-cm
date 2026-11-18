@@ -1,4 +1,4 @@
-# Endive Component Model -- Constitution
+# Typewire -- Constitution
 
 This document defines the governing principles, architecture, and verification
 strategy for bringing WebAssembly Component Model support to the
@@ -37,7 +37,7 @@ These apply across all phases and must not be violated:
 7. **Java 11 baseline** -- no records, sealed classes, or pattern matching
    in production code.
 
-8. **Maven multi-module** under `run.endive.cm` groupId, Google Java Format
+8. **Maven multi-module** under `io.roastedroot` groupId, Google Java Format
    (AOSP style), checkstyle, no wildcard imports.
 
 ## Module Dependency Graph

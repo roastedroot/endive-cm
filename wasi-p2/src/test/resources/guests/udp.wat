@@ -1,4 +1,4 @@
-;; Implements endive:wasi-test/udp, whose exports use wasi:sockets/udp on the
+;; Implements typewire:wasi-test/udp, whose exports use wasi:sockets/udp on the
 ;; instance network, always over IPv4 loopback.
 ;;
 ;; bind binds a socket to an ephemeral port, opens streams to any address on it,

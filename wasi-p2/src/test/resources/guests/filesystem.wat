@@ -1,4 +1,4 @@
-;; Implements endive:wasi-test/filesystem, whose exports each drive one part of
+;; Implements typewire:wasi-test/filesystem, whose exports each drive one part of
 ;; wasi:filesystem against a single preopened directory named "data".
 ;;
 ;; A function whose flattened results exceed one value is handed a return area.

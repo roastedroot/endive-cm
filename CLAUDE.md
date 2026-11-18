@@ -1,4 +1,4 @@
-# Claude Code guidelines for endive-cm
+# Claude Code guidelines for Typewire
 
 ## Endive runtime reference
 

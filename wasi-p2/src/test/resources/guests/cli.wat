@@ -1,4 +1,4 @@
-;; Implements endive:wasi-test/cli, a command exporting wasi:cli/run.
+;; Implements typewire:wasi-test/cli, a command exporting wasi:cli/run.
 ;;
 ;; run writes each argument to stdout on a line of its own, then each
 ;; environment variable as name=value on a line of its own, then everything

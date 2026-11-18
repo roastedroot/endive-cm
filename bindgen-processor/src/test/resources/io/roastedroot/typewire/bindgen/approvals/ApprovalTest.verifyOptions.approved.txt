@@ -1,0 +1,105 @@
+// typewire.testing.OptionTypesWorld
+
+package typewire.testing;
+
+import io.roastedroot.typewire.abi.VariantValue;
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.ComponentLinker;
+import io.roastedroot.typewire.runtime.ComponentStore;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.VariantHostTypeDescriptor;
+import io.roastedroot.typewire.types.FuncType;
+import io.roastedroot.typewire.types.LabelValType;
+import io.roastedroot.typewire.types.ListType;
+import io.roastedroot.typewire.types.OptionType;
+import io.roastedroot.typewire.types.PrimValType;
+import io.roastedroot.typewire.types.Type;
+import io.roastedroot.typewire.types.ValType;
+import io.roastedroot.typewire.types.WasmComponent;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import javax.annotation.processing.Generated;
+
+/**
+ * Bindings for the WIT world {@code example:option-types/option-types}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+@SuppressWarnings("unchecked")
+public final class OptionTypesWorld {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:option-types/maybe}.
+         */
+        typewire.testing.example.optiontypes.maybe.Host maybe();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction run;
+
+    private OptionTypesWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.run = instance.export("run").typed(VariantHostTypeDescriptor.instance(), VariantHostTypeDescriptor.instance());
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static OptionTypesWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        typewire.testing.example.optiontypes.maybe.Host maybe = imports.maybe();
+        HostInstance.Builder maybeBuilder = HostInstance.builder(store);
+        ValType maybeType0 = maybeBuilder.declareType(Type.of(OptionType.builder().withValType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()));
+        ValType maybeType2 = maybeBuilder.declareType(Type.of(OptionType.builder().withValType(ValType.builder().withPrimValType(PrimValType.STRING).build()).build()));
+        ValType maybeType4 = maybeBuilder.declareType(Type.of(ListType.builder().withElementType(maybeType0).build()));
+        ValType maybeType6 = maybeBuilder.declareType(Type.of(OptionType.builder().withValType(maybeType4).build()));
+        maybeBuilder.addFunction("echo", FuncType.builder().addParam(LabelValType.builder().withLabel("value").withValType(maybeType0).build()).withResult(maybeType0).build(), args -> new Object[] { Optional.ofNullable(maybe.echo((Long) ((VariantValue) args[0]).value())).map(some -> VariantValue.of("some", some)).orElse(VariantValue.of("none", null)) });
+        maybeBuilder.addFunction("label", FuncType.builder().addParam(LabelValType.builder().withLabel("text").withValType(maybeType2).build()).withResult(maybeType2).build(), args -> new Object[] { Optional.ofNullable(maybe.label((String) ((VariantValue) args[0]).value())).map(some -> VariantValue.of("some", some)).orElse(VariantValue.of("none", null)) });
+        maybeBuilder.addFunction("first", FuncType.builder().addParam(LabelValType.builder().withLabel("values").withValType(maybeType4).build()).withResult(maybeType0).build(), args -> new Object[] { Optional.ofNullable(maybe.first(((List<Object>) args[0]).stream().map(element -> (Long) ((VariantValue) element).value()).collect(Collectors.toList()))).map(some -> VariantValue.of("some", some)).orElse(VariantValue.of("none", null)) });
+        maybeBuilder.addFunction("nested", FuncType.builder().addParam(LabelValType.builder().withLabel("values").withValType(maybeType6).build()).withResult(maybeType0).build(), args -> new Object[] { Optional.ofNullable(maybe.nested(Optional.ofNullable(((VariantValue) args[0]).value()).map(some -> ((List<Object>) some).stream().map(element1 -> (Long) ((VariantValue) element1).value()).collect(Collectors.toList())).orElse(null))).map(some -> VariantValue.of("some", some)).orElse(VariantValue.of("none", null)) });
+        values.put("example:option-types/maybe", maybeBuilder.build());
+        return new OptionTypesWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public Long run(Long value) {
+        return (Long) ((VariantValue) this.run.apply(Optional.ofNullable(value).map(some -> VariantValue.of("some", some)).orElse(VariantValue.of("none", null)))[0]).value();
+    }
+}
+
+// typewire.testing.example.optiontypes.maybe.Host
+
+package typewire.testing.example.optiontypes.maybe;
+
+import java.util.List;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:option-types/maybe}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    Long echo(Long value);
+
+    String label(String text);
+
+    Long first(List<Long> values);
+
+    Long nested(List<Long> values);
+}

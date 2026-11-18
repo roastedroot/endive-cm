@@ -1,4 +1,4 @@
-;; Implements endive:wasi-test/ip-name-lookup, whose exports each resolve a name
+;; Implements typewire:wasi-test/ip-name-lookup, whose exports each resolve a name
 ;; through wasi:sockets/ip-name-lookup on the instance network.
 ;;
 ;; resolve-addresses hands back a result whose own<resolve-address-stream> or

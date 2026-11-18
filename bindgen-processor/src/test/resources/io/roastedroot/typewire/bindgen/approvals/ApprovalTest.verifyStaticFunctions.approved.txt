@@ -1,0 +1,289 @@
+// typewire.testing.StaticFunctionsWorld
+
+package typewire.testing;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.ComponentLinker;
+import io.roastedroot.typewire.runtime.ComponentStore;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.HostResource;
+import io.roastedroot.typewire.runtime.PrimitiveHostTypeDescriptor;
+import io.roastedroot.typewire.types.FuncType;
+import io.roastedroot.typewire.types.LabelValType;
+import io.roastedroot.typewire.types.PrimValType;
+import io.roastedroot.typewire.types.ValType;
+import io.roastedroot.typewire.types.WasmComponent;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.annotation.processing.Generated;
+
+/**
+ * Bindings for the WIT world {@code example:static-functions/static-functions}.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class StaticFunctionsWorld {
+
+    /**
+     * The world's imports, which the embedder implements.
+     */
+    public interface Imports {
+
+        /**
+         * The imported interface {@code example:static-functions/host-counters}.
+         */
+        typewire.testing.example.staticfunctions.hostcounters.Host hostCounters();
+    }
+
+    private final ComponentInstance instance;
+
+    private final ComponentFunction run;
+
+    private final typewire.testing.exports.example.staticfunctions.guestcounters.Guest guestCounters;
+
+    private StaticFunctionsWorld(ComponentInstance instance) {
+        this.instance = instance;
+        this.run = instance.export("run").typed(PrimitiveHostTypeDescriptor.forClass(Long.class));
+        this.guestCounters = new typewire.testing.exports.example.staticfunctions.guestcounters.Guest(instance.exportedInstance("example:static-functions/guest-counters"));
+    }
+
+    /**
+     * Instantiates {@code component}, satisfying its imports with {@code imports}.
+     */
+    public static StaticFunctionsWorld instantiate(ComponentStore store, WasmComponent component, Imports imports) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        typewire.testing.example.staticfunctions.hostcounters.Host hostCounters = imports.hostCounters();
+        HostInstance.Builder hostCountersBuilder = HostInstance.builder(store);
+        typewire.testing.example.staticfunctions.hostcounters.Handles hostCountersHandles = new typewire.testing.example.staticfunctions.hostcounters.Handles(hostCountersBuilder);
+        HostResource hostCountersCounter = hostCountersHandles.counterResourceType();
+        hostCountersBuilder.addResource("counter", hostCountersCounter);
+        hostCountersBuilder.addFunction("[constructor]counter", FuncType.builder().addParam(LabelValType.builder().withLabel("start").withValType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()).withResult(hostCountersCounter.own()).build(), args -> new Object[] { hostCountersHandles.ownCounter(hostCounters.counter((Long) args[0])) });
+        hostCountersBuilder.addFunction("[static]counter.open", FuncType.builder().addParam(LabelValType.builder().withLabel("start").withValType(ValType.builder().withPrimValType(PrimValType.U32).build()).build()).withResult(hostCountersCounter.own()).build(), args -> new Object[] { hostCountersHandles.ownCounter(hostCounters.counterOpen((Long) args[0])) });
+        hostCountersBuilder.addFunction("[static]counter.made", FuncType.builder().withResult(ValType.builder().withPrimValType(PrimValType.U32).build()).build(), args -> new Object[] { hostCounters.counterMade() });
+        hostCountersBuilder.addFunction("[method]counter.get", FuncType.builder().addParam(LabelValType.builder().withLabel("self").withValType(hostCountersCounter.borrow()).build()).withResult(ValType.builder().withPrimValType(PrimValType.U32).build()).build(), args -> new Object[] { hostCountersHandles.getCounter((ResourceValue) args[0]).get() });
+        values.put("example:static-functions/host-counters", hostCountersBuilder.build());
+        return new StaticFunctionsWorld(ComponentLinker.builder().build().instantiate(store, component, values));
+    }
+
+    /**
+     * The component instance behind these bindings.
+     */
+    public ComponentInstance instance() {
+        return instance;
+    }
+
+    public Long run() {
+        return (Long) this.run.apply()[0];
+    }
+
+    /**
+     * The exported interface {@code example:static-functions/guest-counters}.
+     */
+    public typewire.testing.exports.example.staticfunctions.guestcounters.Guest guestCounters() {
+        return guestCounters;
+    }
+}
+
+// typewire.testing.example.staticfunctions.hostcounters.Counter
+
+package typewire.testing.example.staticfunctions.hostcounters;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code counter}, which the embedder implements. A method's borrowed receiver is what Java carries as {@code this}, so it is not a parameter here.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Counter {
+
+    Long get();
+
+    /**
+     * Called when the guest drops an owned handle to this resource.
+     */
+    default void drop() {
+    }
+}
+
+// typewire.testing.example.staticfunctions.hostcounters.Handles
+
+package typewire.testing.example.staticfunctions.hostcounters;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.HostInstance;
+import io.roastedroot.typewire.runtime.HostResource;
+import io.roastedroot.typewire.runtime.HostResourceTable;
+import javax.annotation.processing.Generated;
+
+/**
+ * The resources {@code example:static-functions/host-counters} declares, and the objects the handles to them stand for.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Handles {
+
+    private final HostResource counter;
+
+    private final HostResourceTable<Counter> counterTable = new HostResourceTable<>();
+
+    /**
+     * Declares each resource into {@code builder}.
+     */
+    public Handles(HostInstance.Builder builder) {
+        this.counter = builder.declareResource(rep -> counterTable.drop(rep, Counter::drop));
+    }
+
+    /**
+     * The resource type {@code counter}, with its {@code own} and {@code borrow}.
+     */
+    public HostResource counterResourceType() {
+        return counter;
+    }
+
+    /**
+     * Hands {@code value} over as a new owned handle to {@code counter}.
+     */
+    public ResourceValue ownCounter(Counter value) {
+        return ResourceValue.owned(counter.type(), counterTable.add(value));
+    }
+
+    /**
+     * The {@code counter} a handle stands for.
+     */
+    public Counter getCounter(ResourceValue handle) {
+        return counterTable.get(handle);
+    }
+
+    /**
+     * The {@code counter} an owned handle stands for, whose ownership passes to the caller. It is forgotten here without being dropped.
+     */
+    public Counter takeCounter(ResourceValue handle) {
+        return counterTable.take(handle);
+    }
+}
+
+// typewire.testing.example.staticfunctions.hostcounters.Host
+
+package typewire.testing.example.staticfunctions.hostcounters;
+
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:static-functions/host-counters}, which the embedder implements.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public interface Host {
+
+    /**
+     * Makes a {@code counter}.
+     */
+    Counter counter(Long start);
+
+    /**
+     * The static {@code counter.open}.
+     */
+    Counter counterOpen(Long start);
+
+    /**
+     * The static {@code counter.made}.
+     */
+    Long counterMade();
+}
+
+// typewire.testing.exports.example.staticfunctions.guestcounters.Guest
+
+package typewire.testing.exports.example.staticfunctions.guestcounters;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.ComponentFunction;
+import io.roastedroot.typewire.runtime.ComponentInstance;
+import io.roastedroot.typewire.runtime.PrimitiveHostTypeDescriptor;
+import io.roastedroot.typewire.runtime.ResourceHostTypeDescriptor;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT interface {@code example:static-functions/guest-counters}, as the component exports it.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Guest {
+
+    final ComponentFunction tallyTally;
+
+    final ComponentFunction tallyGet;
+
+    final ComponentFunction tallyOpen;
+
+    final ComponentFunction tallyMade;
+
+    /**
+     * Built by the world's bindings. Public only because they are another package.
+     */
+    public Guest(ComponentInstance instance) {
+        this.tallyTally = instance.export("[constructor]tally").typed(ResourceHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Long.class));
+        this.tallyGet = instance.export("[method]tally.get").typed(PrimitiveHostTypeDescriptor.forClass(Long.class), ResourceHostTypeDescriptor.instance());
+        this.tallyOpen = instance.export("[static]tally.open").typed(ResourceHostTypeDescriptor.instance(), PrimitiveHostTypeDescriptor.forClass(Long.class));
+        this.tallyMade = instance.export("[static]tally.made").typed(PrimitiveHostTypeDescriptor.forClass(Long.class));
+    }
+
+    /**
+     * Makes a {@code tally} inside the component.
+     */
+    public Tally tally(Long start) {
+        return new Tally(this, (ResourceValue) this.tallyTally.apply(start)[0]);
+    }
+
+    /**
+     * The static {@code tally.open}.
+     */
+    public Tally tallyOpen(Long start) {
+        return new Tally(this, (ResourceValue) this.tallyOpen.apply(start)[0]);
+    }
+
+    /**
+     * The static {@code tally.made}.
+     */
+    public Long tallyMade() {
+        return (Long) this.tallyMade.apply()[0];
+    }
+}
+
+// typewire.testing.exports.example.staticfunctions.guestcounters.Tally
+
+package typewire.testing.exports.example.staticfunctions.guestcounters;
+
+import io.roastedroot.typewire.abi.ResourceValue;
+import io.roastedroot.typewire.runtime.GuestResource;
+import javax.annotation.processing.Generated;
+
+/**
+ * The WIT resource {@code tally}, which {@code example:static-functions/guest-counters} implements. Nothing destroys it on the embedder's behalf, so closing one is what runs the guest's destructor.
+ */
+@Generated("io.roastedroot.typewire.bindgen.BindgenProcessor")
+public final class Tally implements AutoCloseable {
+
+    private final Guest owner;
+
+    private final ResourceValue handle;
+
+    private boolean dropped;
+
+    Tally(Guest owner, ResourceValue handle) {
+        this.owner = owner;
+        this.handle = handle;
+    }
+
+    public Long get() {
+        return (Long) owner.tallyGet.apply(handle)[0];
+    }
+
+    /**
+     * Runs the guest's destructor. Doing so more than once does nothing.
+     */
+    @Override
+    public void close() {
+        if (!dropped) {
+            dropped = true;
+            GuestResource.drop(handle);
+        }
+    }
+}

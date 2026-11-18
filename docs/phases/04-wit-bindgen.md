@@ -40,9 +40,9 @@ to interact with components.
 
 ## Module
 
-`bindgen` (`run.endive.cm:bindgen`) + `bindgen-maven-plugin`
+`bindgen` (`io.roastedroot:typewire-bindgen`) + `bindgen-maven-plugin`
 
-**Package**: `run.endive.cm.bindgen`
+**Package**: `io.roastedroot.typewire.bindgen`
 
 ## Deliverables
 
@@ -75,7 +75,7 @@ For each `canon lift` / `canon lower`:
 
 ### Maven plugin
 
-`run.endive.cm:bindgen-maven-plugin` that runs during `generate-sources`.
+`io.roastedroot:typewire-bindgen-maven-plugin` that runs during `generate-sources`.
 Takes WIT file(s) as input, produces Java sources into
 `target/generated-sources/wit`.
 
