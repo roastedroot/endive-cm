@@ -33,6 +33,7 @@ import io.netty.channel.uring.IoUringServerSocketChannel;
 import io.netty.channel.uring.IoUringSocketChannel;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.channels.spi.SelectorProvider;
@@ -41,7 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
-import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 
 /**
  * The Netty channels from which the network creates its sockets, and the Netty options standing
@@ -55,12 +56,13 @@ import run.endive.cm.wasi.p2.sockets.tcp.TcpChannel;
  *
  * <p>WASI's IPv6 sockets take no IPv4 traffic, so the native transports set {@code IPV6_V6ONLY} on
  * them. Java offers NIO no way to set it, so on NIO an IPv6 socket still takes a port from IPv4's
- * wildcard address, and a listening one closes each IPv4 connection it accepts. Netty's io_uring
- * channels are IPv6 wherever the host has IPv6, so an IPv4 socket on io_uring is an IPv6 one used
- * only with IPv4 addresses. Linux then refuses to bind it to a port an IPv6 socket holds on the
- * wildcard address.
+ * wildcard address. A listening one closes each IPv4 connection it accepts, and a UDP one drops
+ * each IPv4 datagram it receives. Netty's io_uring TCP channels are IPv6 wherever the host has
+ * IPv6, so an IPv4 TCP socket on io_uring is an IPv6 one used only with IPv4 addresses. Linux then
+ * refuses to bind it to a port an IPv6 socket holds on the wildcard address.
  *
  * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/tcp-create-socket.wit">wasi:sockets/tcp-create-socket, create-tcp-socket</a>
+ * @see <a href="https://github.com/WebAssembly/WASI/blob/v0.2.12/proposals/sockets/wit/udp-create-socket.wit">wasi:sockets/udp-create-socket, create-udp-socket</a>
  */
 final class NettyChannels {
 
@@ -92,20 +94,22 @@ final class NettyChannels {
 
     private final Function<SocketProtocolFamily, ? extends SocketChannel> socket;
     private final Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket;
-    private final ChannelFactory<? extends DatagramChannel> datagram;
+    private final Function<SocketProtocolFamily, ? extends DatagramChannel> datagram;
     private final Binder binder;
     private final Listener listener;
     private final Map<SocketOption<?>, ChannelOption<?>> options;
     private final Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits;
+    private final Function<Channel, SocketAddress> localAddresses;
 
     private NettyChannels(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
-            ChannelFactory<? extends DatagramChannel> datagram,
+            Function<SocketProtocolFamily, ? extends DatagramChannel> datagram,
             Binder binder,
             Listener listener,
             Map<SocketOption<?>, ChannelOption<?>> options,
-            Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits) {
+            Map<SocketProtocolFamily, ChannelOption<Integer>> hopLimits,
+            Function<Channel, SocketAddress> localAddresses) {
         this.socket = Objects.requireNonNull(socket, "socket");
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         this.datagram = Objects.requireNonNull(datagram, "datagram");
@@ -113,6 +117,7 @@ final class NettyChannels {
         this.listener = listener;
         this.options = options;
         this.hopLimits = hopLimits;
+        this.localAddresses = localAddresses;
     }
 
     /**
@@ -121,14 +126,22 @@ final class NettyChannels {
      * @param socket creates the channel of a TCP connection of a family, or of the host's default
      *     family when given {@code null}
      * @param serverSocket creates the channel of a listening TCP socket of a family
-     * @param datagram creates the channel of a UDP socket
+     * @param datagram creates the channel of a UDP socket of a family, or of the host's default
+     *     family when given {@code null}
      */
     static NettyChannels of(
             Function<SocketProtocolFamily, ? extends SocketChannel> socket,
             Function<SocketProtocolFamily, ? extends ServerSocketChannel> serverSocket,
-            ChannelFactory<? extends DatagramChannel> datagram) {
+            Function<SocketProtocolFamily, ? extends DatagramChannel> datagram) {
         return new NettyChannels(
-                socket, serverSocket, datagram, Nio::bind, Nio::listen, STANDARD_OPTIONS, Map.of());
+                socket,
+                serverSocket,
+                datagram,
+                Nio::bind,
+                Nio::listen,
+                STANDARD_OPTIONS,
+                Map.of(),
+                Nio::localAddress);
     }
 
     /** Creates the channel of a TCP connection of the host's default family. */
@@ -144,8 +157,13 @@ final class NettyChannels {
         return serverSocket.apply(family);
     }
 
+    /** Creates the channel of a UDP socket of the host's default family. */
     ChannelFactory<? extends DatagramChannel> datagram() {
-        return datagram;
+        return () -> datagram.apply(null);
+    }
+
+    DatagramChannel datagram(SocketProtocolFamily family) {
+        return datagram.apply(family);
     }
 
     /**
@@ -167,13 +185,18 @@ final class NettyChannels {
         return listener.listen(channel, backlog);
     }
 
+    /** The address {@code channel} is bound to now, which Netty's io_uring reads only once. */
+    InetSocketAddress localAddress(Channel channel) {
+        return (InetSocketAddress) localAddresses.apply(channel);
+    }
+
     /**
      * The Netty option standing for {@code option} on a socket of {@code family}, or {@code null}
      * when the transport has none.
      */
     @SuppressWarnings("unchecked")
     <T> ChannelOption<T> option(SocketOption<T> option, SocketProtocolFamily family) {
-        if (option == TcpChannel.HOP_LIMIT) {
+        if (option == HopLimits.OPTION) {
             return (ChannelOption<T>) hopLimits.get(family);
         }
         return (ChannelOption<T>) options.get(option);
@@ -234,6 +257,15 @@ final class NettyChannels {
         return channel;
     }
 
+    /**
+     * {@code channel} kept active from its registration until it closes. Netty's native transports
+     * otherwise end a datagram channel's activity, and with it its writes, once it disconnects.
+     */
+    private static <C extends DatagramChannel> C activeWhileOpen(C channel) {
+        channel.config().setOption(ChannelOption.DATAGRAM_CHANNEL_ACTIVE_ON_REGISTRATION, true);
+        return channel;
+    }
+
     /** The standard options, with those for keep-alive timing a transport adds. */
     private static Map<SocketOption<?>, ChannelOption<?>> withKeepAlive(
             ChannelOption<Integer> idle,
@@ -255,16 +287,25 @@ final class NettyChannels {
                                         ? new NioSocketChannel()
                                         : new NioSocketChannel(SelectorProvider.provider(), family),
                         family -> new NioServerSocketChannel(SelectorProvider.provider(), family),
-                        NioDatagramChannel::new,
+                        family ->
+                                family == null
+                                        ? new NioDatagramChannel()
+                                        : new NioDatagramChannel(
+                                                SelectorProvider.provider(), family),
                         Nio::bind,
                         Nio::listen,
                         withKeepAlive(
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL),
                                 NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT)),
-                        Map.of());
+                        Map.of(),
+                        Nio::localAddress);
 
         private Nio() {}
+
+        static SocketAddress localAddress(Channel channel) {
+            return channel.unsafe().localAddress();
+        }
 
         static InetSocketAddress bind(SocketChannel channel, InetSocketAddress local)
                 throws IOException {
@@ -320,6 +361,10 @@ final class NettyChannels {
             return socket.localAddress();
         }
 
+        static SocketAddress localAddress(Channel channel) {
+            return socketOf(channel).localAddress();
+        }
+
         /** Listens on the socket, returning its descriptor. */
         static int listen(SocketChannel channel, int backlog) throws IOException {
             Socket socket = socketOf(channel);
@@ -348,7 +393,14 @@ final class NettyChannels {
                                         new EpollServerSocketChannel(family),
                                         family,
                                         Unix.LINUX_V6_ONLY),
-                        EpollDatagramChannel::new,
+                        family ->
+                                family == null
+                                        ? new EpollDatagramChannel()
+                                        : activeWhileOpen(
+                                                ipv6Only(
+                                                        new EpollDatagramChannel(family),
+                                                        family,
+                                                        Unix.LINUX_V6_ONLY)),
                         Unix::bind,
                         (channel, backlog) ->
                                 new EpollServerSocketChannel(Unix.listen(channel, backlog)),
@@ -356,7 +408,8 @@ final class NettyChannels {
                                 EpollChannelOption.TCP_KEEPIDLE,
                                 EpollChannelOption.TCP_KEEPINTVL,
                                 EpollChannelOption.TCP_KEEPCNT),
-                        Unix.LINUX_HOP_LIMITS);
+                        Unix.LINUX_HOP_LIMITS,
+                        Unix::localAddress);
 
         private Epoll() {}
 
@@ -366,8 +419,8 @@ final class NettyChannels {
     }
 
     /**
-     * Netty's io_uring channels take over no socket opened elsewhere, and are IPv6 wherever the host
-     * has IPv6.
+     * Netty's io_uring channels take over no socket opened elsewhere. Its TCP channels are IPv6
+     * wherever the host has IPv6.
      */
     private static final class IoUring {
 
@@ -383,14 +436,22 @@ final class NettyChannels {
                                         new IoUringServerSocketChannel(),
                                         requireFamily(family),
                                         Unix.LINUX_V6_ONLY),
-                        IoUringDatagramChannel::new,
+                        family ->
+                                family == null
+                                        ? new IoUringDatagramChannel()
+                                        : activeWhileOpen(
+                                                ipv6Only(
+                                                        new IoUringDatagramChannel(family),
+                                                        family,
+                                                        Unix.LINUX_V6_ONLY)),
                         Unix::bind,
                         (channel, backlog) -> null,
                         withKeepAlive(
                                 IoUringChannelOption.TCP_KEEPIDLE,
                                 IoUringChannelOption.TCP_KEEPINTVL,
                                 IoUringChannelOption.TCP_KEEPCNT),
-                        Unix.LINUX_HOP_LIMITS);
+                        Unix.LINUX_HOP_LIMITS,
+                        Unix::localAddress);
 
         private IoUring() {}
 
@@ -421,12 +482,20 @@ final class NettyChannels {
                                                 Unix.BSD_V6_ONLY),
                         family ->
                                 ipv6Only(new KQueueServerSocketChannel(), family, Unix.BSD_V6_ONLY),
-                        KQueueDatagramChannel::new,
+                        family ->
+                                family == null
+                                        ? new KQueueDatagramChannel()
+                                        : activeWhileOpen(
+                                                ipv6Only(
+                                                        new KQueueDatagramChannel(family),
+                                                        family,
+                                                        Unix.BSD_V6_ONLY)),
                         Unix::bind,
                         (channel, backlog) ->
                                 new KQueueServerSocketChannel(Unix.listen(channel, backlog)),
                         STANDARD_OPTIONS,
-                        Unix.BSD_HOP_LIMITS);
+                        Unix.BSD_HOP_LIMITS,
+                        Unix::localAddress);
 
         private KQueue() {}
 

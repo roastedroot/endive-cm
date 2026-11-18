@@ -17,6 +17,7 @@ import run.endive.cm.wasi.p2.io.streams.BufferedHostInputStream;
 import run.endive.cm.wasi.p2.io.streams.BufferedHostOutputStream;
 import run.endive.cm.wasi.p2.io.streams.HostInputStream;
 import run.endive.cm.wasi.p2.io.streams.HostOutputStream;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 
 /**
  * A channel whose operations complete only when a test completes them, recording what the socket
@@ -49,7 +50,7 @@ final class TestTcpChannel implements TcpChannel {
         options.put(ExtendedSocketOptions.TCP_KEEPCOUNT, 9);
         options.put(StandardSocketOptions.SO_RCVBUF, 65536);
         options.put(StandardSocketOptions.SO_SNDBUF, 65536);
-        options.put(TcpChannel.HOP_LIMIT, 64);
+        options.put(HopLimits.OPTION, 64);
     }
 
     /** Queues a connection to be accepted. */

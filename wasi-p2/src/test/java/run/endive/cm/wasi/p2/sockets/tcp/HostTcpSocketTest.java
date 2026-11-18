@@ -32,6 +32,7 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.tcp.TcpSocket;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
 import run.endive.cm.wasi.p2.sockets.instancenetwork.HostInstanceNetwork;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 import run.endive.cm.wasi.p2.sockets.network.HostNetwork;
 import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
 
@@ -359,7 +360,7 @@ class HostTcpSocketTest {
     @Test
     void anOptionTheHostLacksIsNotSupported() {
         channel.options.remove(ExtendedSocketOptions.TCP_KEEPIDLE);
-        channel.options.remove(TcpChannel.HOP_LIMIT);
+        channel.options.remove(HopLimits.OPTION);
 
         assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(socket::keepAliveIdleTime));
         assertEquals(ErrorCode.NOT_SUPPORTED, errorOf(socket::hopLimit));
@@ -371,14 +372,14 @@ class HostTcpSocketTest {
         socket.setHopLimit((short) 255);
 
         assertEquals((short) 255, socket.hopLimit());
-        assertEquals(255, channel.options.get(TcpChannel.HOP_LIMIT));
+        assertEquals(255, channel.options.get(HopLimits.OPTION));
     }
 
     @Test
     void aHopLimitTheHostLeftUnsetIsItsDefault() {
-        channel.options.put(TcpChannel.HOP_LIMIT, -1);
+        channel.options.put(HopLimits.OPTION, -1);
 
-        assertEquals(HostTcpSocket.DEFAULT_HOP_LIMIT, socket.hopLimit());
+        assertEquals(HopLimits.DEFAULT, socket.hopLimit());
     }
 
     @Test

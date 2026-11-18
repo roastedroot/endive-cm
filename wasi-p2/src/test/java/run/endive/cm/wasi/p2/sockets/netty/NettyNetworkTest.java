@@ -92,7 +92,7 @@ class NettyNetworkTest {
                 NettyChannels.of(
                         family -> new NioSocketChannel(),
                         family -> new NioServerSocketChannel(),
-                        () -> {
+                        family -> {
                             datagrams.incrementAndGet();
                             return new NioDatagramChannel();
                         });

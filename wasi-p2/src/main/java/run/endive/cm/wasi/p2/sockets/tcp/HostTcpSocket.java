@@ -27,6 +27,7 @@ import run.endive.cm.wasi.p2.bindings.wasi.sockets.tcp.TcpSocket;
 import run.endive.cm.wasi.p2.io.poll.HostPoll;
 import run.endive.cm.wasi.p2.sockets.NetworkPolicy;
 import run.endive.cm.wasi.p2.sockets.network.ErrorCodes;
+import run.endive.cm.wasi.p2.sockets.network.HopLimits;
 import run.endive.cm.wasi.p2.sockets.network.HostNetwork;
 import run.endive.cm.wasi.p2.sockets.network.IpAddresses;
 
@@ -50,12 +51,6 @@ public class HostTcpSocket implements TcpSocket {
 
     /** The most keep-alive probes that every host accepts. */
     static final int MAX_KEEP_ALIVE_COUNT = Byte.MAX_VALUE;
-
-    /**
-     * The hop limit Linux and macOS use unless configured otherwise, which macOS reports as -1 for
-     * an IPv6 socket the guest has not set.
-     */
-    static final short DEFAULT_HOP_LIMIT = 64;
 
     private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
     private static final BigInteger MAX_INT = BigInteger.valueOf(Integer.MAX_VALUE);
@@ -334,8 +329,7 @@ public class HostTcpSocket implements TcpSocket {
      */
     @Override
     public Short hopLimit() {
-        int value = option(TcpChannel.HOP_LIMIT);
-        return (short) (value < 0 ? DEFAULT_HOP_LIMIT : value);
+        return HopLimits.of(option(HopLimits.OPTION));
     }
 
     /**
@@ -346,7 +340,7 @@ public class HostTcpSocket implements TcpSocket {
     @Override
     public void setHopLimit(Short value) {
         requirePositive(value);
-        setOption(TcpChannel.HOP_LIMIT, value.intValue());
+        setOption(HopLimits.OPTION, value.intValue());
     }
 
     @Override
